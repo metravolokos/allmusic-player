@@ -1,7 +1,7 @@
 """Generate only synthetic tones; FFmpeg/ffprobe are build tools, not shipped CLI.
 
-No personal music. Signal: 440 Hz, 8 s, 44100 Hz stereo, low amplitude.
-Generated signal and manifest may be used under CC0-1.0.
+No personal music. Five 8 s playback samples plus a 32 s FLAC stream/seek fixture.
+Generated signals and manifest may be used under CC0-1.0.
 """
 from pathlib import Path
 import argparse
@@ -16,6 +16,7 @@ CASES = [
     ("tone-aac-m4a.m4a", "aac", "aac", "ipod", ["-b:a", "128k"]),
     ("tone-alac-m4a.m4a", "alac", "alac", "ipod", ["-sample_fmt", "s32p"]),
 ]
+STREAM_NAME = "tone-stream-flac.flac"
 
 
 def run(args):
@@ -53,16 +54,34 @@ def main():
             assert stream["bits_per_raw_sample"] == "24", stream
         manifest["files"].append({"name": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                                   "generation_command": command, "probe": probe})
+    stream_path = args.directory / STREAM_NAME
+    stream_command = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
+                      "-i", "sine=frequency=440:sample_rate=44100:duration=32",
+                      "-af", "volume=0.5,afade=t=in:d=0.05,afade=t=out:st=31.95:d=0.05",
+                      "-ac", "2", "-c:a", "flac", "-sample_fmt", "s16", "-map_metadata", "-1",
+                      "-f", "flac", str(stream_path)]
+    if not args.verify_only:
+        subprocess.run(stream_command, check=True)
+    stream_probe = json.loads(run(["ffprobe", "-v", "error", "-show_streams", "-show_format",
+                                   "-of", "json", str(stream_path)]))
+    assert len(stream_probe["streams"]) == 1 and stream_probe["streams"][0]["codec_name"] == "flac"
+    assert 31.8 < float(stream_probe["format"]["duration"]) < 32.5
+    manifest["streaming_file"] = {"name": STREAM_NAME,
+        "sha256": hashlib.sha256(stream_path.read_bytes()).hexdigest(),
+        "generation_command": stream_command, "probe": stream_probe}
     if not args.verify_only:
         (args.directory / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
         (args.directory / "README.txt").write_text(
-            "001-B1: synthetic 440 Hz / 8 s stereo tones, CC0-1.0. No personal music.\n"
-            "MP3, FLAC 16-bit, AAC-LC ADTS + M4A, ALAC 24-bit M4A. Start at low volume.\n")
+            "Synthetic 440 Hz stereo tones, CC0-1.0. No personal music.\n"
+            "Five 8 s codec/container playback samples plus 32 s FLAC for 001-B2 Range/seek.\n"
+            "Start at low volume.\n")
     else:
         original = json.loads((args.directory / "manifest.json").read_text())
         assert [(f["name"], f["sha256"]) for f in original["files"]] == [
             (f["name"], f["sha256"]) for f in manifest["files"]], "Fixture hash mismatch"
-    print("Verified five real codec/container combinations (ffprobe), not Qt playback")
+        assert original["streaming_file"]["name"] == STREAM_NAME
+        assert original["streaming_file"]["sha256"] == manifest["streaming_file"]["sha256"], "Streaming fixture hash mismatch"
+    print("Verified five playback formats and 32 s streaming fixture (ffprobe), not Qt playback")
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ public:
     };
     QVector<Request> requests;
     std::function<Response(const Request &)> handler;
+    std::function<void(const Request &)> onRequest;
     bool tls = false;
     QSslConfiguration ssl;
     bool start() { return listen(QHostAddress::LocalHost, 0); }
@@ -63,6 +64,7 @@ protected:
             if (!validLength || length < 0 || length > 32768) { socket->abort(); return; }
             if (buffer->size() - end - 4 < length) return;
             *handled = true; request.body = buffer->mid(end + 4, length); requests.push_back(request);
+            if (onRequest) onRequest(request);
             Response response;
             if (request.method != "GET" && request.method != "PROPFIND" && request.method != "HEAD") {
                 response.status = 405;

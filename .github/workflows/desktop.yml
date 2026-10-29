@@ -190,5 +190,6 @@ jobs:
             build/audio-fixtures/manifest.json
             build/ffmpeg-info.txt
             build/packaged-playback.txt
+            build/packaged-streaming.txt
           if-no-files-found: ignore
 
