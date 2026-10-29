@@ -14,6 +14,7 @@ int main(int argc, char *argv[])
     const auto arguments = app.arguments();
     const bool smokeTest = arguments.size() == 3
         && arguments.at(1) == QStringLiteral("--smoke-test");
+    bool capturedFrame = false;
     if (arguments.size() != 1 && !smokeTest) {
         qCritical() << "Usage: allmusic-player [--smoke-test screenshot.png]";
         return 2;
@@ -32,7 +33,7 @@ int main(int argc, char *argv[])
             return 1;
         // Require an actual rendered frame, not merely successful QML loading.
         QObject::connect(window, &QQuickWindow::frameSwapped, &app,
-                         [&app, window, path = arguments.at(2)] {
+                         [&app, &capturedFrame, window, path = arguments.at(2)] {
             const QImage image = window->grabWindow();
             if (!window->isVisible() || !window->isExposed() || image.isNull()
                 || !image.save(path)) {
@@ -41,6 +42,7 @@ int main(int argc, char *argv[])
                 return;
             }
             qInfo() << "Rendered window captured:" << path;
+            capturedFrame = true;
             app.exit(0);
         }, static_cast<Qt::ConnectionType>(Qt::SingleShotConnection | Qt::QueuedConnection));
         QTimer::singleShot(15000, &app, [&app] {
@@ -48,5 +50,6 @@ int main(int argc, char *argv[])
             app.exit(1);
         });
     }
-    return app.exec();
+    const int result = app.exec();
+    return smokeTest && !capturedFrame ? 1 : result;
 }
