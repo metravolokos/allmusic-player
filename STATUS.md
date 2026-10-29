@@ -210,19 +210,26 @@ PR #8 готов к рассмотрению; сам факт этих резу�
 `/AllMusic`; без реального Mail, авторизации, записи/удаления, Android audio,
 медиатеки, постоянного аудиокэша и gapless.
 
-Локально подготовлены `WebDavRangeDevice` (64-КиБ страницы, максимум 4 страницы
-в памяти, ETag/If-Range и fail-closed при HTTP 200), Desktop-интеграция,
-mock-сервер и Windows one-click launcher. Создан 32-секундный синтетический
-FLAC для Range/seek. Первый Desktop CI `40942046920` успешно собрал приложение,
-`WebDavRangeDevice` и mock, затем остановился при компиляции теста из-за
-отсутствующего include `QAudioBuffer`; include исправлен, повторный CI ожидается.
-Qt/CMake в executor нет. CTest, Windows архив и ручное Windows 11 испытание пока
-**НЕ ПРОВЕРЕНЫ**. Локально пройдены генерация/ffprobe фикстур,
-`check_repository.py`, 4 Android package audit теста и `git diff --check`.
+Реализованы `WebDavRangeDevice` (64-КиБ страницы, максимум 4 страницы в RAM,
+ETag/If-Range, fail-closed при HTTP 200), Desktop-интеграция, loopback mock и
+Windows one-click launcher. Ветка `task/001-b2-webdav-stream` создана от PR #8
+merge `b2232ff`; текущий PR #9.
 
-Техническая гипотеза: `QMediaPlayer::setSourceDevice()` может читать seekable
-адаптер поверх отдельных Range-запросов. Успех воспроизведения, время до PCM,
-байты до PCM и seek считаются неизвестными до CI; PCM не является доказательством
-слышимого звука. См. [задачу](tasks/001-B2-webdav-stream.md) и [руководство Windows](docs/WEB-DAV-STREAM-TEST.md).
-Полный [отчёт 001-B2](docs/001-B2-REPORT.md) будет включать логи CI и результаты
-ручной Windows 11 проверки после получения.
+[Desktop CI 40943552384](https://github.com/metravolokos/allmusic-player/actions/runs/40943552384)
+на head `f4bb308` прошёл Linux и Windows: Linux 4/4 CTest, включая streaming
+10/10 и WebDAV 86/86; Windows сборка, тесты, smoke и Windows x64 архив прошли.
+[Android CI 40943552169](https://github.com/metravolokos/allmusic-player/actions/runs/40943552169)
+прошёл как регрессия 001-C. Архив доступен в [AllMusicPlayer-Windows-x64](https://github.com/metravolokos/allmusic-player/actions/runs/40943552384/artifacts/12927309414)
+и [WebDAV kit](https://github.com/metravolokos/allmusic-player/actions/runs/40943552384/artifacts/12928921132).
+
+Измерение Qt 6.12.0 / FFmpeg 9.0.1 на Linux: 31 мс до первого ненулевого PCM,
+65 536 байт Range payload из 385 604 байт файла, кэш адаптера 254 532 байта
+(предел 262 144), 9 216 PCM frames, peak 0.0441908, 4 HTTP requests. Автотест
+подтвердил seek на незагруженную область; 200, смена ETag, неожиданный сервер,
+обрыв и отмена обрабатываются fail-closed. Это декодирование PCM, не слышимый
+звук. Точный размер внутреннего кэша FFmpeg неизвестен.
+
+Основная ручная приёмка B2 на Windows 11 — **ОЖИДАЕТСЯ**: слышимый звук,
+управление, seek и fallback HTTP 200. См. [задачу](tasks/001-B2-webdav-stream.md),
+[руководство Windows](docs/WEB-DAV-STREAM-TEST.md) и [отчёт 001-B2](docs/001-B2-REPORT.md).
+PR не объединять до приёмки владельцем.
