@@ -96,12 +96,12 @@ jobs:
           cmake --build --preset desktop-release --parallel 2
       - name: Render a window in virtual X11 (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a ctest --preset desktop-release
+        run: xvfb-run -a ctest --preset desktop-release --verbose
         env:
           QT_QPA_PLATFORM: xcb
       - name: Render a window (Windows CI desktop)
         if: runner.os == 'Windows'
-        run: ctest --preset desktop-release
+        run: ctest --preset desktop-release --verbose
       - name: Collect Qt Base license sources
         if: runner.os == 'Windows'
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683

@@ -151,6 +151,27 @@ private slots:
         const auto r = range("/AllMusic/test.bin", 8, 4);
         QCOMPARE(r.error, Error::None); QCOMPARE(r.bytes, "89");
     }
+    void serverCannotEnableCookies() {
+        server->handler = [](const auto &) { auto r = partial(); r.headers["Set-Cookie"] = "fixture=value; Path=/"; return r; };
+        QCOMPARE(range().error, Error::None); QCOMPARE(range().error, Error::None);
+        QCOMPARE(server->requests.size(), 2);
+        QVERIFY(!server->requests[1].headers.contains("cookie"));
+    }
+    void rejectsEncodedBody() {
+        server->handler = [](const auto &) { auto r = partial(); r.headers["Content-Encoding"] = "br"; return r; };
+        const auto r = range(); QVERIFY(r.error == Error::Protocol || r.error == Error::Network);
+        QVERIFY(r.bytes.isEmpty());
+    }
+    void cancelledValidationCannotFinishNextOperation() {
+        server->handler = [](const auto &) { return partial(); };
+        QSignalSpy spy(client, &WebDavProbe::completed);
+        QVERIFY(client->readRange("/Outside/a", 0, 1));
+        client->cancel(); QCOMPARE(spy.size(), 1);
+        QVERIFY(client->readRange("/AllMusic/a", 2, 4));
+        QVERIFY(spy.wait(1000)); QCOMPARE(spy.size(), 2);
+        QCOMPARE(qvariant_cast<Result>(spy[1][0]).error, Error::None);
+        QCOMPARE(server->requests.size(), 1);
+    }
     void malformedRange_data() {
         QTest::addColumn<QByteArray>("header");
         for (const auto &s : {"bytes 3-6/10", "bytes 2-4/10", "bytes 2-5/5", "bytes 2-5/*", "",
