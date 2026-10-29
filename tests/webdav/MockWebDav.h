@@ -22,6 +22,7 @@ public:
     QVector<Request> requests;
     std::function<Response(const Request &)> handler;
     std::function<void(const Request &)> onRequest;
+    bool includeB2Marker = true;
     bool tls = false;
     QSslConfiguration ssl;
     bool start() { return listen(QHostAddress::LocalHost, 0); }
@@ -72,6 +73,8 @@ protected:
                 response.status = 403;
             } else if (handler) response = handler(request);
             else response.body = listing();
+            if (includeB2Marker)
+                response.headers["X-AllMusic-Mock"] = "001-B2-loopback";
             QTimer::singleShot(response.delayMs, socket, [socket, response] {
                 if (socket->state() != QAbstractSocket::ConnectedState) return;
                 QByteArray bytes = "HTTP/1.1 " + QByteArray::number(response.status) + " Fixture\r\nConnection: close\r\n";

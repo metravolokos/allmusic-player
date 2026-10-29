@@ -18,6 +18,7 @@ public:
                               qint64 length, const QByteArray &etag)
     {
         WebDavProbe probe(port);
+        probe.requireB2MockMarker();
         activeProbe = &probe;
         QEventLoop loop;
         QObject::connect(&probe, &WebDavProbe::completed, &loop,

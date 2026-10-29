@@ -112,6 +112,7 @@ void LocalPlayback::scanLoopback(int port)
     m_etags.clear();
     emit loopbackFilesChanged();
     m_probe = new WebDavProbe(m_loopbackPort, false, this);
+    m_probe->requireB2MockMarker();
     connect(m_probe, &WebDavProbe::completed, this, [this](const WebDavProbe::Result &result) {
         if (result.error != WebDavProbe::Error::None) {
             fail(QStringLiteral("Не удалось прочитать локальный WebDAV (%1, HTTP %2).")

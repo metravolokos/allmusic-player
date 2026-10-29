@@ -103,6 +103,7 @@ private slots:
         ignoreRange = false;
         changeEtag = false;
         truncateRange = false;
+        server.includeB2Marker = true;
         delayMs = 0;
         installHandler();
     }
@@ -173,6 +174,18 @@ private slots:
         QVERIFY(failed.first().first().toString().contains("200"));
         QVERIFY(server.requests.first().headers.contains("range"));
         QVERIFY(device.cachedBytes() == 0);
+    }
+    void unexpectedLoopbackServiceIsRejected()
+    {
+        server.includeB2Marker = false;
+        WebDavRangeDevice device(server.serverPort(), "/AllMusic/tone.mp3", audio.size(), etag);
+        QVERIFY(device.open(QIODevice::ReadOnly));
+        char byte = 0;
+        qint64 read = 0;
+        QVERIFY(readWithEventLoop(device, &byte, 1, &read));
+        QCOMPARE(read, -1);
+        QVERIFY(device.errorString().contains("HTTP"));
+        QCOMPARE(device.cachedBytes(), 0);
     }
     void changedEtagFailsClosed()
     {

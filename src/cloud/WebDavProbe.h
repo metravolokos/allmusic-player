@@ -38,6 +38,7 @@ public:
                    const QByteArray &expectedStrongEtag = {});
     void cancel();
     bool busy() const { return active; }
+    void requireB2MockMarker(bool required = true) { requireMockMarker = required; }
     // Smaller limits may be used by tests; defaults bound all operations.
     void setTimeoutMs(int ms) { timeoutMs = qBound(10, ms, 30000); }
     static std::optional<QString> safePath(const QString &reference, const QUrl &origin);
@@ -59,5 +60,6 @@ private:
     int timeoutMs = 3000;
     quint64 operation = 0;
     bool active = false, listing = false, tlsFailure = false;
+    bool requireMockMarker = false;
 };
 Q_DECLARE_METATYPE(WebDavProbe::Result)
