@@ -229,7 +229,15 @@ merge `b2232ff`; текущий PR #9.
 обрыв и отмена обрабатываются fail-closed. Это декодирование PCM, не слышимый
 звук. Точный размер внутреннего кэша FFmpeg неизвестен.
 
-Основная ручная приёмка B2 на Windows 11 — **ОЖИДАЕТСЯ**: слышимый звук,
-управление, seek и fallback HTTP 200. См. [задачу](tasks/001-B2-webdav-stream.md),
-[руководство Windows](docs/WEB-DAV-STREAM-TEST.md) и [отчёт 001-B2](docs/001-B2-REPORT.md).
-PR не объединять до приёмки владельцем.
+Основная ручная функциональная приёмка B2 на **Windows 11 — ПРОЙДЕНА (5/5)**,
+по сообщению владельца 29.10.2026: слышимый потоковый FLAC, пауза/продолжение/стоп,
+seek к ~25-й секунде, новый GET Range, ошибка HTTP 200 с прекращением воспроизведения.
+[Протокол владельца в PR #9](https://github.com/metravolokos/allmusic-player/pull/9#issuecomment-6507500307).
+[Desktop CI 40944887711](https://github.com/metravolokos/allmusic-player/actions/runs/40944887711)
+и [Android CI 40944887824](https://github.com/metravolokos/allmusic-player/actions/runs/40944887824)
+для проверенного head `ab8320a` — success; 4/4 проверки PR зелёные.
+Решение о приёмке ограничено loopback mock, без реального Mail, Android audio,
+оценки внешней сети и полного спектра потоковых форматов. D-027 остаётся
+исследовательским вопросом для настоящего WebDAV и выбора архитектуры.
+[Задача](tasks/001-B2-webdav-stream.md), [инструкция](docs/WEB-DAV-STREAM-TEST.md),
+[отчёт](docs/001-B2-REPORT.md). PR #9 не объединять без отдельного разрешения владельца.
