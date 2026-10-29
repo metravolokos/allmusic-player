@@ -401,9 +401,10 @@ private slots:
                 << "gaps >250 ms" << gapsOver250Ms.load()
                 << "process peak RSS bytes" << processPeakRssBytes()
                 << "; PCM callback gaps are not an audible-interruption test";
+        device.cancel();
         player.stop();
         player.setSource({});
-        device.cancel();
+        QTRY_COMPARE_WITH_TIMEOUT(server.activeRangeResponses, 0, 1000);
         disconnect(&output, nullptr, this, nullptr);
         disconnect(&device, nullptr, this, nullptr);
     }
@@ -510,7 +511,7 @@ private slots:
                 while (sample > current && !peak.compare_exchange_weak(current, sample)) { }
             }
             if (bytesAtFirstPcm.load() < 0) {
-                bytesAtFirstPcm.store(transferred.load());
+                bytesAtFirstPcm.store(qMax(transferred.load(), device.cachedBytes()));
                 firstPcmMs.store(startup.elapsed());
             }
         }, Qt::DirectConnection);
@@ -552,9 +553,10 @@ private slots:
         qInfo() << name << "finished at" << player.position() << "of" << player.duration()
                 << "ms; fetched payload bytes" << transferred.load()
                 << "requests" << server.requests.size() << "adapter cache" << device.cachedBytes();
+        device.cancel();
         player.stop();
         player.setSource({});
-        device.cancel();
+        QTRY_COMPARE_WITH_TIMEOUT(server.activeRangeResponses, 0, 1000);
         disconnect(&output, nullptr, this, nullptr);
         disconnect(&device, nullptr, this, nullptr);
     }
@@ -591,7 +593,7 @@ private slots:
                 while (sample > current && !peak.compare_exchange_weak(current, sample)) { }
             }
             if (bytesAtFirstPcm.load() < 0) {
-                bytesAtFirstPcm.store(transferred.load());
+                bytesAtFirstPcm.store(qMax(transferred.load(), device.cachedBytes()));
                 firstPcmMs.store(startup.elapsed());
             }
         }, Qt::DirectConnection);
@@ -616,6 +618,7 @@ private slots:
         for (const auto &request : server.requests)
             requestedUnseenPage |= request.headers.value("range").startsWith("bytes=262144-");
         QVERIFY2(requestedUnseenPage, "seek did not issue a Range request for the later file region");
+        device.cancel();
         player.stop();
         qInfo() << "FLAC measurement (separate detailed baseline): PCM ms" << firstPcmMs.load()
                 << "seek ms" << seekTimer.elapsed() << "payload bytes at PCM" << bytesAtFirstPcm.load()
@@ -624,7 +627,7 @@ private slots:
                 << "; decoded frames" << decodedFrames.load() << "; requests" << server.requests.size()
                 << "; this is PCM, not audible-output evidence";
         player.setSource({});
-        device.cancel();
+        QTRY_COMPARE_WITH_TIMEOUT(server.activeRangeResponses, 0, 1000);
         disconnect(&output, nullptr, this, nullptr);
         disconnect(&device, nullptr, this, nullptr);
     }
