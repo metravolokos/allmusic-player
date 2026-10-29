@@ -1,0 +1,56 @@
+# Build outputs and generated packages
+/build/
+/out/
+/dist/
+/install/
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+Testing/
+*.user
+*.user.*
+*.qmlc
+*.jsc
+
+# Local IDE, SDK, caches
+.idea/
+.vscode/
+.vs/
+.qt/
+.cache/
+.venv/
+__pycache__/
+*.pyc
+/Qt/
+/SDK/
+/Android/
+/android-sdk/
+/android-ndk*/
+local.properties
+
+# Credentials and signing material: never commit actual values
+.env
+.env.*
+!.env.example
+*credentials*.json
+*secrets*.json
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Personal media, caches, logs
+*.mp3
+*.flac
+*.aac
+*.alac
+*.m4a
+*.mp4
+*.part
+*.sqlite*
+*.db
+*.log
+.DS_Store
+Thumbs.db

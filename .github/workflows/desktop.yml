@@ -1,0 +1,125 @@
+name: Desktop foundation
+
+on:
+  push:
+    branches: [main, 'task/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            qt-arch: linux_gcc_64
+          - os: windows-2022
+            qt-arch: win64_msvc2022_64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Prepare MSVC 2022 x64
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+        with:
+          arch: x64
+          toolset: '14.44'
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-13 libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 xvfb xauth fonts-dejavu-core
+          echo 'CC=gcc-13' >> "$GITHUB_ENV"
+          echo 'CXX=g++-13' >> "$GITHUB_ENV"
+      - name: CMake 3.30.5
+        run: python -m pip install cmake==3.30.5
+      - name: Get Ninja 1.12.1 sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: ninja-build/ninja
+          ref: 2daa09ba270b0a43e1929d29b073348aa985dfaa
+          path: build/ninja-source
+          persist-credentials: false
+      - name: Build Ninja 1.12.1
+        run: |
+          cd build/ninja-source
+          python configure.py --bootstrap
+          echo "$PWD" >> "$GITHUB_PATH"
+      - name: Install open-source Qt 6.12.0
+        uses: jurplel/install-qt-action@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          version: '6.12.0'
+          arch: ${{ matrix.qt-arch }}
+          cache: false
+      - name: Record versions and check documentation
+        run: |
+          python scripts/check_repository.py
+          cmake --version
+          ninja --version
+          qmake -query QT_VERSION
+          if [ "$RUNNER_OS" = Linux ]; then g++-13 --version; else cl 2>&1 || true; fi
+      - name: Configure and build
+        run: |
+          cmake --preset desktop-release
+          cmake --build --preset desktop-release --parallel 2
+      - name: Render a window in virtual X11 (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ctest --preset desktop-release
+        env:
+          QT_QPA_PLATFORM: xcb
+      - name: Render a window (Windows CI desktop)
+        if: runner.os == 'Windows'
+        run: ctest --preset desktop-release
+      - name: Collect Qt Base license sources
+        if: runner.os == 'Windows'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: qt/qtbase
+          ref: 025bdad181de241e81bf853c8a2d7bf3d19261a9
+          path: build/license-sources/qtbase
+          persist-credentials: false
+      - name: Collect Qt Declarative license sources
+        if: runner.os == 'Windows'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: qt/qtdeclarative
+          ref: 4332fbbb4c340463dc8cee36dda0c85d932122d8
+          path: build/license-sources/qtdeclarative
+          persist-credentials: false
+      - name: Package and test Windows archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/package-windows.ps1
+      - name: Upload Windows archive
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: AllMusicPlayer-Windows-x64
+          path: dist/AllMusicPlayer-Windows-x64.zip
+          if-no-files-found: error
+      - name: Upload diagnostics and rendered frames
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: diagnostics-${{ matrix.os }}
+          path: |
+            build/desktop-release/window-smoke.png
+            build/desktop-release/Testing/Temporary/
+            build/desktop-release/CMakeCache.txt
+            build/package-smoke.png
+          if-no-files-found: ignore
