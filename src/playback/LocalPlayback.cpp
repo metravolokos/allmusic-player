@@ -51,11 +51,15 @@ void LocalPlayback::fail(const QString &message)
 
 bool LocalPlayback::openLocal(const QUrl &url)
 {
+    // Unblock an in-flight Range read before asking the backend to stop. The
+    // backend may be waiting synchronously for the source device's current read.
+    if (m_rangeDevice) {
+        m_rangeDevice->cancel();
+    }
     // Never forward a remote URL/UNC path to the experimental backend.
     m_player.stop();
     m_player.setSource({});
     if (m_rangeDevice) {
-        m_rangeDevice->cancel();
         m_rangeDevice->deleteLater();
         m_rangeDevice = nullptr;
     }
@@ -151,10 +155,12 @@ bool LocalPlayback::openLoopback(int index)
         fail(QStringLiteral("Сначала найдите файл в локальном тестовом WebDAV."));
         return false;
     }
+    if (m_rangeDevice) {
+        m_rangeDevice->cancel();
+    }
     m_player.stop();
     m_player.setSource({});
     if (m_rangeDevice) {
-        m_rangeDevice->cancel();
         m_rangeDevice->deleteLater();
     }
     m_networkBytes = 0;

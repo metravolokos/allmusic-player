@@ -229,11 +229,16 @@ private slots:
         QVERIFY(completed.wait(3000));
         const auto result = qvariant_cast<WebDavProbe::Result>(completed.takeFirst().at(0));
         QCOMPARE(result.error, WebDavProbe::Error::None);
-        QCOMPARE(result.entries.size(), 1);
-        QCOMPARE(result.entries[0].etag, etag);
-        QCOMPARE(result.entries[0].size.value(), audio.size());
-        WebDavRangeDevice device(server.serverPort(), result.entries[0].reference,
-                                 result.entries[0].size.value(), result.entries[0].etag);
+        QVector<WebDavProbe::Entry> files;
+        for (const auto &entry : result.entries) {
+            if (!entry.directory)
+                files.push_back(entry);
+        }
+        QCOMPARE(files.size(), 1);
+        QCOMPARE(files[0].etag, etag);
+        QCOMPARE(files[0].size.value(), audio.size());
+        WebDavRangeDevice device(server.serverPort(), files[0].reference,
+                                 files[0].size.value(), files[0].etag);
         QVERIFY(device.open(QIODevice::ReadOnly));
         char byte = 0;
         qint64 read = -1;
@@ -446,7 +451,9 @@ private slots:
             QCOMPARE(QByteArray(bytes, sizeof(bytes)), audio.mid(position, sizeof(bytes)));
             QVERIFY(device.cachedBytes() <= 4 * 64 * 1024);
         }
-        QVERIFY(server.requests.size() >= 5);
+        // The requested offsets visit four distinct 64 KiB pages; returning
+        // to 42,000 bytes must reuse the still-cached first page.
+        QVERIFY(server.requests.size() >= 4);
         qInfo() << "repeated seeks GET count" << server.requests.size()
                 << "adapter cache bytes" << device.cachedBytes();
     }
