@@ -7,6 +7,47 @@
 #include <QMap>
 #include <functional>
 #include <memory>
+#include <utility>
+
+class MockResponseWriter final : public QObject {
+public:
+    MockResponseWriter(QTcpSocket *socket, QByteArray body, qint64 limit,
+                       qsizetype chunkSize, int chunkIntervalMs)
+        : QObject(socket), m_socket(socket), m_body(std::move(body)), m_limit(limit),
+          m_chunkSize(chunkSize), m_chunkIntervalMs(chunkIntervalMs) {}
+
+    void start() { writeNext(); }
+
+private:
+    void writeNext() {
+        if (m_socket->state() != QAbstractSocket::ConnectedState) {
+            deleteLater();
+            return;
+        }
+        const qint64 remaining = m_limit - m_offset;
+        if (remaining <= 0) {
+            m_socket->disconnectFromHost();
+            deleteLater();
+            return;
+        }
+        const qint64 count = m_chunkSize > 0 ? qMin<qint64>(m_chunkSize, remaining) : remaining;
+        m_socket->write(m_body.mid(m_offset, count));
+        m_offset += count;
+        if (m_offset >= m_limit) {
+            m_socket->disconnectFromHost();
+            deleteLater();
+            return;
+        }
+        QTimer::singleShot(m_chunkIntervalMs, this, [this] { writeNext(); });
+    }
+
+    QTcpSocket *m_socket;
+    QByteArray m_body;
+    qint64 m_limit;
+    qsizetype m_chunkSize;
+    int m_chunkIntervalMs;
+    qint64 m_offset = 0;
+};
 
 // Entirely in-memory, loopback-only fixture. No filesystem and no cloud proxying.
 class MockWebDav : public QTcpServer {
@@ -18,10 +59,15 @@ public:
         QMap<QByteArray, QByteArray> headers;
         int delayMs = 0;
         bool truncate = false;
+        bool disconnectBeforeResponse = false;
+        qint64 disconnectAfterBytes = -1;
+        qsizetype chunkSize = 0;
+        int chunkIntervalMs = 0;
     };
     QVector<Request> requests;
     std::function<Response(const Request &)> handler;
     std::function<void(const Request &)> onRequest;
+    int activeResponses = 0;
     bool includeB2Marker = true;
     bool tls = false;
     QSslConfiguration ssl;
@@ -42,7 +88,11 @@ protected:
         if (!socket->setSocketDescriptor(descriptor)) { socket->deleteLater(); return; }
         auto buffer = std::make_shared<QByteArray>();
         auto handled = std::make_shared<bool>(false);
-        connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
+        connect(socket, &QTcpSocket::disconnected, socket, [this, socket] {
+            if (socket->property("mock-response-active").toBool())
+                --activeResponses;
+            socket->deleteLater();
+        });
         QTimer::singleShot(5000, socket, &QTcpSocket::abort);
         connect(socket, &QTcpSocket::readyRead, socket, [this, socket, buffer, handled] {
             if (*handled) return;
@@ -75,15 +125,28 @@ protected:
             else response.body = listing();
             if (includeB2Marker)
                 response.headers["X-AllMusic-Mock"] = "001-B2-loopback";
+            socket->setProperty("mock-response-active", true);
+            ++activeResponses;
             QTimer::singleShot(response.delayMs, socket, [socket, response] {
                 if (socket->state() != QAbstractSocket::ConnectedState) return;
+                if (response.disconnectBeforeResponse) { socket->abort(); return; }
                 QByteArray bytes = "HTTP/1.1 " + QByteArray::number(response.status) + " Fixture\r\nConnection: close\r\n";
                 auto headers = response.headers;
                 if (!headers.contains("Content-Length")) headers["Content-Length"] = QByteArray::number(response.body.size());
                 for (auto it = headers.cbegin(); it != headers.cend(); ++it) bytes += it.key() + ": " + it.value() + "\r\n";
                 bytes += "\r\n";
-                bytes += response.truncate ? response.body.left(response.body.size() / 2) : response.body;
-                socket->write(bytes); socket->disconnectFromHost();
+                socket->write(bytes);
+                qint64 bodyLimit = response.body.size();
+                if (response.truncate) bodyLimit /= 2;
+                if (response.disconnectAfterBytes >= 0)
+                    bodyLimit = qMin(bodyLimit, response.disconnectAfterBytes);
+                if (response.chunkSize > 0) {
+                    new MockResponseWriter(socket, response.body, bodyLimit,
+                                           response.chunkSize, response.chunkIntervalMs)->start();
+                } else {
+                    socket->write(response.body.left(bodyLimit));
+                    socket->disconnectFromHost();
+                }
             });
         });
         if (tls) static_cast<QSslSocket *>(socket)->startServerEncryption();
