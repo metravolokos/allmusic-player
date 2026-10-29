@@ -10,8 +10,46 @@
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTING": "ON"
       }
+    },
+    {
+      "name": "android-debug",
+      "displayName": "Android 001-C arm64-v8a (Qt 6.12.0)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/android-debug",
+      "toolchainFile": "$env{QT_ANDROID_ROOT}/lib/cmake/Qt6/qt.toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "OFF",
+        "ANDROID_ABI": "arm64-v8a",
+        "ANDROID_PLATFORM": "android-28",
+        "ANDROID_SDK_ROOT": "$env{ANDROID_HOME}",
+        "ANDROID_NDK_ROOT": "$env{ANDROID_HOME}/ndk/27.2.12479018",
+        "QT_HOST_PATH": "$env{QT_HOST_PATH}",
+        "QT_ANDROID_BUILD_ALL_ABIS": "OFF",
+        "ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES": "ON"
+      }
     }
   ],
-  "buildPresets": [{"name": "desktop-release", "configurePreset": "desktop-release"}],
-  "testPresets": [{"name": "desktop-release", "configurePreset": "desktop-release", "output": {"outputOnFailure": true}}]
+  "buildPresets": [
+    {
+      "name": "desktop-release",
+      "configurePreset": "desktop-release"
+    },
+    {
+      "name": "android-debug",
+      "configurePreset": "android-debug",
+      "targets": [
+        "apk"
+      ]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "desktop-release",
+      "configurePreset": "desktop-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
 }

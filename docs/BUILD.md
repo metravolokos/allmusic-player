@@ -93,3 +93,30 @@ git diff --check
 
 Android SDK/NDK не устанавливаются в задаче 000. Ранняя проверка APK на Huawei
 запланирована отдельно и требует разрешения владельца на следующую задачу.
+
+## Android 001-C
+
+Реализация разрешена отдельно 29.10.2026. Основной путь — workflow
+`.github/workflows/android.yml`: pull_request (фильтр путей) и workflow_dispatch.
+Нет автоматического push-запуска. Фильтр не заменяет required checks в настройках
+GitHub: запрет объединения до успешной проверки контролирует владелец; настройки
+защиты main этой задачей не меняются.
+
+На подготовленной Linux-машине с Android SDK, JDK 21, NDK 27.2.12479018,
+SDK platform 36 / build-tools 36.0.0, Qt 6.12.0 Android arm64 и host gcc_64:
+
+```sh
+export ANDROID_HOME=/path/to/Android/Sdk
+export QT_ANDROID_ROOT=/path/to/Qt/6.12.0/android_arm64_v8a
+export QT_HOST_PATH=/path/to/Qt/6.12.0/gcc_64
+cmake --preset android-debug -DALLMUSIC_BUILD_LABEL=001-C-local
+cmake --build --preset android-debug --parallel 2
+```
+
+Для маркировки CI использует SHA проверяемого merge commit, run ID и attempt;
+versionCode — номер запуска workflow. Пакет самодостаточный, debug, подпись
+временная; keystore не сохраняется. Устройство не подключается к runner.
+Скрипт `scripts/package-android.py` рассчитан на workflow с подготовленными
+runtime-отчётом, лицензиями и переменными сборки. Он публикует только пакет,
+инструкции и аудит, а не build tree или Gradle cache.
+[Пошаговая установка на Huawei](ANDROID-TEST.md); [результаты](001-C-REPORT.md).
