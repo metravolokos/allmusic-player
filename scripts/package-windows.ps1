@@ -32,7 +32,7 @@ Copy-Item build/license-sources/qt5/coin/provisioning "$stage/Qt-FFmpeg-build-sc
 $crt = Join-Path $env:VCToolsRedistDir 'x64/Microsoft.VC143.CRT'
 if (!(Test-Path "$crt/msvcp140.dll")) { throw "VC143 runtime not found: $crt" }
 Copy-Item "$crt/*.dll" $stage
-Copy-Item docs/WINDOWS-TEST.md "$stage/README.md"
+Copy-Item docs/AUDIO-TEST.md "$stage/README.md"
 Copy-Item docs/DEPENDENCIES.md "$stage/DEPENDENCIES.md"
 python scripts/collect-licenses.py build/license-sources "$stage/licenses"
 if ($LASTEXITCODE -ne 0) { throw 'License collection failed' }

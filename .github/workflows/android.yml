@@ -93,11 +93,12 @@ jobs:
           echo "ARTIFACT_NAME=AllMusicPlayer-001C-Android-arm64-v8a-debug-${short_sha}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
           { java -version; cmake --version; ninja --version; "$QT_ANDROID_ROOT/bin/qmake" -query QT_VERSION; cat "$ANDROID_HOME/ndk/27.2.12479018/source.properties"; } > build/android-evidence/toolchain.txt 2>&1
           cmake --preset android-debug -DALLMUSIC_BUILD_LABEL="$label" -DALLMUSIC_ANDROID_VERSION_CODE="$GITHUB_RUN_NUMBER"
+          cat build/android-debug/src/app/android-allmusic-player-deployment-settings.json > build/android-evidence/deployment-settings.json
           cmake --build --preset android-debug --parallel 2
       - name: Audit runtime dependencies
         run: |
-          cd build/android-debug/android-build
-          ./gradlew --no-daemon --console=plain dependencies --configuration debugRuntimeClasspath > ../../android-evidence/gradle-runtime.txt
+          cd build/android-debug/src/app/android-build
+          ./gradlew --no-daemon --console=plain dependencies --configuration debugRuntimeClasspath > "$GITHUB_WORKSPACE/build/android-evidence/gradle-runtime.txt"
       - name: Collect Qt Base license sources
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -129,3 +130,4 @@ jobs:
           path: build/android-evidence/
           if-no-files-found: ignore
           retention-days: 14
+

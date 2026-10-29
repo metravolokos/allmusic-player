@@ -83,7 +83,7 @@ def capture(command, path):
 def main():
     evidence = ROOT / "build/android-evidence"
     evidence.mkdir(parents=True, exist_ok=True)
-    candidates = list((ROOT / "build/android-debug/android-build/build/outputs/apk/debug").glob("*.apk"))
+    candidates = list((ROOT / "build/android-debug/src/app/android-build/build/outputs/apk/debug").glob("*.apk"))
     assert len(candidates) == 1, f"Expected exactly one debug APK: {candidates}"
     apk = candidates[0]
     with zipfile.ZipFile(apk) as archive:
@@ -164,3 +164,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
