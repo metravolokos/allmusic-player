@@ -11,10 +11,11 @@ class WebDavProbe final : public QObject {
 public:
     enum class Error { None, Busy, UnsafePath, InvalidRequest, Redirect, Auth,
         Forbidden, NotFound, RangeUnavailable, RateLimited, Server, Http,
-        Network, Timeout, Cancelled, TooLarge, Protocol, VersionChanged };
+        Network, Timeout, Cancelled, TooLarge, Protocol, VersionChanged, Tls };
     Q_ENUM(Error)
     struct Entry {
         QString path;
+        QString reference; // Encoded path suitable for a subsequent request; path is for display.
         bool directory = false;
         std::optional<qint64> size;
         QByteArray etag;
@@ -57,6 +58,6 @@ private:
     qint64 start = 0, count = 0;
     int timeoutMs = 3000;
     quint64 operation = 0;
-    bool active = false, listing = false;
+    bool active = false, listing = false, tlsFailure = false;
 };
 Q_DECLARE_METATYPE(WebDavProbe::Result)

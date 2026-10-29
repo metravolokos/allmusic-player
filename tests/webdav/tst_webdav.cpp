@@ -2,6 +2,7 @@
 #include "MockWebDav.h"
 #include <QFile>
 #include <QSignalSpy>
+#include <QRegularExpression>
 #include <QSslKey>
 #include <QtTest>
 
@@ -46,6 +47,13 @@ private slots:
         for (const auto &r : server->requests) {
             QVERIFY2(r.method == "GET" || r.method == "PROPFIND", r.method.constData());
             QVERIFY2(r.target == "/AllMusic" || r.target.startsWith("/AllMusic/"), r.target.constData());
+            QVERIFY(!r.target.contains('?')); QVERIFY(!r.target.contains('#'));
+            const auto decoded = QUrl::fromPercentEncoding(r.target);
+            QVERIFY(!decoded.contains('\\'));
+            QVERIFY(!decoded.contains(QRegularExpression("%[0-9a-fA-F]{2}")));
+            for (const auto &segment : decoded.split('/')) {
+                QVERIFY(segment != "."); QVERIFY(segment != "..");
+            }
             QVERIFY(!r.headers.contains("authorization"));
             QVERIFY(!r.headers.contains("cookie"));
         }
@@ -67,9 +75,11 @@ private slots:
         QVERIFY(r.entries[0].directory);
         QCOMPARE(r.entries[1].path, QString::fromUtf8("/AllMusic/Тест #100%.bin"));
         QCOMPARE(r.entries[1].size.value(), 10); QCOMPARE(r.entries[1].etag, "\"v1\"");
+        server->handler = [](const auto &) { return partial(); };
+        QCOMPARE(range(r.entries[1].reference).error, Error::None);
         QVERIFY(!r.entries[1].lastModified.isEmpty());
         QVERIFY(!r.entries[2].size); QVERIFY(!r.entries[3].size);
-        QCOMPARE(server->requests.size(), 1);
+        QCOMPARE(server->requests.size(), 2);
         QCOMPARE(server->requests[0].headers.value("depth"), "1");
         QVERIFY(server->requests[0].body.contains("getetag"));
     }
@@ -274,11 +284,12 @@ private slots:
         secure.ssl = QSslConfiguration::defaultConfiguration();
         secure.ssl.setLocalCertificate(QSslCertificate(cert.readAll()));
         secure.ssl.setPrivateKey(QSslKey(key.readAll(), QSsl::Rsa));
+        QVERIFY(!secure.ssl.localCertificate().isNull()); QVERIFY(!secure.ssl.privateKey().isNull());
         secure.ssl.setPeerVerifyMode(QSslSocket::VerifyNone); // server only; client keeps strict default verification.
         QVERIFY(secure.start());
         WebDavProbe strict(secure.serverPort(), true); QSignalSpy spy(&strict, &WebDavProbe::completed);
         QVERIFY(strict.listDirectory("/AllMusic/")); QVERIFY(spy.wait(4000));
-        QCOMPARE(qvariant_cast<Result>(spy[0][0]).error, Error::Network);
+        QCOMPARE(qvariant_cast<Result>(spy[0][0]).error, Error::Tls);
         QCOMPARE(secure.requests.size(), 0);
     }
 };

@@ -3,6 +3,7 @@
 #include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QXmlStreamReader>
+#include <QSslError>
 #include <limits>
 
 namespace {
@@ -98,7 +99,7 @@ bool WebDavProbe::readRange(const QString &path, qint64 offset, qint64 length, c
 
 void WebDavProbe::send() {
     if (!active) return;
-    body.clear(); ++result.attempts;
+    body.clear(); tlsFailure = false; ++result.attempts;
     QUrl url = origin; url.setPath(requestPath);
     QNetworkRequest request(url);
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
@@ -117,6 +118,9 @@ void WebDavProbe::send() {
         reply = manager.get(request);
     }
     reply->setReadBufferSize(64 * 1024);
+    connect(reply, &QNetworkReply::sslErrors, this, [this](const QList<QSslError> &) {
+        tlsFailure = true; // Observe only: never ignoreSslErrors or change the trust store.
+    });
     connect(reply, &QNetworkReply::metaDataChanged, this, [this] {
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (!listing && status == 200) {
@@ -164,7 +168,7 @@ void WebDavProbe::send() {
         if (status == 429) { finish(Error::RateLimited); return; }
         if (status == 408) { finish(Error::Timeout); return; }
         if (status >= 500) { finish(Error::Server); return; }
-        if (networkError != QNetworkReply::NoError) { finish(Error::Network); return; }
+        if (networkError != QNetworkReply::NoError) { finish(tlsFailure ? Error::Tls : Error::Network); return; }
         if (!contentEncoding.isEmpty() && contentEncoding != "identity") { finish(Error::Protocol); return; }
         if (listing) {
             if (status != 207) { finish(Error::Http); return; }
@@ -255,7 +259,9 @@ void WebDavProbe::parseListing() {
         if (candidate != directory && (!candidate.startsWith(prefix) || candidate.mid(prefix.size()).contains('/'))) {
             ++result.rejectedEntries; continue;
         }
-        entry.path = *path; result.entries.push_back(entry);
+        entry.path = *path;
+        QUrl encoded; encoded.setPath(*path); entry.reference = encoded.path(QUrl::FullyEncoded);
+        result.entries.push_back(entry);
         if (result.entries.size() > 10000) { finish(Error::TooLarge); return; }
     }
     finish(xml.hasError() || !root ? Error::Protocol : Error::None);
