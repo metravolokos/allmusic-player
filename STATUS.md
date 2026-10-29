@@ -213,12 +213,16 @@ PR #8 готов к рассмотрению; сам факт этих резу�
 Локально подготовлены `WebDavRangeDevice` (64-КиБ страницы, максимум 4 страницы
 в памяти, ETag/If-Range и fail-closed при HTTP 200), Desktop-интеграция,
 mock-сервер и Windows one-click launcher. Создан 32-секундный синтетический
-FLAC для Range/seek. Автоматические тесты добавлены, но Qt/CMake отсутствуют в
-текущем executor: C++ CI, Windows архив и ручное испытание Windows 11 пока
-**НЕ ПРОВЕРЕНЫ**. Локально пройдены генерация/ffprobe фикстур, `check_repository.py`,
-4 Android package audit теста и `git diff --check`.
+FLAC для Range/seek. Первый Desktop CI `40942046920` успешно собрал приложение,
+`WebDavRangeDevice` и mock, затем остановился при компиляции теста из-за
+отсутствующего include `QAudioBuffer`; include исправлен, повторный CI ожидается.
+Qt/CMake в executor нет. CTest, Windows архив и ручное Windows 11 испытание пока
+**НЕ ПРОВЕРЕНЫ**. Локально пройдены генерация/ffprobe фикстур,
+`check_repository.py`, 4 Android package audit теста и `git diff --check`.
 
 Техническая гипотеза: `QMediaPlayer::setSourceDevice()` может читать seekable
 адаптер поверх отдельных Range-запросов. Успех воспроизведения, время до PCM,
 байты до PCM и seek считаются неизвестными до CI; PCM не является доказательством
 слышимого звука. См. [задачу](tasks/001-B2-webdav-stream.md) и [руководство Windows](docs/WEB-DAV-STREAM-TEST.md).
+Полный [отчёт 001-B2](docs/001-B2-REPORT.md) будет включать логи CI и результаты
+ручной Windows 11 проверки после получения.

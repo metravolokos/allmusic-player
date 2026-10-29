@@ -52,6 +52,6 @@ Qt Multimedia/FFmpeg остаётся кандидатом; Android audio и с�
 
 ## Текущая задача 001-B2
 
-[Задача](tasks/001-B2-webdav-stream.md), [статус и отчёт](STATUS.md),
+[Задача](tasks/001-B2-webdav-stream.md), [отчёт](docs/001-B2-REPORT.md), [статус](STATUS.md),
 [ручная демонстрация Windows 11](docs/WEB-DAV-STREAM-TEST.md). Проверять только
 loopback mock; реальный WebDAV не используется.

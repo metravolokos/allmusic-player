@@ -3,12 +3,14 @@
 #include "MockWebDav.h"
 
 #include <QAudioBufferOutput>
+#include <QAudioBuffer>
 #include <QMediaPlayer>
 #include <QFile>
 #include <QSignalSpy>
 #include <QElapsedTimer>
 #include <QtTest>
 #include <atomic>
+#include <cmath>
 #include <thread>
 #include <limits>
 
@@ -231,26 +233,33 @@ private slots:
         QAudioBufferOutput output;
         player.setAudioOutput(nullptr);
         player.setAudioBufferOutput(&output);
-        player.setSourceDevice(&device);
         std::atomic<qint64> decodedFrames{0};
         std::atomic<qint64> bytesAtFirstPcm{-1};
         std::atomic<qint64> transferred{0};
         std::atomic<qint64> firstPcmMs{-1};
+        std::atomic<float> peak{0.0f};
         QElapsedTimer startup;
-        startup.start();
         connect(&device, &WebDavRangeDevice::bytesFetched, this,
                 [&](qint64 count) { transferred.fetch_add(count); }, Qt::DirectConnection);
         connect(&output, &QAudioBufferOutput::audioBufferReceived, this,
                 [&](const QAudioBuffer &buffer) {
             if (!buffer.isValid()) return;
             decodedFrames.fetch_add(buffer.frameCount());
+            for (int i = 0; i < buffer.sampleCount(); ++i) {
+                const float sample = std::abs(buffer.format().normalizedSampleValue(
+                    buffer.constData<char>() + i * buffer.format().bytesPerSample()));
+                float current = peak.load();
+                while (sample > current && !peak.compare_exchange_weak(current, sample)) { }
+            }
             if (bytesAtFirstPcm.load() < 0) {
                 bytesAtFirstPcm.store(transferred.load());
                 firstPcmMs.store(startup.elapsed());
             }
         }, Qt::DirectConnection);
+        startup.start();
+        player.setSourceDevice(&device);
         player.play();
-        QTRY_VERIFY_WITH_TIMEOUT(decodedFrames.load() > 4096, 12000);
+        QTRY_VERIFY_WITH_TIMEOUT(decodedFrames.load() > 4096 && peak.load() > 0.01f, 12000);
         QVERIFY(bytesAtFirstPcm.load() > 0);
         QVERIFY2(bytesAtFirstPcm.load() < audio.size(), "decoder consumed the entire file before first PCM");
         QVERIFY2(device.cachedBytes() <= 4 * 64 * 1024, "page cache exceeded its fixed bound");
@@ -270,6 +279,7 @@ private slots:
         qInfo() << "time to PCM ms" << firstPcmMs.load() << "bytes fetched at PCM"
                 << bytesAtFirstPcm.load() << "of file" << audio.size()
                 << "; cached bytes" << device.cachedBytes() << "; decoded frames" << decodedFrames.load()
+                << "; PCM peak" << peak.load()
                 << "; HTTP requests" << server.requests.size();
         player.setSource({});
         disconnect(&output, nullptr, this, nullptr);

@@ -41,6 +41,7 @@ Copy-Item "$crt/*.dll" $stage
 Copy-Item docs/AUDIO-TEST.md "$stage/README.md"
 Copy-Item docs/WEB-DAV-STREAM-TEST.md "$stage/WEB-DAV-STREAM-TEST.md"
 Copy-Item scripts/start-webdav-demo.bat "$stage/start-webdav-demo.bat"
+Copy-Item scripts/start-webdav-no-range.bat "$stage/start-webdav-no-range.bat"
 Copy-Item docs/DEPENDENCIES.md "$stage/DEPENDENCIES.md"
 python scripts/collect-licenses.py build/license-sources "$stage/licenses"
 if ($LASTEXITCODE -ne 0) { throw 'License collection failed' }
