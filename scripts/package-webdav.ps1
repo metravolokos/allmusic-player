@@ -17,7 +17,7 @@ $savedPath = $env:PATH
 try {
     $env:PATH = "$env:SystemRoot/System32;$env:SystemRoot"
     $env:QT_PLUGIN_PATH = ''
-    & "$stage/webdav-tests.exe" -o "$stage/result.txt",txt
+    & "$stage/webdav-tests.exe" -o "${stage}/result.txt,txt"
     if ($LASTEXITCODE -ne 0) { throw 'Packaged WebDAV tests failed' }
 } finally { $env:PATH = $savedPath }
 Get-ChildItem $stage -Recurse -File | ForEach-Object {

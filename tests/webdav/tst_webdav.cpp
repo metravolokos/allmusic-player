@@ -17,12 +17,18 @@ class WebDavTests : public QObject {
     Result range(const QString &path = "/AllMusic/test.bin", qint64 offset = 2,
                  qint64 length = 4, const QByteArray &tag = {}) {
         QSignalSpy spy(client, &WebDavProbe::completed);
-        if (!client->readRange(path, offset, length, tag) || !spy.wait(4000)) return Result{Error::Timeout};
+        if (!client->readRange(path, offset, length, tag) || !spy.wait(4000)) {
+            QTest::qFail("Range operation did not emit completion", __FILE__, __LINE__);
+            return Result{Error::Protocol};
+        }
         return qvariant_cast<Result>(spy.takeFirst().at(0));
     }
     Result list(const QString &path = "/AllMusic/") {
         QSignalSpy spy(client, &WebDavProbe::completed);
-        if (!client->listDirectory(path) || !spy.wait(4000)) return Result{Error::Timeout};
+        if (!client->listDirectory(path) || !spy.wait(4000)) {
+            QTest::qFail("PROPFIND operation did not emit completion", __FILE__, __LINE__);
+            return Result{Error::Protocol};
+        }
         return qvariant_cast<Result>(spy.takeFirst().at(0));
     }
     static QByteArray response(const QByteArray &href, const QByteArray &props = "", int propStatus = 200) {
