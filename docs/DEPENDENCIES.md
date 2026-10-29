@@ -6,7 +6,7 @@
 
 | Компонент | Версия / область | Лицензия / источник |
 |---|---|---|
-| Qt Base: Core, Gui и зависимости сборки Qt | 6.12.0 | Для используемых библиотек LGPLv3 (либо альтернативные GPL/commercial); [исходники и лицензии](https://github.com/qt/qtbase/tree/v6.12.0/LICENSES) |
+| Qt Base: Core, Gui, косвенные Network/OpenGL и инструменты Qt | 6.12.0 | Для используемых библиотек LGPLv3 (либо альтернативные GPL/commercial); [исходники и лицензии](https://github.com/qt/qtbase/tree/v6.12.0/LICENSES) |
 | Qt Declarative: Qml, QmlModels, QmlWorkerScript, Quick, QtQuick.Window | 6.12.0 | LGPLv3 для используемых библиотек; [исходники и лицензии](https://github.com/qt/qtdeclarative/tree/v6.12.0/LICENSES) |
 | Инструменты Qt: moc, rcc, qmlcachegen, windeployqt | 6.12.0 | Условия различаются по инструментам: GPL с исключениями либо LGPL/commercial; тексты в исходниках Qt |
 | Встроенные сторонние компоненты Qt | По составу конкретного пакета Qt | Собственные лицензии, включая MIT/BSD/FreeType/zlib и др.; `qt_attribution.json` и тексты в `src/3rdparty` |

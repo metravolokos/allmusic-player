@@ -2,7 +2,7 @@ name: Desktop foundation
 
 on:
   push:
-    branches: [main, 'task/**']
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -14,7 +14,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  documentation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Check repository documents
+        run: |
+          python3 scripts/check_repository.py
+          git diff --check
   desktop:
+    needs: documentation
     strategy:
       fail-fast: false
       matrix:
@@ -66,6 +75,8 @@ jobs:
           version: '6.12.0'
           arch: ${{ matrix.qt-arch }}
           cache: false
+          aqtversion: '==3.3.0'
+          extra: '--base https://download.qt.io'
       - name: Record versions and check documentation
         run: |
           python scripts/check_repository.py

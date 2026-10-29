@@ -34,6 +34,12 @@ local.properties
 !.env.example
 *credentials*.json
 *secrets*.json
+*secrets*.yaml
+*secrets*.yml
+*credentials*.yaml
+*credentials*.yml
+.netrc
+.npmrc
 *.key
 *.pem
 *.p12
