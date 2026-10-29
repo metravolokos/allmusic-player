@@ -4,7 +4,11 @@ import shutil
 import sys
 
 source, destination = map(Path, sys.argv[1:])
-for module in ("qtbase", "qtdeclarative"):
+modules = ["qtbase", "qtdeclarative"]
+# Desktop Multimedia only; the Android package retains the original scope.
+if (source / "qtmultimedia").is_dir():
+    modules.append("qtmultimedia")
+for module in modules:
     root = source / module
     if not (root / "LICENSES" / "LGPL-3.0-only.txt").is_file():
         raise SystemExit(f"Missing upstream licenses: {root}")
@@ -19,3 +23,4 @@ for module in ("qtbase", "qtdeclarative"):
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(path, target)
 print("Qt license texts and third-party attribution files collected")
+

@@ -5,9 +5,17 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <QDebug>
+#ifndef Q_OS_ANDROID
+#include "LocalPlayback.h"
+#endif
 
 int main(int argc, char *argv[])
 {
+#ifndef Q_OS_ANDROID
+    // Fixed backend for this experiment; no network streaming in 001-B1.
+    qputenv("QT_MEDIA_BACKEND", "ffmpeg");
+    qputenv("QT_FFMPEG_PROTOCOL_WHITELIST", "file");
+#endif
     QGuiApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("AllMusic Player"));
     QCoreApplication::setApplicationVersion(QStringLiteral("0.0.1"));
@@ -21,12 +29,17 @@ int main(int argc, char *argv[])
         return 2;
     }
 
+#ifndef Q_OS_ANDROID
+    LocalPlayback playback;
+#endif
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed,
                      &app, [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
 #ifdef Q_OS_ANDROID
     engine.rootContext()->setContextProperty(QStringLiteral("buildLabel"),
                                             QStringLiteral(ALLMUSIC_BUILD_LABEL));
+#else
+    engine.rootContext()->setContextProperty(QStringLiteral("playback"), &playback);
 #endif
     engine.loadFromModule(QStringLiteral("AllMusicPlayer"), QStringLiteral("Main"));
     if (engine.rootObjects().isEmpty())
@@ -58,3 +71,4 @@ int main(int argc, char *argv[])
     const int result = app.exec();
     return smokeTest && !capturedFrame ? 1 : result;
 }
+
