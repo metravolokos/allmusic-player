@@ -63,9 +63,10 @@ jobs:
           # Qt >=6.7 Android metadata lives in all_os; install-qt resolves it.
           # Avoid install-qt-action's linux/android version-list preflight.
           python -m aqt list-qt all_os android --arch 6.12.0 > build/android-evidence/available-qt-abis.txt
+          # Keep Qt outside the source tree: qmlimportscanner scans project roots.
           # Host tools require Qt's ICU archive; ICU is not Android runtime.
-          python -m aqt install-qt linux desktop 6.12.0 linux_gcc_64 --archives qtbase qtdeclarative icu --outputdir "$GITHUB_WORKSPACE/Qt" --base https://download.qt.io
-          python -m aqt install-qt linux android 6.12.0 android_arm64_v8a --archives qtbase qtdeclarative --outputdir "$GITHUB_WORKSPACE/Qt" --base https://download.qt.io
+          python -m aqt install-qt linux desktop 6.12.0 linux_gcc_64 --archives qtbase qtdeclarative icu --outputdir "$RUNNER_TEMP/Qt" --base https://download.qt.io
+          python -m aqt install-qt linux android 6.12.0 android_arm64_v8a --archives qtbase qtdeclarative --outputdir "$RUNNER_TEMP/Qt" --base https://download.qt.io
       - name: CMake 3.30.5
         run: python -m pip install cmake==3.30.5
       - name: Get Ninja 1.12.1 sources
@@ -82,8 +83,8 @@ jobs:
           echo "$PWD" >> "$GITHUB_PATH"
       - name: Configure and build bundled debug APK
         env:
-          QT_ANDROID_ROOT: ${{ github.workspace }}/Qt/6.12.0/android_arm64_v8a
-          QT_HOST_PATH: ${{ github.workspace }}/Qt/6.12.0/gcc_64
+          QT_ANDROID_ROOT: ${{ runner.temp }}/Qt/6.12.0/android_arm64_v8a
+          QT_HOST_PATH: ${{ runner.temp }}/Qt/6.12.0/gcc_64
         run: |
           mkdir -p build/android-evidence
           short_sha=$(git rev-parse --short=12 HEAD)
