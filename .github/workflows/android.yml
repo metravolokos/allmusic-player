@@ -37,15 +37,18 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Prepare JDK 21 and SDK packages
+      - name: Prepare JDK 21 and check documents
         run: |
           echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
           echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
           python3 scripts/check_repository.py
           git diff --check
-          # Preserve sdkmanager's exit status, not yes's expected SIGPIPE.
-          set +o pipefail
-          yes | sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018"
+      - name: Prepare Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          cmdline-tools-version: '12266719'
+          log-accepted-android-sdk-licenses: false
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0 ndk;27.2.12479018'
       - name: Install open-source Qt 6.12.0 Android and host tools
         id: qt
         uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06

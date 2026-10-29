@@ -83,7 +83,9 @@ def main():
     assert len(candidates) == 1, f"Expected exactly one debug APK: {candidates}"
     apk = candidates[0]
     sdk = Path(os.environ["ANDROID_HOME"])
-    analyzer = sdk / "cmdline-tools/latest/bin/apkanalyzer"
+    analyzers = sorted((sdk / "cmdline-tools").glob("*/bin/apkanalyzer"))
+    assert analyzers, "Android SDK apkanalyzer missing"
+    analyzer = Path(shutil.which("apkanalyzer") or analyzers[-1])
     tools = sdk / "build-tools/36.0.0"
     manifest = capture([analyzer, "manifest", "print", apk], evidence / "AndroidManifest.xml")
     parsed = check_manifest(manifest)
