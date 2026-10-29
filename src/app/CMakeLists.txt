@@ -49,7 +49,11 @@ if(ANDROID)
     return()
 endif()
 
-add_library(local-playback STATIC ${PROJECT_SOURCE_DIR}/src/playback/LocalPlayback.cpp ${PROJECT_SOURCE_DIR}/src/playback/LocalPlayback.h)
+add_library(local-playback STATIC
+    ${PROJECT_SOURCE_DIR}/src/playback/LocalPlayback.cpp
+    ${PROJECT_SOURCE_DIR}/src/playback/LocalPlayback.h
+    ${PROJECT_SOURCE_DIR}/src/playback/WebDavRangeDevice.cpp
+    ${PROJECT_SOURCE_DIR}/src/playback/WebDavRangeDevice.h)
 target_link_libraries(local-playback PUBLIC Qt6::Multimedia)
 target_include_directories(local-playback PUBLIC ${PROJECT_SOURCE_DIR}/src/playback)
 target_link_libraries(allmusic-player PRIVATE local-playback Qt6::QuickControls2)

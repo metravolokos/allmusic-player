@@ -21,6 +21,8 @@ public:
     };
     QVector<Request> requests;
     std::function<Response(const Request &)> handler;
+    std::function<void(const Request &)> onRequest;
+    bool includeB2Marker = true;
     bool tls = false;
     QSslConfiguration ssl;
     bool start() { return listen(QHostAddress::LocalHost, 0); }
@@ -63,6 +65,7 @@ protected:
             if (!validLength || length < 0 || length > 32768) { socket->abort(); return; }
             if (buffer->size() - end - 4 < length) return;
             *handled = true; request.body = buffer->mid(end + 4, length); requests.push_back(request);
+            if (onRequest) onRequest(request);
             Response response;
             if (request.method != "GET" && request.method != "PROPFIND" && request.method != "HEAD") {
                 response.status = 405;
@@ -70,6 +73,8 @@ protected:
                 response.status = 403;
             } else if (handler) response = handler(request);
             else response.body = listing();
+            if (includeB2Marker)
+                response.headers["X-AllMusic-Mock"] = "001-B2-loopback";
             QTimer::singleShot(response.delayMs, socket, [socket, response] {
                 if (socket->state() != QAbstractSocket::ConnectedState) return;
                 QByteArray bytes = "HTTP/1.1 " + QByteArray::number(response.status) + " Fixture\r\nConnection: close\r\n";

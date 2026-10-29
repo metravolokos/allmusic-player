@@ -18,6 +18,12 @@ foreach ($pattern in @('Qt6Multimedia.dll', 'multimedia/ffmpegmediaplugin.dll', 
 Copy-Item build/desktop-release/playback-tests.exe $stage
 windeployqt --release --no-translations --no-compiler-runtime --skip-plugin-types imageformats,iconengines "$stage/playback-tests.exe"
 if ($LASTEXITCODE -ne 0) { throw 'Playback test deployment failed' }
+Copy-Item build/desktop-release/streaming-tests.exe $stage
+windeployqt --release --no-translations --no-compiler-runtime --skip-plugin-types imageformats,iconengines "$stage/streaming-tests.exe"
+if ($LASTEXITCODE -ne 0) { throw 'Streaming test deployment failed' }
+Copy-Item build/desktop-release/webdav-mock.exe $stage
+windeployqt --release --no-translations --no-compiler-runtime --skip-plugin-types imageformats,iconengines "$stage/webdav-mock.exe"
+if ($LASTEXITCODE -ne 0) { throw 'Loopback WebDAV mock deployment failed' }
 Copy-Item build/audio-fixtures "$stage/audio-fixtures" -Recurse
 Copy-Item docs/AUDIO-TEST.md "$stage/AUDIO-TEST.md"
 Copy-Item build/ffmpeg-info.json "$stage/FFMPEG-INFO.json"
@@ -33,6 +39,9 @@ $crt = Join-Path $env:VCToolsRedistDir 'x64/Microsoft.VC143.CRT'
 if (!(Test-Path "$crt/msvcp140.dll")) { throw "VC143 runtime not found: $crt" }
 Copy-Item "$crt/*.dll" $stage
 Copy-Item docs/AUDIO-TEST.md "$stage/README.md"
+Copy-Item docs/WEB-DAV-STREAM-TEST.md "$stage/WEB-DAV-STREAM-TEST.md"
+Copy-Item scripts/start-webdav-demo.bat "$stage/start-webdav-demo.bat"
+Copy-Item scripts/start-webdav-no-range.bat "$stage/start-webdav-no-range.bat"
 Copy-Item docs/DEPENDENCIES.md "$stage/DEPENDENCIES.md"
 python scripts/collect-licenses.py build/license-sources "$stage/licenses"
 if ($LASTEXITCODE -ne 0) { throw 'License collection failed' }
@@ -61,6 +70,8 @@ try {
     $env:ALLMUSIC_FIXTURES = "$stage/audio-fixtures"
     & "$stage/playback-tests.exe" -o "$root/build/packaged-playback.txt,txt"
     if ($LASTEXITCODE -ne 0) { throw 'Packaged PCM decoding tests failed' }
+    & "$stage/streaming-tests.exe" -o "$root/build/packaged-streaming.txt,txt"
+    if ($LASTEXITCODE -ne 0) { throw 'Packaged WebDAV streaming tests failed' }
     $process = Start-Process "$stage/allmusic-player.exe" -ArgumentList '--smoke-test', "$root/build/package-smoke.png" -WorkingDirectory $stage -PassThru
     if (!$process.WaitForExit(30000)) { $process.Kill(); throw 'Packaged app timed out' }
     if ($process.ExitCode -ne 0) { throw "Packaged app failed: $($process.ExitCode)" }

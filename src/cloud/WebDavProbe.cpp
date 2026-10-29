@@ -126,6 +126,11 @@ void WebDavProbe::send() {
     });
     connect(reply, &QNetworkReply::metaDataChanged, this, [this] {
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (requireMockMarker && reply->rawHeader("X-AllMusic-Mock") != "001-B2-loopback") {
+            result.status = status;
+            finish(Error::Protocol);
+            return;
+        }
         if (!listing && status == 200) {
             result.status = status;
             finish(expectedEtag.isEmpty() ? Error::RangeUnavailable : Error::VersionChanged);
@@ -146,6 +151,7 @@ void WebDavProbe::send() {
         const auto contentRange = reply->rawHeader("Content-Range");
         const auto contentLength = reply->rawHeader("Content-Length");
         const auto contentEncoding = reply->rawHeader("Content-Encoding");
+        const auto mockMarker = reply->rawHeader("X-AllMusic-Mock");
         result.etag = reply->rawHeader("ETag");
         result.strongEtag = strong(result.etag);
         const auto retryAfter = reply->rawHeader("Retry-After");
@@ -154,6 +160,7 @@ void WebDavProbe::send() {
         }
         body += reply->readAll();
         reply = nullptr; finishedReply->deleteLater();
+        if (requireMockMarker && mockMarker != "001-B2-loopback") { finish(Error::Protocol); return; }
         if (status >= 300 && status <= 399) { finish(Error::Redirect); return; }
         if (retryable(status) && result.attempts < 3) {
             bool ok = false; const int seconds = retryAfter.toInt(&ok);

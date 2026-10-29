@@ -7,12 +7,12 @@ import QtMultimedia
 
 Window {
     id: window
-    width: 760
-    height: 480
+    width: 800
+    height: 680
     minimumWidth: 540
-    minimumHeight: 420
+    minimumHeight: 600
     visible: true
-    title: "AllMusic Player — локальный прототип 001-B1"
+    title: "AllMusic Player — прототип 001-B2"
     color: "#f5f6f8"
     readonly property var media: playback.player
     function time(ms) {
@@ -30,11 +30,42 @@ Window {
         anchors.margins: 28
         spacing: 16
         Label { text: "AllMusic Player"; font.pixelSize: 28; font.bold: true }
-        Label { text: "Локальный прототип 001-B1"; color: "#526171" }
+        Label { text: "Потоковый прототип через локальный WebDAV · 001-B2"; color: "#526171" }
         Button { text: "Выбрать аудиофайл…"; onClicked: picker.open() }
+        GroupBox {
+            Layout.fillWidth: true
+            title: "Локальный тестовый WebDAV"
+            RowLayout {
+                anchors.fill: parent
+                TextField {
+                    id: webdavPort
+                    Layout.preferredWidth: 100
+                    text: "8765"
+                    validator: IntValidator { bottom: 1; top: 65535 }
+                    Accessible.name: "Порт loopback WebDAV"
+                }
+                Button { text: "Найти файлы"; onClicked: playback.scanLoopback(Number(webdavPort.text)) }
+                ComboBox {
+                    id: remoteFile
+                    Layout.fillWidth: true
+                    model: playback.loopbackFiles
+                    Accessible.name: "Файл из /AllMusic"
+                    onActivated: {
+                        if (playback.openLoopback(currentIndex)) window.media.play()
+                    }
+                }
+            }
+        }
         Label {
             Layout.fillWidth: true
-            text: window.media.source.toString() || "Файл ещё не выбран"
+            text: "Сеть разрешена только к 127.0.0.1 и внутри /AllMusic. Range 206 обязателен; 200 отображается как ошибка, файл целиком не скачивается."
+            color: "#526171"
+            wrapMode: Text.WordWrap
+        }
+        Label { text: "Получено по Range: " + playback.networkBytes + " байт"; color: "#526171" }
+        Label {
+            Layout.fillWidth: true
+            text: window.media.source.toString() || remoteFile.currentText || "Файл ещё не выбран"
             elide: Text.ElideMiddle
             Accessible.name: "Выбранный файл"
         }

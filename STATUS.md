@@ -1,6 +1,6 @@
 # Текущий статус проекта — AllMusic Player
 
-**Дата:** 29.10.2026. **Этап:** 001-B1 — локальный Desktop-аудиопрототип. **Задача 000:** завершена и принята владельцем; PR #2 объединён в main. Задачи 001-A и 001-C завершены по сообщению владельца; PR #3, #4 и #6 объединены. Разрешена только 001-B1.
+**Дата:** 29.10.2026. **Текущая задача:** 001-B2 — потоковый прототип через локальный WebDAV. PR #8 объединён в `main` (`b2232ff`); ветка B2 создана от этого коммита. Предыдущие разделы ниже сохраняют историческое состояние до B2.
 
 ## Утверждено и подготовлено
 
@@ -203,3 +203,41 @@ Windows 11: MP3, FLAC, AAC ADTS, AAC M4A, ALAC M4A, пауза/продолже�
 неподтверждёнными, не блокируют обычную Windows-приёмку B1 по D-026.
 PR #8 готов к рассмотрению; сам факт этих результатов **не разрешает merge**.
 001-B2 начинать только после решения владельца.
+
+## 001-B2 — текущая работа
+
+Разрешение владельца получено 29.10.2026. Scope ограничен loopback mock и
+`/AllMusic`; без реального Mail, авторизации, записи/удаления, Android audio,
+медиатеки, постоянного аудиокэша и gapless.
+
+Реализованы `WebDavRangeDevice` (64-КиБ страницы, максимум 4 страницы в RAM,
+ETag/If-Range, fail-closed при HTTP 200), Desktop-интеграция, loopback mock и
+Windows one-click launcher. Ветка `task/001-b2-webdav-stream` создана от PR #8
+merge `b2232ff`; текущий PR #9.
+
+[Desktop CI 40943552384](https://github.com/metravolokos/allmusic-player/actions/runs/40943552384)
+на head `f4bb308` прошёл Linux и Windows: Linux 4/4 CTest, включая streaming
+10/10 и WebDAV 86/86; Windows сборка, тесты, smoke и Windows x64 архив прошли.
+[Android CI 40943552169](https://github.com/metravolokos/allmusic-player/actions/runs/40943552169)
+прошёл как регрессия 001-C. Архив доступен в [AllMusicPlayer-Windows-x64](https://github.com/metravolokos/allmusic-player/actions/runs/40943552384/artifacts/12927309414)
+и [WebDAV kit](https://github.com/metravolokos/allmusic-player/actions/runs/40943552384/artifacts/12928921132).
+
+Измерение Qt 6.12.0 / FFmpeg 9.0.1 на Linux: 31 мс до первого ненулевого PCM,
+65 536 байт Range payload из 385 604 байт файла, кэш адаптера 254 532 байта
+(предел 262 144), 9 216 PCM frames, peak 0.0441908, 4 HTTP requests. Автотест
+подтвердил seek на незагруженную область; 200, смена ETag, неожиданный сервер,
+обрыв и отмена обрабатываются fail-closed. Это декодирование PCM, не слышимый
+звук. Точный размер внутреннего кэша FFmpeg неизвестен.
+
+Основная ручная функциональная приёмка B2 на **Windows 11 — ПРОЙДЕНА (5/5)**,
+по сообщению владельца 29.10.2026: слышимый потоковый FLAC, пауза/продолжение/стоп,
+seek к ~25-й секунде, новый GET Range, ошибка HTTP 200 с прекращением воспроизведения.
+[Протокол владельца в PR #9](https://github.com/metravolokos/allmusic-player/pull/9#issuecomment-6507500307).
+[Desktop CI 40944887711](https://github.com/metravolokos/allmusic-player/actions/runs/40944887711)
+и [Android CI 40944887824](https://github.com/metravolokos/allmusic-player/actions/runs/40944887824)
+для проверенного head `ab8320a` — success; 4/4 проверки PR зелёные.
+Решение о приёмке ограничено loopback mock, без реального Mail, Android audio,
+оценки внешней сети и полного спектра потоковых форматов. D-027 остаётся
+исследовательским вопросом для настоящего WebDAV и выбора архитектуры.
+[Задача](tasks/001-B2-webdav-stream.md), [инструкция](docs/WEB-DAV-STREAM-TEST.md),
+[отчёт](docs/001-B2-REPORT.md). PR #9 не объединять без отдельного разрешения владельца.
