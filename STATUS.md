@@ -264,13 +264,16 @@ PR #10 объединён в `main` коммитом `d2c599d16f177e5f232869c0e1
 post-merge Desktop CI run 40954984722 успешен. PR #11 для 001-E открыт и ожидает
 приёмки владельца: [потоковые форматы и устойчивость к сбоям сети](https://github.com/metravolokos/allmusic-player/pull/11).
 
-Desktop CI run 40962934885 успешен: Ubuntu 24.04 и Windows Server 2022, CTest 4/4
-на обеих платформах, включая streaming и WebDAV regression. На последующем docs-коммите
-40964465652 первый Windows streaming test завершился Failed через 24,96 с без QtTest
-assertion в логе; повтор только Windows job прошёл CTest 4/4 (streaming 25,21 с),
-Linux и документация также успешны. Причина первого сбоя неизвестна и не повторилась.
-Android APK workflow run 40964465685 успешен. Созданы автономный [Windows x64 ZIP](https://github.com/metravolokos/allmusic-player/actions/runs/40964465652/artifacts/12938562107)
-и [WebDAV loopback kit](https://github.com/metravolokos/allmusic-player/actions/runs/40964465652/artifacts/12938841098); [APK](https://github.com/metravolokos/allmusic-player/actions/runs/40964465685/artifacts/12936914984) сохранён.
+Desktop CI run 40969906289 успешен: Ubuntu 24.04 и Windows Server 2022, CTest 4/4
+на обеих платформах; Linux streaming 24/24, WebDAV regression 86/86, Windows streaming
+24/24 за 25,09 с. Android APK workflow run 40969906265 также успешен.
+
+Несколько промежуточных Windows прогонов выявили тестовую гонку: отложенный Range от
+предыдущего slow ALAC PCM сценария попадал в тест 429 и нарушал предположение о порядке
+запросов. Источник теперь явно отменяется после отсоединения плеера, а проверка требует
+повтор именно диапазона, получившего 429. Последний Windows CTest прошёл полностью.
+Созданы автономный [Windows x64 ZIP](https://github.com/metravolokos/allmusic-player/actions/runs/40969906289/artifacts/12940192439)
+и [WebDAV loopback kit](https://github.com/metravolokos/allmusic-player/actions/runs/40969906289/artifacts/12940880129); [APK](https://github.com/metravolokos/allmusic-player/actions/runs/40969906265/artifacts/12940461473) сохранён.
 
 Синтетические MP3, FLAC, AAC-LC ADTS/M4A и ALAC M4A выдали PCM до полной загрузки,
 прошли seek и завершились; подробные Linux метрики и пределы измерений — в
