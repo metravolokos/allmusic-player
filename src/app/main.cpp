@@ -1,6 +1,7 @@
 #include <QGuiApplication>
 #include <QImage>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QQuickWindow>
 #include <QTimer>
 #include <QDebug>
@@ -23,6 +24,10 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed,
                      &app, [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
+#ifdef Q_OS_ANDROID
+    engine.rootContext()->setContextProperty(QStringLiteral("buildLabel"),
+                                            QStringLiteral(ALLMUSIC_BUILD_LABEL));
+#endif
     engine.loadFromModule(QStringLiteral("AllMusicPlayer"), QStringLiteral("Main"));
     if (engine.rootObjects().isEmpty())
         return 1;

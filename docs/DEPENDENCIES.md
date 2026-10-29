@@ -63,3 +63,42 @@ DLL/плагины и их сторонние компоненты, доступ
 Сервер `download.qt.io` из исходной облачной среды отвечает 403 на CONNECT;
 доступность готового открытого Linux-пакета подтверждена успешным GitHub Actions;
 Windows-пакеты и итоговые результаты фиксируются отдельно в [статусе проекта](../STATUS.md).
+
+## Android 001-C: runtime и инструменты
+
+Qt 6.12.0 Base/Declarative динамически упаковываются в APK как `.so`; отдельная
+установка Qt не нужна. CMake 3.30.5/Ninja 1.12.1 сохранены. Инструменты: JDK 21,
+Android SDK platform 36, build-tools 36.0.0, NDK r27c/27.2.12479018 (Clang 17.0.2).
+JDK/SDK/Gradle/AGP — средства сборки, не GMS runtime телефона. Шаблон Qt 6.12.0
+использует Gradle 9.5.1 / AGP 9.2.1 и AndroidX Core 1.17.0; его транзитивные
+зависимости фиксируются отчётом `audit/gradle-runtime.txt`. AndroidX и Kotlin
+не являются Google Play Services. Runtime GMS/Firebase запрещён и проверяется
+в зависимостях, DEX и manifest. Свои Java/Kotlin-исходники не добавляются.
+
+- [Qt Android prerequisites](https://doc.qt.io/qt-6.12/android-configure-dev-environment.html).
+- [Шаблон Gradle Qt 6.12.0](https://github.com/qt/qtbase/blob/v6.12.0/src/android/templates/build.gradle).
+- [AndroidX Core: лицензия Apache-2.0](https://android.googlesource.com/platform/frameworks/support/+/androidx-main/LICENSE.txt).
+- [Kotlin: Apache-2.0](https://github.com/JetBrains/kotlin/blob/master/license/LICENSE.txt).
+- [Android NDK libc++: Apache-2.0 с LLVM exceptions](https://github.com/llvm/llvm-project/blob/llvmorg-17.0.2/libcxx/LICENSE.TXT).
+
+В пакет включены уведомления Qt Base/Declarative, найденные уведомления из
+Java runtime архивов и NDK NOTICE/NOTICE.toolchain (они охватывают больше
+компонентов, чем фактически включённый libc++). Native inventory находится
+в `audit/native-libraries.txt`, сведения о сборке — BUILD-INFO.json.
+Новый модуль Qt за пределами Base/Declarative требует проверки и останавливает
+аудит; Multimedia/FFmpeg/TagLib/SQLite не добавлялись.
+
+LGPL-обязательства распространяются и на тестовые бинарные пакеты; персональное
+назначение не является освобождением. Сохранены upstream notices и ссылки на
+соответствующие исходники выше. Получатель имеет право изменять Qt и выполнять
+обратную разработку для отладки этих изменений; запреты не вводятся.
+Для замены Qt в APK недостаточно заменить DLL: собрать совместимую динамическую
+Qt 6.12.0 Android arm64, пересобрать проект командами из BUILD.md (в репозитории
+получателя), перепаковать стандартной целью apk и подписать собственным debug-
+ключом. Удалить прежнюю тестовую копию перед установкой с другой подписью;
+исходный CI-ключ не нужен, проверок привязки к сертификату нет. Запросить помощь
+по этим действиям можно у владельца репозитория. Исходники библиотек должны
+оставаться доступными получателю; при распространении за пределы эксперимента
+повторно проверить способ предоставления complete corresponding source,
+включённые сторонние notices и условия Android runtime. Пакет не объявляется
+юридически проверенным публичным релизом; собственная лицензия проекта не выбрана.
