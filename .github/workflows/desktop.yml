@@ -22,6 +22,17 @@ jobs:
         run: |
           python3 scripts/check_repository.py
           git diff --check
+      - name: Generate and inspect synthetic audio fixtures
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python3 scripts/generate-audio-fixtures.py build/audio-fixtures
+          python3 scripts/generate-audio-fixtures.py build/audio-fixtures --verify-only
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: synthetic-audio-001B1
+          path: build/audio-fixtures/
+          if-no-files-found: error
   desktop:
     needs: documentation
     strategy:
@@ -52,7 +63,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++-13 libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 xvfb xauth fonts-dejavu-core
+          sudo apt-get install -y g++-13 libpulse0 libasound2t64 libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 xvfb xauth fonts-dejavu-core
           echo 'CC=gcc-13' >> "$GITHUB_ENV"
           echo 'CXX=g++-13' >> "$GITHUB_ENV"
       - name: CMake 3.30.5
@@ -75,6 +86,7 @@ jobs:
         with:
           version: '6.12.0'
           arch: ${{ matrix.qt-arch }}
+          modules: 'qtmultimedia qtshadertools'
           cache: false
           aqtversion: '==3.3.0'
           # aqt 3.3.0 does not support the Qt >=6.11 Windows repository layout.
@@ -90,6 +102,10 @@ jobs:
           ninja --version
           qmake -query QT_VERSION
           if [ "$RUNNER_OS" = Linux ]; then g++-13 --version; else cl 2>&1 || true; fi
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: synthetic-audio-001B1
+          path: build/audio-fixtures
       - name: Configure and build
         run: |
           cmake --preset desktop-release
@@ -118,6 +134,18 @@ jobs:
           ref: 4332fbbb4c340463dc8cee36dda0c85d932122d8
           path: build/license-sources/qtdeclarative
           persist-credentials: false
+      - name: Collect Qt Multimedia license sources
+        if: runner.os == 'Windows'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: qt/qtmultimedia
+          ref: v6.12.0
+          path: build/license-sources/qtmultimedia
+          persist-credentials: false
+      - name: Collect FFmpeg corresponding sources
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/collect-ffmpeg.ps1
       - name: Package and test Windows archive
         if: runner.os == 'Windows'
         shell: pwsh
@@ -150,4 +178,7 @@ jobs:
             build/desktop-release/Testing/Temporary/
             build/desktop-release/CMakeCache.txt
             build/package-smoke.png
+            build/audio-fixtures/manifest.json
+            build/ffmpeg-info.txt
           if-no-files-found: ignore
+

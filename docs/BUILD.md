@@ -120,3 +120,24 @@ versionCode — номер запуска workflow. Пакет самодост�
 runtime-отчётом, лицензиями и переменными сборки. Он публикует только пакет,
 инструкции и аудит, а не build tree или Gradle cache.
 [Пошаговая установка на Huawei](ANDROID-TEST.md); [результаты](001-C-REPORT.md).
+
+
+## Дополнение 001-B1: Desktop audio
+
+Установите дополнительно Qt 6.12.0 Multimedia и Shader Tools; Quick Controls,
+Dialogs и Layouts входят в Qt Declarative. Qt-версию не менять. Для генератора
+нужны FFmpeg/ffprobe с libmp3lame/aac/flac/alac (на Ubuntu пакет `ffmpeg`).
+На Linux для обычного звука нужен настроенный PulseAudio/PipeWire/ALSA.
+
+```sh
+python3 scripts/generate-audio-fixtures.py build/audio-fixtures
+python3 scripts/generate-audio-fixtures.py build/audio-fixtures --verify-only
+cmake --preset desktop-release
+cmake --build --preset desktop-release --parallel 2
+QT_MEDIA_BACKEND=ffmpeg QT_QPA_PLATFORM=xcb xvfb-run -a ctest --preset desktop-release --verbose
+```
+
+В Windows те же CMake/CTest команды после получения фикстур артефакта
+synthetic-audio-001B1 в build/audio-fixtures (или локальной генерации FFmpeg).
+Проверка PCM автоматическая; [проверка слышимого звука](AUDIO-TEST.md) отдельно.
+Прежние разделы о text-only приложении описывают историческую задачу 000.

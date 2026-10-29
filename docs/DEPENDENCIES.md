@@ -102,3 +102,35 @@ Qt 6.12.0 Android arm64, пересобрать проект командами 
 повторно проверить способ предоставления complete corresponding source,
 включённые сторонние notices и условия Android runtime. Пакет не объявляется
 юридически проверенным публичным релизом; собственная лицензия проекта не выбрана.
+
+
+## Desktop 001-B1 — исследовательский звук
+
+Подключены динамические Qt Multimedia и Quick Controls / Dialogs / Layouts
+из Qt Declarative 6.12.0 (используемые библиотеки — LGPLv3, альтернативные
+GPL/commercial). Android остаётся в прежней области Base/Declarative.
+В Desktop CI дополнительно устанавливается Qt Shader Tools как сборочная
+зависимость; GPL-инструменты с Qt exception не становятся лицензией приложения.
+Новые модули и их third-party notices включаются через исходники qtmultimedia
+v6.12.0 и qtdeclarative v6.12.0. См. [Qt Multimedia](https://github.com/qt/qtmultimedia/tree/v6.12.0)
+и [FFmpeg deployment](https://doc.qt.io/qt-6.12/qtmultimedia-deploying.html).
+
+В Windows распространяются только FFmpeg DLL из официального бинарного Qt,
+не системная GPL-сборка FFmpeg генератора. inspect-ffmpeg.py запрашивает версию,
+лицензию и configuration непосредственно avutil DLL, отклоняет GPL/nonfree
+и нерелизную версию. FFMPEG-INFO.json и SHA256SUMS фиксируют конкретный комплект.
+При неизвестной сборке упаковка останавливается для уточнения исходников.
+FFmpeg LGPL (2.1-or-later либо 3.0 в зависимости от actual configuration);
+тексты COPYING и upstream source соответствующего релиза включены в архив.
+Динамические библиотеки можно заменить совместимой собственной сборкой;
+запрет обратной разработки для отладки таких изменений не вводится.
+Upstream [FFmpeg](https://github.com/FFmpeg/FFmpeg), Qt build/dependency сведения
+в qtmultimedia; соответствие downstream-патчам подлежит отдельной сверке.
+Перед публичным распространением требуется полный аудит corresponding source
+и фактического состава. Этот отчёт не выбирает лицензию собственного кода.
+
+Системный FFmpeg/libmp3lame на Ubuntu — только генерация/ffprobe в CI;
+его исполняемые файлы и GPL runtime в Windows-архив не копируются.
+Синтетические тоны/manifest — CC0-1.0, создаются скриптом, личной музыки нет.
+Новые декодеры увеличивают поверхность обработки недоверенных медиа;
+001-B1 ограничен локальными тестовыми файлами, без сетевых протоколов.
