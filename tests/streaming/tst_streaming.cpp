@@ -40,6 +40,8 @@ class StreamingTests final : public QObject
     bool force416 = false;
     bool disconnectBeforeResponse = false;
     int retry429Responses = 0;
+    QByteArray rangeReceiving429;
+    bool sameRangeRetried = false;
     int delayMs = 0;
     qint64 disconnectAfterBytes = -1;
     qsizetype chunkSize = 0;
@@ -77,10 +79,14 @@ class StreamingTests final : public QObject
             response.chunkIntervalMs = chunkIntervalMs;
             if (retry429Responses > 0) {
                 --retry429Responses;
+                rangeReceiving429 = request.headers.value("range");
                 response.status = 429;
                 response.headers["Retry-After"] = "0";
                 return response;
             }
+            if (!rangeReceiving429.isEmpty() && request.method == "GET"
+                && request.headers.value("range") == rangeReceiving429)
+                sameRangeRetried = true;
             const QByteArray expectedTarget = "/AllMusic/" + fixtureName.toUtf8();
             const QByteArray secondTarget = "/AllMusic/" + secondFixtureName.toUtf8();
             if (request.method != "GET"
@@ -181,6 +187,8 @@ private slots:
         force416 = false;
         disconnectBeforeResponse = false;
         retry429Responses = 0;
+        rangeReceiving429.clear();
+        sameRangeRetried = false;
         delayMs = 0;
         disconnectAfterBytes = -1;
         chunkSize = 0;
@@ -394,6 +402,7 @@ private slots:
                 << "; PCM callback gaps are not an audible-interruption test";
         player.stop();
         player.setSource({});
+        device.cancel();
         disconnect(&output, nullptr, this, nullptr);
         disconnect(&device, nullptr, this, nullptr);
     }
@@ -408,7 +417,8 @@ private slots:
         QCOMPARE(read, 1);
         QCOMPARE(uchar(byte), uchar(audio[0]));
         QCOMPARE(server.requests.size(), 2);
-        QCOMPARE(server.requests[0].headers.value("range"), server.requests[1].headers.value("range"));
+        QCOMPARE(rangeReceiving429, QByteArray("bytes=0-65535"));
+        QVERIFY(sameRangeRetried);
         QVERIFY(device.cachedBytes() > 0);
     }
     void temporaryDisconnectFailsThenNewSourceReconnects()
@@ -543,6 +553,7 @@ private slots:
                 << "requests" << server.requests.size() << "adapter cache" << device.cachedBytes();
         player.stop();
         player.setSource({});
+        device.cancel();
         disconnect(&output, nullptr, this, nullptr);
         disconnect(&device, nullptr, this, nullptr);
     }
@@ -612,6 +623,7 @@ private slots:
                 << "; decoded frames" << decodedFrames.load() << "; requests" << server.requests.size()
                 << "; this is PCM, not audible-output evidence";
         player.setSource({});
+        device.cancel();
         disconnect(&output, nullptr, this, nullptr);
         disconnect(&device, nullptr, this, nullptr);
     }
