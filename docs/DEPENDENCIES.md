@@ -7,13 +7,13 @@
 | Компонент | Версия / область | Лицензия / источник |
 |---|---|---|
 | Qt Base: Core, Gui, косвенные Network/OpenGL и инструменты Qt | 6.12.0 | Для используемых библиотек LGPLv3 (либо альтернативные GPL/commercial); [исходники и лицензии](https://github.com/qt/qtbase/tree/v6.12.0/LICENSES) |
-| Qt Declarative: Qml, QmlModels, QmlWorkerScript, Quick, QtQuick.Window | 6.12.0 | LGPLv3 для используемых библиотек; [исходники и лицензии](https://github.com/qt/qtdeclarative/tree/v6.12.0/LICENSES) |
+| Qt Declarative: Qml, QmlMeta, QmlModels, QmlWorkerScript, Quick, QtQuick.Window | 6.12.0 | LGPLv3 для используемых библиотек; [исходники и лицензии](https://github.com/qt/qtdeclarative/tree/v6.12.0/LICENSES) |
 | Инструменты Qt: moc, rcc, qmlcachegen, windeployqt | 6.12.0 | Условия различаются по инструментам: GPL с исключениями либо LGPL/commercial; тексты в исходниках Qt |
 | Встроенные сторонние компоненты Qt | По составу конкретного пакета Qt | Собственные лицензии, включая MIT/BSD/FreeType/zlib и др.; `qt_attribution.json` и тексты в `src/3rdparty` |
 | CMake | 3.30.5, только сборка | [BSD-3-Clause и сторонние уведомления](https://github.com/Kitware/CMake/tree/v3.30.5/Licenses) |
 | Ninja | 1.12.1, только сборка | [Apache-2.0](https://github.com/ninja-build/ninja/blob/v1.12.1/COPYING) |
 | GCC / libstdc++ | Ubuntu GCC 13.x | [GPLv3; для runtime — GCC Runtime Library Exception](https://gcc.gnu.org/onlinedocs/libstdc++/manual/license.html) |
-| MSVC 2022 / VC143 runtime | toolset 14.44 | [Условия Microsoft и список разрешённых к распространению файлов](https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution) |
+| MSVC 2022 / VC143 runtime / D3DCompiler 47 | toolset 14.44; runtime/D3D в Windows-архиве | [Условия Microsoft и список разрешённых к распространению файлов](https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution) |
 | Python | 3.12, только инструменты | [PSF License](https://docs.python.org/3.12/license.html) |
 | install-qt-action / aqtinstall | Установщик CI, точный action закреплён SHA | [MIT](https://github.com/jurplel/install-qt-action/blob/v4/LICENSE), [MIT](https://github.com/miurahr/aqtinstall/blob/master/LICENSE) |
 
