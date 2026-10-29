@@ -141,8 +141,9 @@ protected:
                 if (response.disconnectAfterBytes >= 0)
                     bodyLimit = qMin(bodyLimit, response.disconnectAfterBytes);
                 if (response.chunkSize > 0) {
-                    new MockResponseWriter(socket, response.body, bodyLimit,
-                                           response.chunkSize, response.chunkIntervalMs)->start();
+                    auto *writer = new MockResponseWriter(socket, response.body, bodyLimit,
+                                                          response.chunkSize, response.chunkIntervalMs);
+                    writer->start();
                 } else {
                     socket->write(response.body.left(bodyLimit));
                     socket->disconnectFromHost();
