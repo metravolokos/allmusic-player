@@ -107,3 +107,21 @@ ABI `arm64-v8a` разрешён без предположений о телеф
 Совместимость Huawei nova 15 Pro / EMUI 15, его API/ABI, установка и реальная
 отрисовка **НЕ ПРОВЕРЕНЫ**. Сборка CI не заменяет приёмку владельцем.
 001-B/001-D и реальное облако не разрешены. PR не объединять автоматически.
+
+### Проверенный Android артефакт 001-C
+
+[Android CI 40899932754](https://github.com/metravolokos/allmusic-player/actions/runs/40899932754)
+успешен для head `09cca4e`, проверенный merge SHA `b2f012e16ac6`.
+[Скачать APK kit](https://github.com/metravolokos/allmusic-player/actions/runs/40899932754/artifacts/12908837814),
+около 17 МБ, до 12.11.2026; метка `001-C-b2f012e16ac6-40899932754-1`.
+Пройдены компиляция/упаковка, 4 теста аудитора, подпись, ZIP/ELF 16 KiB alignment,
+arm64-v8a, min API 28/target 36, нулевой набор разрешений, единственная QtActivity
+без служб/receiver/provider, отсутствие GMS/Firebase в manifest/runtime/DEX.
+Windows/Linux [CI 40898773590](https://github.com/metravolokos/allmusic-player/actions/runs/40898773590)
+успешен: 2/2 CTest на каждой платформе, Linux QtTest 86 passed, 0 failed,
+Windows упаковка приложения и WebDAV kit. Подробности/команды — в отчёте.
+
+[PR #6](https://github.com/metravolokos/allmusic-player/pull/6) открыт; не объединять
+без решения владельца. Huawei остаётся **НЕ ПРОВЕРЕНО**. Только документационный
+коммит после указанной сборки не меняет APK; новый Android CI из-за отчёта
+не запускается, маркировка APK относится к проверенному merge commit.
