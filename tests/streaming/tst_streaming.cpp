@@ -60,7 +60,7 @@ class StreamingTests final : public QObject
             response.body = audio.mid(first, boundedLast - first + 1);
             response.headers["Content-Range"] = "bytes " + QByteArray::number(first) + "-"
                 + QByteArray::number(boundedLast) + "/" + QByteArray::number(audio.size());
-            response.headers["ETag"] = changeEtag ? "\"fixture-v2\"" : etag;
+            response.headers["ETag"] = changeEtag ? QByteArray("\"fixture-v2\"") : etag;
             response.truncate = truncateRange;
             return response;
         };
@@ -136,7 +136,8 @@ private slots:
         QCOMPARE(later, audio.mid(70000, later.size()));
         QCOMPARE(server.requests.size(), 2);
         QCOMPARE(server.requests[0].headers.value("range"), "bytes=0-65535");
-        QCOMPARE(server.requests[1].headers.value("range"), "bytes=65536-131071");
+        QCOMPARE(server.requests[1].headers.value("range"),
+                 "bytes=65536-" + QByteArray::number(qMin<qint64>(131071, audio.size() - 1)));
         QVERIFY(device.cachedBytes() <= 4 * 64 * 1024);
         QVERIFY(server.requests[1].headers.contains("if-range"));
     }
