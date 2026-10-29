@@ -22,6 +22,8 @@ jobs:
         run: |
           python3 scripts/check_repository.py
           git diff --check
+      - name: Inspect Windows Qt repository layout
+        run: python3 scripts/probe-qt-packages.py
   desktop:
     needs: documentation
     strategy:
