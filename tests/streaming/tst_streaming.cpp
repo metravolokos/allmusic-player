@@ -205,6 +205,7 @@ private slots:
             QVERIFY(!request.headers.contains("cookie"));
         }
         QTRY_COMPARE_WITH_TIMEOUT(server.activeResponses, 0, 6000);
+        QCOMPARE(server.activeRangeResponses, 0);
         server.requests.clear();
         server.close();
     }
@@ -627,24 +628,55 @@ private slots:
         disconnect(&output, nullptr, this, nullptr);
         disconnect(&device, nullptr, this, nullptr);
     }
-    void stopDuringActiveLoadReturnsPromptly()
+    void userStopCancelsActiveRangeAndCanRestart()
     {
-        delayMs = 2500;
         LocalPlayback playback;
         playback.scanLoopback(server.serverPort());
         QTRY_COMPARE_WITH_TIMEOUT(playback.loopbackFiles().size(), 1, 5000);
         QVERIFY(playback.openLoopback(0));
-        playback.player()->play();
-        QTRY_VERIFY_WITH_TIMEOUT(server.requests.size() >= 2, 5000);
+        delayMs = 2500;
+        playback.togglePlayback();
+        auto rangeGetCount = [this] {
+            int count = 0;
+            for (const auto &request : server.requests) {
+                if (request.method == "GET" && request.headers.contains("range"))
+                    ++count;
+            }
+            return count;
+        };
+        QTRY_VERIFY_WITH_TIMEOUT(rangeGetCount() > 0 && server.activeRangeResponses > 0, 3000);
         QElapsedTimer timer;
         timer.start();
-        playback.player()->stop();
-        const qint64 stopMs = timer.elapsed();
+        playback.stop();
+        QTRY_COMPARE_WITH_TIMEOUT(server.activeRangeResponses, 0, 800);
+        const qint64 cancelMs = timer.elapsed();
+        QVERIFY2(cancelMs < 1000,
+                 qPrintable(QStringLiteral("active Range response closed after %1 ms").arg(cancelMs)));
+        QVERIFY(cancelMs < delayMs); // The mock would otherwise hold this response for 2.5 s.
         QTest::qWait(100);
-        qInfo() << "QMediaPlayer::stop during delayed GET returned in" << stopMs
-                << "ms; active mock responses after 100 ms" << server.activeResponses
-                << "(nonzero means the adapter request was not cancelled by stop)";
-        QVERIFY(stopMs < 1000);
+        QCOMPARE(server.activeRangeResponses, 0);
+        QCOMPARE(playback.currentLoopbackIndex(), 0);
+        QVERIFY(playback.player()->source().isEmpty());
+        qInfo() << "user Stop cancelled the delayed Range response in" << cancelMs
+                << "ms before its" << delayMs << "ms natural response delay";
+
+        // Play after Stop creates a fresh source for the same selected item.
+        delayMs = 0;
+        const int requestsBeforeRestart = server.requests.size();
+        playback.togglePlayback();
+        QTRY_VERIFY_WITH_TIMEOUT(server.requests.size() > requestsBeforeRestart, 4000);
+        QTRY_COMPARE_WITH_TIMEOUT(playback.player()->playbackState(), QMediaPlayer::PlayingState, 5000);
+        QCOMPARE(playback.currentLoopbackIndex(), 0);
+
+        // Pausing and resuming leave the current source in place.
+        playback.togglePlayback();
+        QTRY_COMPARE_WITH_TIMEOUT(playback.player()->playbackState(), QMediaPlayer::PausedState, 3000);
+        playback.togglePlayback();
+        QTRY_COMPARE_WITH_TIMEOUT(playback.player()->playbackState(), QMediaPlayer::PlayingState, 3000);
+        QCOMPARE(playback.currentLoopbackIndex(), 0);
+
+        playback.stop();
+        QTRY_COMPARE_WITH_TIMEOUT(server.activeRangeResponses, 0, 1000);
     }
     void trackSwitchCancelsOldLoadAndContinues()
     {

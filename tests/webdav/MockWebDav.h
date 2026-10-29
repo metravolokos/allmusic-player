@@ -68,6 +68,7 @@ public:
     std::function<Response(const Request &)> handler;
     std::function<void(const Request &)> onRequest;
     int activeResponses = 0;
+    int activeRangeResponses = 0;
     bool includeB2Marker = true;
     bool tls = false;
     QSslConfiguration ssl;
@@ -89,8 +90,11 @@ protected:
         auto buffer = std::make_shared<QByteArray>();
         auto handled = std::make_shared<bool>(false);
         connect(socket, &QTcpSocket::disconnected, socket, [this, socket] {
-            if (socket->property("mock-response-active").toBool())
+            if (socket->property("mock-response-active").toBool()) {
                 --activeResponses;
+                if (socket->property("mock-range-response-active").toBool())
+                    --activeRangeResponses;
+            }
             socket->deleteLater();
         });
         QTimer::singleShot(5000, socket, &QTcpSocket::abort);
@@ -126,7 +130,11 @@ protected:
             if (includeB2Marker)
                 response.headers["X-AllMusic-Mock"] = "001-B2-loopback";
             socket->setProperty("mock-response-active", true);
+            const bool rangeResponse = request.method == "GET" && request.headers.contains("range");
+            socket->setProperty("mock-range-response-active", rangeResponse);
             ++activeResponses;
+            if (rangeResponse)
+                ++activeRangeResponses;
             QTimer::singleShot(response.delayMs, socket, [socket, response] {
                 if (socket->state() != QAbstractSocket::ConnectedState) return;
                 if (response.disconnectBeforeResponse) { socket->abort(); return; }

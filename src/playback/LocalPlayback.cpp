@@ -7,6 +7,7 @@
 #include <QAudioDevice>
 #include <QTimer>
 #include <QRegularExpression>
+#include <QPointer>
 
 LocalPlayback::LocalPlayback(QObject *parent) : QObject(parent)
 {
@@ -62,20 +63,84 @@ void LocalPlayback::fail(const QString &message)
     emit errorChanged();
 }
 
-bool LocalPlayback::openLocal(const QUrl &url)
+void LocalPlayback::setCurrentLoopbackIndex(int index)
 {
-    // Unblock an in-flight Range read before asking the backend to stop. The
-    // backend may be waiting synchronously for the source device's current read.
-    if (m_rangeDevice) {
-        m_rangeDevice->cancel();
-    }
-    // Never forward a remote URL/UNC path to the experimental backend.
+    if (m_currentLoopbackIndex == index)
+        return;
+    m_currentLoopbackIndex = index;
+    emit currentLoopbackIndexChanged();
+}
+
+void LocalPlayback::detachNetworkSource()
+{
+    auto *device = m_rangeDevice;
+    if (!device)
+        return;
+
+    // A decoder read can be waiting on a Range response. Cancel first so
+    // stop/detach cannot leave the worker blocked on the network timeout.
+    device->cancel();
     m_player.stop();
     m_player.setSource({});
-    if (m_rangeDevice) {
-        m_rangeDevice->deleteLater();
+    if (m_rangeDevice == device)
         m_rangeDevice = nullptr;
+    device->deleteLater();
+}
+
+void LocalPlayback::resetPlayerSource()
+{
+    if (m_rangeDevice) {
+        detachNetworkSource();
+        return;
     }
+    m_player.stop();
+    m_player.setSource({});
+}
+
+void LocalPlayback::stop()
+{
+    if (m_rangeDevice) {
+        detachNetworkSource();
+    } else {
+        // Local playback keeps its source attached; QMediaPlayer resets its
+        // position on stop and the next play starts the same file again.
+        m_player.stop();
+    }
+    if (!m_error.isEmpty()) {
+        m_error.clear();
+        emit errorChanged();
+    }
+}
+
+void LocalPlayback::togglePlayback()
+{
+    switch (m_player.playbackState()) {
+    case QMediaPlayer::PlayingState:
+        m_player.pause();
+        return;
+    case QMediaPlayer::PausedState:
+        m_player.play();
+        return;
+    case QMediaPlayer::StoppedState:
+        break;
+    }
+
+    // A stopped network source was cancelled and detached. Reopen its current
+    // WebDAV item before starting; pause/resume above keeps the existing source.
+    if (m_currentLoopbackIndex >= 0 && !m_rangeDevice) {
+        const int index = m_currentLoopbackIndex;
+        if (openLoopback(index))
+            m_player.play();
+        return;
+    }
+    m_player.play();
+}
+
+bool LocalPlayback::openLocal(const QUrl &url)
+{
+    resetPlayerSource();
+    setCurrentLoopbackIndex(-1);
+    // Never forward a remote URL/UNC path to the experimental backend.
     m_error.clear();
     emit errorChanged();
     const QString path = url.toLocalFile();
@@ -117,6 +182,9 @@ void LocalPlayback::scanLoopback(int port)
         fail(QStringLiteral("Укажите порт локального тестового WebDAV (1–65535)."));
         return;
     }
+    if (m_rangeDevice)
+        stop();
+    setCurrentLoopbackIndex(-1);
     if (m_probe) {
         QObject::disconnect(m_probe, nullptr, this, nullptr);
         m_probe->cancel();
@@ -168,14 +236,8 @@ bool LocalPlayback::openLoopback(int index)
         fail(QStringLiteral("Сначала найдите файл в локальном тестовом WebDAV."));
         return false;
     }
-    if (m_rangeDevice) {
-        m_rangeDevice->cancel();
-    }
-    m_player.stop();
-    m_player.setSource({});
-    if (m_rangeDevice) {
-        m_rangeDevice->deleteLater();
-    }
+    resetPlayerSource();
+    setCurrentLoopbackIndex(-1);
     m_networkBytes = 0;
     emit networkBytesChanged();
     auto *device = new WebDavRangeDevice(m_loopbackPort, m_references[index],
@@ -186,14 +248,21 @@ bool LocalPlayback::openLoopback(int index)
         return false;
     }
     m_rangeDevice = device;
-    connect(device, &WebDavRangeDevice::bytesFetched, this, [this](qint64 count) {
+    const QPointer<WebDavRangeDevice> guardedDevice(device);
+    connect(device, &WebDavRangeDevice::bytesFetched, this, [this, guardedDevice](qint64 count) {
+        if (!guardedDevice || m_rangeDevice != guardedDevice.data())
+            return;
         m_networkBytes += count;
         emit networkBytesChanged();
     });
     connect(device, &WebDavRangeDevice::requestFailed, this,
-            [this](const QString &message) { fail(message); });
+            [this, guardedDevice](const QString &message) {
+        if (guardedDevice && m_rangeDevice == guardedDevice.data())
+            fail(message);
+    });
     m_error.clear();
     emit errorChanged();
+    setCurrentLoopbackIndex(index);
     m_player.setSourceDevice(m_rangeDevice);
     return true;
 }

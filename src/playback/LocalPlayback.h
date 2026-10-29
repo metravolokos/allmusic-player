@@ -20,6 +20,7 @@ class LocalPlayback final : public QObject
     Q_PROPERTY(QString deviceWarning READ deviceWarning NOTIFY deviceWarningChanged)
     Q_PROPERTY(QStringList loopbackFiles READ loopbackFiles NOTIFY loopbackFilesChanged)
     Q_PROPERTY(qint64 networkBytes READ networkBytes NOTIFY networkBytesChanged)
+    Q_PROPERTY(int currentLoopbackIndex READ currentLoopbackIndex NOTIFY currentLoopbackIndexChanged)
 public:
     explicit LocalPlayback(QObject *parent = nullptr);
     ~LocalPlayback() override;
@@ -29,16 +30,23 @@ public:
     QString deviceWarning() const;
     QStringList loopbackFiles() const { return m_loopbackFiles; }
     qint64 networkBytes() const { return m_networkBytes; }
+    int currentLoopbackIndex() const { return m_currentLoopbackIndex; }
     Q_INVOKABLE bool openLocal(const QUrl &url);
     Q_INVOKABLE void scanLoopback(int port);
     Q_INVOKABLE bool openLoopback(int index);
+    Q_INVOKABLE void togglePlayback();
+    Q_INVOKABLE void stop();
 signals:
     void errorChanged();
     void deviceWarningChanged();
     void loopbackFilesChanged();
     void networkBytesChanged();
+    void currentLoopbackIndexChanged();
 private:
     void fail(const QString &message);
+    void resetPlayerSource();
+    void detachNetworkSource();
+    void setCurrentLoopbackIndex(int index);
     QMediaPlayer m_player;
     QAudioOutput m_audio;
     QString m_error;
@@ -50,4 +58,5 @@ private:
     WebDavRangeDevice *m_rangeDevice = nullptr;
     qint64 m_networkBytes = 0;
     quint16 m_loopbackPort = 0;
+    int m_currentLoopbackIndex = -1;
 };

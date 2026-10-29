@@ -51,7 +51,7 @@ Window {
                     model: playback.loopbackFiles
                     Accessible.name: "Файл из /AllMusic"
                     onActivated: {
-                        if (playback.openLoopback(currentIndex)) window.media.play()
+                        if (playback.openLoopback(currentIndex)) playback.togglePlayback()
                     }
                 }
             }
@@ -72,10 +72,16 @@ Window {
         RowLayout {
             Button {
                 text: window.media.playbackState === MediaPlayer.PlayingState ? "Пауза" : "Воспроизвести"
-                enabled: window.media.hasAudio && playback.error.length === 0
-                onClicked: window.media.playbackState === MediaPlayer.PlayingState ? window.media.pause() : window.media.play()
+                enabled: (window.media.hasAudio || window.media.source.toString().length > 0
+                          || playback.currentLoopbackIndex >= 0) && playback.error.length === 0
+                onClicked: playback.togglePlayback()
             }
-            Button { text: "Стоп"; enabled: window.media.hasAudio; onClicked: window.media.stop() }
+            Button {
+                text: "Стоп"
+                enabled: window.media.hasAudio || window.media.source.toString().length > 0
+                         || playback.currentLoopbackIndex >= 0
+                onClicked: playback.stop()
+            }
             Label {
                 text: window.media.playbackState === MediaPlayer.PlayingState ? "Воспроизведение"
                     : window.media.playbackState === MediaPlayer.PausedState ? "Пауза"
