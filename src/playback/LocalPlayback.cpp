@@ -37,6 +37,19 @@ LocalPlayback::LocalPlayback(QObject *parent) : QObject(parent)
     });
 }
 
+LocalPlayback::~LocalPlayback()
+{
+    // QMediaPlayer is a value member and is destroyed before QObject deletes
+    // child devices. Cancel and detach the source first so its destructor
+    // cannot wait for an in-flight network timeout.
+    if (m_rangeDevice)
+        m_rangeDevice->cancel();
+    if (m_probe)
+        m_probe->cancel();
+    m_player.stop();
+    m_player.setSource({});
+}
+
 QString LocalPlayback::deviceWarning() const
 {
     return QMediaDevices::audioOutputs().isEmpty()

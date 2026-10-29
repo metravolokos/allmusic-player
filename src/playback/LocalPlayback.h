@@ -22,6 +22,7 @@ class LocalPlayback final : public QObject
     Q_PROPERTY(qint64 networkBytes READ networkBytes NOTIFY networkBytesChanged)
 public:
     explicit LocalPlayback(QObject *parent = nullptr);
+    ~LocalPlayback() override;
     QMediaPlayer *player() { return &m_player; }
     QAudioOutput *audio() { return &m_audio; }
     QString error() const { return m_error; }
