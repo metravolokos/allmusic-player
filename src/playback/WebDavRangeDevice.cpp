@@ -179,6 +179,10 @@ qint64 WebDavRangeDevice::readData(char *data, qint64 maxSize)
 {
     if (maxSize <= 0)
         return 0;
+    if (QThread::currentThread() == thread()) {
+        setFailure(QStringLiteral("Аудиодвижок запросил сеть из UI-потока; чтение остановлено, чтобы не блокировать интерфейс."));
+        return -1;
+    }
     if (m_cancelled.load())
         return -1;
     qint64 offset = QIODevice::pos();
