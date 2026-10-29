@@ -25,7 +25,8 @@
         "ANDROID_SDK_ROOT": "$env{ANDROID_HOME}",
         "ANDROID_NDK_ROOT": "$env{ANDROID_HOME}/ndk/27.2.12479018",
         "QT_HOST_PATH": "$env{QT_HOST_PATH}",
-        "QT_ANDROID_BUILD_ALL_ABIS": "OFF"
+        "QT_ANDROID_BUILD_ALL_ABIS": "OFF",
+        "ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES": "ON"
       }
     }
   ],
