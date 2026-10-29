@@ -31,7 +31,7 @@
 $env:QT_MEDIA_BACKEND = 'ffmpeg'
 $env:QT_FFMPEG_PROTOCOL_WHITELIST = 'file'
 $env:ALLMUSIC_FIXTURES = "$PWD/audio-fixtures"
-./playback-tests.exe -o playback-results.txt,txt
+./playback-tests.exe -o "playback-results.txt,txt"
 $LASTEXITCODE
 ```
 

@@ -12,6 +12,10 @@ qt_standard_project_setup(REQUIRES 6.12)
 qt_add_executable(allmusic-player src/app/main.cpp)
 if(ANDROID)
     set(app_qml ui/android/Main.qml)
+    # CMake's import scan walks the target SOURCE_DIR (repository root),
+    # including the unrelated Desktop QML. Let androiddeployqt scan only the
+    # declared Android root below; keep the strict APK dependency audit.
+    set(qml_scan_options NO_IMPORT_SCAN)
 else()
     set(app_qml ui/desktop/Main.qml)
 endif()
@@ -20,6 +24,7 @@ qt_add_qml_module(allmusic-player
     URI AllMusicPlayer
     VERSION 1.0
     QML_FILES ${app_qml}
+    ${qml_scan_options}
 )
 target_link_libraries(allmusic-player PRIVATE Qt6::Quick)
 set_target_properties(allmusic-player PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -41,6 +46,7 @@ if(ANDROID)
     target_compile_definitions(allmusic-player PRIVATE
         ALLMUSIC_BUILD_LABEL="${ALLMUSIC_BUILD_LABEL}")
     set_target_properties(allmusic-player PROPERTIES
+        QT_QML_ROOT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/ui/android"
         QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
         QT_ANDROID_PACKAGE_NAME "org.metravolokos.allmusicplayer.spike001c"
         QT_ANDROID_APP_NAME "AllMusic Player — тест 001-C"

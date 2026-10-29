@@ -19,6 +19,9 @@ assert release, 'Non-release FFmpeg build: determine exact corresponding source 
 assert '--enable-gpl' not in result['avutil_configuration']
 assert '--enable-nonfree' not in result['avutil_configuration']
 assert 'LGPL' in result['avutil_license'], result
+attributions = json.loads(Path('build/license-sources/qtmultimedia/src/3rdparty/ffmpeg/qt_attribution.json').read_text())
+expected = next(item['Version'] for item in attributions if item['Id'] == 'ffmpeg')
+assert release[1] == expected, ('Qt attribution/runtime FFmpeg mismatch', expected, release[1])
 result['release'] = release[1]
 Path(sys.argv[1]).write_text(json.dumps(result, indent=2) + '\n')
 print(json.dumps(result, indent=2))

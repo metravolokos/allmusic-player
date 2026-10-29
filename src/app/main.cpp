@@ -29,6 +29,9 @@ int main(int argc, char *argv[])
         return 2;
     }
 
+#ifndef Q_OS_ANDROID
+    LocalPlayback playback;
+#endif
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed,
                      &app, [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
@@ -36,7 +39,6 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("buildLabel"),
                                             QStringLiteral(ALLMUSIC_BUILD_LABEL));
 #else
-    LocalPlayback playback;
     engine.rootContext()->setContextProperty(QStringLiteral("playback"), &playback);
 #endif
     engine.loadFromModule(QStringLiteral("AllMusicPlayer"), QStringLiteral("Main"));

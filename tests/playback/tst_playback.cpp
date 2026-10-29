@@ -79,9 +79,10 @@ private slots:
         engine.audio()->setVolume(0.4f);
         QVERIFY(std::abs(engine.audio()->volume() - 0.4f) < 0.001f);
         // Decode again after stop, through EOF; guard against state-only success.
+        const qint64 beforeRestart = frames;
         player->play();
         QTRY_COMPARE_WITH_TIMEOUT(player->mediaStatus(), QMediaPlayer::EndOfMedia, 15000);
-        QVERIFY(frames > 7 * 44100);
+        QVERIFY(frames - beforeRestart > 7 * 44100);
         QVERIFY2(errors.isEmpty(), qPrintable(engine.error()));
         qInfo() << name << "decoded frames" << frames << "peak" << peak
                 << "; physical audio output NOT TESTED";

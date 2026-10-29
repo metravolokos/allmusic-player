@@ -139,8 +139,17 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: qt/qtmultimedia
-          ref: v6.12.0
+          ref: 6ca885f084a3984749d53bb50a0e08bdc60e86cc
           path: build/license-sources/qtmultimedia
+          persist-credentials: false
+      - name: Collect Qt FFmpeg build scripts
+        if: runner.os == 'Windows'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: qt/qt5
+          ref: ef25002ed292b132d1ed3246bfcee1d24a9cd966
+          path: build/license-sources/qt5
+          sparse-checkout: coin/provisioning
           persist-credentials: false
       - name: Collect FFmpeg corresponding sources
         if: runner.os == 'Windows'
@@ -180,5 +189,6 @@ jobs:
             build/package-smoke.png
             build/audio-fixtures/manifest.json
             build/ffmpeg-info.txt
+            build/packaged-playback.txt
           if-no-files-found: ignore
 

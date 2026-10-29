@@ -3,6 +3,7 @@
 #include <QFileInfo>
 #include <QMediaDevices>
 #include <QAudioDevice>
+#include <QTimer>
 
 LocalPlayback::LocalPlayback(QObject *parent) : QObject(parent)
 {
@@ -12,6 +13,15 @@ LocalPlayback::LocalPlayback(QObject *parent) : QObject(parent)
             [this](QMediaPlayer::Error code, const QString &) {
         if (code != QMediaPlayer::NoError)
             fail(QStringLiteral("Не удалось воспроизвести файл: он повреждён, недоступен или кодек не поддерживается. Выберите другой файл."));
+    });
+    connect(&m_player, &QMediaPlayer::mediaStatusChanged, this,
+            [this](QMediaPlayer::MediaStatus status) {
+        if (status == QMediaPlayer::LoadedMedia) {
+            QTimer::singleShot(0, this, [this] {
+                if (m_player.mediaStatus() == QMediaPlayer::LoadedMedia && !m_player.hasAudio())
+                    fail(QStringLiteral("В выбранном файле нет доступной аудиодорожки."));
+            });
+        }
     });
     auto *devices = new QMediaDevices(this);
     connect(devices, &QMediaDevices::audioOutputsChanged, this, [this] {
@@ -40,11 +50,15 @@ bool LocalPlayback::openLocal(const QUrl &url)
     m_error.clear();
     emit errorChanged();
     const QString path = url.toLocalFile();
+    if (!url.isLocalFile() || !url.host().isEmpty() || path.startsWith("//")
+        || path.startsWith("\\\\")) {
+        fail(QStringLiteral("Выберите локальный файл. Сетевые адреса не поддерживаются."));
+        return false;
+    }
     const QFileInfo info(path);
     const QString canonical = info.canonicalFilePath();
-    if (!url.isLocalFile() || !url.host().isEmpty() || path.startsWith("//")
-        || path.startsWith("\\\\") || canonical.startsWith("//")
-        || canonical.startsWith("\\\\") || !info.isFile() || !info.isReadable()) {
+    if (canonical.startsWith("//") || canonical.startsWith("\\\\")
+        || !info.isFile() || !info.isReadable()) {
         fail(QStringLiteral("Выберите доступный локальный аудиофайл. Сетевые адреса и папки не поддерживаются."));
         return false;
     }

@@ -125,7 +125,11 @@ FFmpeg LGPL (2.1-or-later либо 3.0 в зависимости от actual con
 Динамические библиотеки можно заменить совместимой собственной сборкой;
 запрет обратной разработки для отладки таких изменений не вводится.
 Upstream [FFmpeg](https://github.com/FFmpeg/FFmpeg), Qt build/dependency сведения
-в qtmultimedia; соответствие downstream-патчам подлежит отдельной сверке.
+в qtmultimedia; Qt 6.12.0 attribution и сценарий provisioning указывают FFmpeg 9.0.1;
+проверено по исходникам. Сценарий Windows загружает официальный tarball без
+применения патчей. Упаковка сверяет runtime version с attribution и включает
+upstream source + coin/provisioning Qt (commit ef25002ed292b132d1ed3246bfcee1d24a9cd966).
+Фактическая DLL/configuration подтверждаются только соответствующим CI.
 Перед публичным распространением требуется полный аудит corresponding source
 и фактического состава. Этот отчёт не выбирает лицензию собственного кода.
 
