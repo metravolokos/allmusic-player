@@ -22,8 +22,9 @@ def check_manifest(xml):
     assert manifest.get("package") == PACKAGE, "Unexpected package identity"
     assert not any(n.tag.startswith("uses-permission") or n.tag == "permission"
                    for n in manifest.iter()), "APK must request/declare zero permissions"
-    assert not any(n.tag in {"service", "receiver", "provider", "activity-alias"}
-                   for n in manifest.iter()), "Unexpected Android component"
+    extra = [(n.tag, n.get(ANDROID + "name")) for n in manifest.iter()
+             if n.tag in {"service", "receiver", "provider", "activity-alias"}]
+    assert not extra, f"Unexpected Android components: {extra}"
     sdk = manifest.find("uses-sdk")
     assert sdk is not None and sdk.get(ANDROID + "minSdkVersion") == "28"
     assert sdk.get(ANDROID + "targetSdkVersion") == "36"
@@ -93,6 +94,10 @@ def main():
     analyzer = Path(shutil.which("apkanalyzer") or analyzers[-1])
     tools = sdk / "build-tools/36.0.0"
     manifest = capture([analyzer, "manifest", "print", apk], evidence / "AndroidManifest.xml")
+    print("Final APK manifest:\n" + manifest, flush=True)
+    print("APK native entries:\n" + "\n".join(
+        line for line in (evidence / "apk-entries.txt").read_text().splitlines()
+        if line.startswith("lib/")), flush=True)
     parsed = check_manifest(manifest)
     assert os.environ["BUILD_LABEL"] in parsed.get(ANDROID + "versionName", "")
     assert parsed.get(ANDROID + "versionCode") == os.environ["GITHUB_RUN_NUMBER"]
@@ -129,7 +134,7 @@ def main():
     for path in sorted(cache.rglob("*")):
         if path.suffix not in {".aar", ".jar"} or not zipfile.is_zipfile(path):
             continue
-        if not any(part.startswith(("androidx.", "org.jetbrains")) for part in path.parts):
+        if not any(part.startswith(("androidx.", "org.jetbrains", "com.google.guava", "org.jspecify")) for part in path.parts):
             continue
         with zipfile.ZipFile(path) as archive:
             for name in archive.namelist():
