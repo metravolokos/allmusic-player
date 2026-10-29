@@ -6,7 +6,8 @@ $stage = Join-Path $root 'dist/AllMusicPlayer-Windows-x64'
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 cmake --install build/desktop-release --prefix $stage
 if ($LASTEXITCODE -ne 0) { throw 'CMake install failed' }
-windeployqt --release --no-translations --no-compiler-runtime --qmldir ui "$stage/allmusic-player.exe"
+# The text-only screen needs no optional image/icon plugins (e.g. Qt SVG).
+windeployqt --release --no-translations --no-compiler-runtime --skip-plugin-types imageformats,iconengines --qmldir ui "$stage/allmusic-player.exe"
 if ($LASTEXITCODE -ne 0) { throw 'Qt deployment failed' }
 
 # App-local VC runtime: no compiler/Qt installation needed on the user's PC.
