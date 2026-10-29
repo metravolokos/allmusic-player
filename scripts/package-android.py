@@ -70,18 +70,23 @@ def check_runtime(apk, dependencies):
 
 
 def capture(command, path):
-    result = subprocess.run(list(map(str, command)), check=True,
+    result = subprocess.run(list(map(str, command)), check=False,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     path.write_text(result.stdout, encoding="utf-8")
+    if result.returncode:
+        print(result.stdout)
+        result.check_returncode()
     return result.stdout
 
 
 def main():
     evidence = ROOT / "build/android-evidence"
     evidence.mkdir(parents=True, exist_ok=True)
-    candidates = list((ROOT / "build/android-debug/android-build/outputs/apk/debug").glob("*.apk"))
+    candidates = list((ROOT / "build/android-debug/android-build/build/outputs/apk/debug").glob("*.apk"))
     assert len(candidates) == 1, f"Expected exactly one debug APK: {candidates}"
     apk = candidates[0]
+    with zipfile.ZipFile(apk) as archive:
+        (evidence / "apk-entries.txt").write_text("\n".join(archive.namelist()) + "\n")
     sdk = Path(os.environ["ANDROID_HOME"])
     analyzers = sorted((sdk / "cmdline-tools").glob("*/bin/apkanalyzer"))
     assert analyzers, "Android SDK apkanalyzer missing"
@@ -149,7 +154,7 @@ def main():
         if path.is_file() and path.name != "SHA256SUMS.txt":
             sums.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(output).as_posix()}")
     (output / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n")
-    print("APK audit passed: signature, alignment, ABI, zero permissions/components, no GMS/Firebase references")
+    print("APK audit passed: signature, alignment, ABI, zero permissions and no extra components, no GMS/Firebase references")
 
 
 if __name__ == "__main__":
