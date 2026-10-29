@@ -8,7 +8,6 @@ base = "https://download.qt.io/online/qtsdkrepository"
 for directory in (
     "windows_x86/desktop/",
     "windows_x86/desktop/qt6_6120/",
-    "windows_x64/desktop/qt6_6120/",
 ):
     url = f"{base}/{directory}"
     try:
@@ -21,15 +20,10 @@ for directory in (
     except (urllib.error.URLError, UnicodeError, TimeoutError) as error:
         print(f"Index {url}: {error}")
 
-for host, version, nested in (
-    ("windows_x86", "6120", True),
-    ("windows_x86", "6120", False),
-    ("windows_x64", "6120", True),
-    ("windows_x86", "6113", True),
-):
+for version in ("6120", "6113"):
     directory = f"qt6_{version}"
-    suffix = f"{directory}/Updates.xml" if nested else "Updates.xml"
-    url = f"{base}/{host}/desktop/{directory}/{suffix}"
+    suffix = f"{directory}_msvc2022_64/Updates.xml"
+    url = f"{base}/windows_x86/desktop/{directory}/{suffix}"
     try:
         with urllib.request.urlopen(url, timeout=20) as response:
             data = response.read(8 * 1024 * 1024)

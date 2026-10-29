@@ -22,8 +22,6 @@ jobs:
         run: |
           python3 scripts/check_repository.py
           git diff --check
-      - name: Inspect Windows Qt repository layout
-        run: python3 scripts/probe-qt-packages.py
   desktop:
     needs: documentation
     strategy:
@@ -79,6 +77,8 @@ jobs:
           arch: ${{ matrix.qt-arch }}
           cache: false
           aqtversion: '==3.3.0'
+          # aqt 3.3.0 does not support the Qt >=6.11 Windows repository layout.
+          aqtsource: ${{ runner.os == 'Windows' && 'git+https://github.com/miurahr/aqtinstall.git@076e1659807d0b362a3ed684d54c2e9c775eb9c7' || '' }}
           extra: '--base https://download.qt.io'
       - name: Diagnose unavailable Windows Qt packages
         if: failure() && runner.os == 'Windows' && steps.qt.outcome == 'failure'
