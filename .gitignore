@@ -60,3 +60,6 @@ local.properties
 *.log
 .DS_Store
 Thumbs.db
+
+# Task scratch files
+/work/

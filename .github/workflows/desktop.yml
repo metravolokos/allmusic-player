@@ -129,6 +129,17 @@ jobs:
           name: AllMusicPlayer-Windows-x64
           path: dist/AllMusicPlayer-Windows-x64.zip
           if-no-files-found: error
+      - name: Package and test loopback WebDAV tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/package-webdav.ps1
+      - name: Upload WebDAV Windows test kit
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: WebDav001A-Windows-x64
+          path: dist/WebDav001A-Windows-x64.zip
+          if-no-files-found: error
       - name: Upload diagnostics and rendered frames
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
