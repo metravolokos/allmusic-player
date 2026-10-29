@@ -141,3 +141,7 @@ QT_MEDIA_BACKEND=ffmpeg QT_QPA_PLATFORM=xcb xvfb-run -a ctest --preset desktop-r
 synthetic-audio-001B1 в build/audio-fixtures (или локальной генерации FFmpeg).
 Проверка PCM автоматическая; [проверка слышимого звука](AUDIO-TEST.md) отдельно.
 Прежние разделы о text-only приложении описывают историческую задачу 000.
+
+После изоляции app target в src/app промежуточная Android-папка находится в
+`build/android-debug/src/app/android-build`. Команды preset/apk не изменились;
+Desktop EXE остаётся в `build/desktop-release`.
