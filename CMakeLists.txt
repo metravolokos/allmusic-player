@@ -61,7 +61,7 @@ if(BUILD_TESTING)
         target_compile_options(streaming-tests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     # Keep per-slot QtTest output visible in Windows CI when this target fails.
-    add_test(NAME playback-streaming COMMAND streaming-tests -v1)
+    add_test(NAME playback-streaming COMMAND streaming-tests -v2 -o -,txt)
     set_tests_properties(playback-streaming PROPERTIES TIMEOUT 180
         ENVIRONMENT "QT_MEDIA_BACKEND=ffmpeg;QT_FFMPEG_PROTOCOL_WHITELIST=file;ALLMUSIC_FIXTURES=${CMAKE_SOURCE_DIR}/build/audio-fixtures")
     add_test(NAME webdav-safety COMMAND webdav-tests)
