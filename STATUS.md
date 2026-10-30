@@ -311,13 +311,13 @@ mock, автоматическое продолжение того же исто
 
 [PR #19](https://github.com/metravolokos/allmusic-player/pull/19) открыт от ветки
 `codex/002-a-android-audio`, основанной на актуальном `main`. Проверенный head-код:
-`5e460738dd9880daa2e059844bf28e547394c27c`. PR не объединён.
+`8a3c075f289b44403bf5238853b1f63fccc052e0` (финальная проверенная кодовая версия перед документированием приёмки). PR не объединён.
 
-- [Desktop CI run 41055782664](https://github.com/metravolokos/allmusic-player/actions/runs/41055782664): **успешно**, Ubuntu 24.04 и Windows Server 2022, 5/5 CTest на каждой платформе; Windows ZIP audit пройден.
-- [Android CI run 41055782629](https://github.com/metravolokos/allmusic-player/actions/runs/41055782629): **успешно**. Собран и проверен APK `arm64-v8a`, min API 28 / target 36; 8 Python unit tests пройдены; APK audit подтвердил подпись, alignment, нулевые разрешения, отсутствие GMS/Firebase и FFmpeg runtime. В Android UI используется только Qt Android media plugin.
-- [APK artifact, 17,936,532 bytes](https://github.com/metravolokos/allmusic-player/actions/runs/41055782629/artifacts/12976693161), имя `AllMusicPlayer-002A-Android-arm64-v8a-debug-ce287d77c2a1-41055782629-1`, истекает 13.11.2026.
+- [Desktop CI run 41058685268](https://github.com/metravolokos/allmusic-player/actions/runs/41058685268): **успешно**, Ubuntu 24.04 и Windows Server 2022, 5/5 CTest на каждой платформе; Windows ZIP audit пройден.
+- [Android CI run 41058685269](https://github.com/metravolokos/allmusic-player/actions/runs/41058685269): **успешно**. Собран и проверен APK `arm64-v8a`, min API 28 / target 36; 8 Python unit tests пройдены; APK audit подтвердил подпись, alignment, нулевые разрешения, отсутствие GMS/Firebase и FFmpeg runtime. В Android UI используется только Qt Android media plugin.
+- [APK artifact, 17,936,522 bytes](https://github.com/metravolokos/allmusic-player/actions/runs/41058685269/artifacts/12978740288), имя `AllMusicPlayer-002A-Android-arm64-v8a-debug-558cfaf8a1de-41058685269-1`, истекает 13.11.2026.
 - Локально: 8/8 Python-тестов, Python compile, документационная проверка и whitespace check — пройдены. Локальная Qt/Android сборка отсутствовала; сборку подтвердил CI.
 
 Реализация — отдельный Android экран с синтетическим тоном, play/resume, pause, stop, restart и видимыми ошибками. Desktop проигрыватель не менялся. Доступ к облаку, сети, личным файлам и разрешениям Android отсутствует. Выбор production-аудиодвижка не сделан.
 
-**Huawei nova 15 Pro / EMUI 15, слышимость, маршруты динамик/гарнитура: НЕ ПРОВЕРЕНЫ** до ручной установки и прослушивания владельцем. [Инструкция проверки](docs/ANDROID-TEST.md), [отчёт](docs/002-A-ANDROID-AUDIO.md).
+**Ручная приёмка владельца на Huawei — ПРИНЯТО (30.10.2026).** Владелец сообщил: «Всё работает, в фоне работает, после блокировки экрана работает, при возврате в приложение работает». Таким образом, локальный тестовый звук и управление работают по отчёту владельца, а сворачивание/блокировка/возврат прошли в его проверенных сценариях. [Протокол приёмки в PR #19](https://github.com/metravolokos/allmusic-player/pull/19#issuecomment-6524008425). Отдельное прослушивание через гарнитуру **не подтверждено**. Важно: тон длится только около 6 секунд; не проверены длительное фоновое воспроизведение, foreground service, media session, медиакнопки, взаимодействие с системным аудиофокусом и реальный WebDAV. [Инструкция](docs/ANDROID-TEST.md), [отчёт](docs/002-A-ANDROID-AUDIO.md).
