@@ -388,7 +388,13 @@ private slots:
         };
         const Result result = range(audio());
         QCOMPARE(result.error, accepted ? Error::None : Error::Protocol);
-        QVERIFY(result.contentRangeSyntax.contains(category));
+        // Qt Network can discard an HTTP field containing illegal control
+        // characters before the application sees it. Either safe outcome is
+        // acceptable: reject the observed syntax or reject the missing field.
+        if (category == QStringLiteral("непечатаемые") && !result.contentRangePresent)
+            QCOMPARE(result.contentRangeSyntax, QStringLiteral("поле отсутствует"));
+        else
+            QVERIFY(result.contentRangeSyntax.contains(category));
         QVERIFY(!result.contentRangeSyntax.contains(QStringLiteral("private-fixture")));
         QVERIFY(result.contentRangeSyntax.size() < 256);
         if (!accepted)
