@@ -197,6 +197,7 @@ def main():
     apk_size = apk.stat().st_size
     assert apk_size > 0, "Built APK is empty"
     (output / "APK-SIZE.txt").write_text(f"APK size: {apk_size} bytes\n", encoding="utf-8")
+    print(f"APK size: {apk_size} bytes ({apk_size / (1024 * 1024):.2f} MiB)")
     metadata = {"commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
                 "build_label": os.environ["BUILD_LABEL"], "abi": "arm64-v8a",
                 "run": os.environ["GITHUB_RUN_ID"], "attempt": os.environ["GITHUB_RUN_ATTEMPT"],
