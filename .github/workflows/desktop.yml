@@ -356,6 +356,7 @@ jobs:
           retention-days: 3
 
   ci-result:
+    name: Desktop CI result
     if: always()
     needs: [classify, documentation, fixtures, linux, windows, warm_cache]
     runs-on: ubuntu-24.04
@@ -392,9 +393,15 @@ jobs:
                   failures.append(f"{job}: unexpected {result}")
           cache_expected = os.environ["EXPECT_CACHE"] == "true"
           cache_result = os.environ["CACHE_RESULT"]
-          if cache_expected and cache_result != "success":
+          platforms_succeeded = (
+              os.environ["EXPECT_LINUX"] == "true"
+              and os.environ["LINUX_RESULT"] == "success"
+              and os.environ["EXPECT_WINDOWS"] == "true"
+              and os.environ["WINDOWS_RESULT"] == "success"
+          )
+          if cache_expected and platforms_succeeded and cache_result != "success":
               failures.append(f"CACHE: expected warm-cache verification, got {cache_result}")
-          if not cache_expected and cache_result not in {"success", "skipped"}:
+          if (not cache_expected or not platforms_succeeded) and cache_result not in {"success", "skipped"}:
               failures.append(f"CACHE: unexpected {cache_result}")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
               summary.write(f"Изменения: {os.environ['CHANGE_REASON']}\n\nИсходный commit: `{os.environ['SOURCE_SHA']}`\n")
@@ -405,7 +412,7 @@ jobs:
           PY
 
   warm_cache:
-    if: always() && needs.classify.result == 'success' && needs.classify.outputs.desktop_cache_validation == 'true'
+    if: always() && needs.classify.result == 'success' && needs.classify.outputs.desktop_cache_validation == 'true' && needs.linux.result == 'success' && needs.windows.result == 'success'
     needs: [classify, linux, windows]
     strategy:
       fail-fast: false

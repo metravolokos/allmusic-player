@@ -220,7 +220,7 @@ jobs:
           retention-days: 3
 
   warm_cache:
-    if: always() && needs.classify.result == 'success' && needs.classify.outputs.android_cache_validation == 'true'
+    if: always() && needs.classify.result == 'success' && needs.classify.outputs.android_cache_validation == 'true' && needs.android.result == 'success'
     needs: [classify, android]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -278,6 +278,7 @@ jobs:
           cmake --version | head -n 1 | grep -Fx 'cmake version 3.30.5'
 
   ci-result:
+    name: Android CI result
     if: always()
     needs: [classify, android, warm_cache]
     runs-on: ubuntu-24.04
@@ -307,9 +308,10 @@ jobs:
               failures.append(f"ANDROID: unexpected {result}")
           cache_result = os.environ["CACHE_RESULT"]
           cache_expected = os.environ["EXPECT_CACHE"] == "true"
-          if cache_expected and cache_result != "success":
+          android_succeeded = expected and result == "success"
+          if cache_expected and android_succeeded and cache_result != "success":
               failures.append(f"CACHE: expected warm-cache verification, got {cache_result}")
-          if not cache_expected and cache_result not in {"success", "skipped"}:
+          if (not cache_expected or not android_succeeded) and cache_result not in {"success", "skipped"}:
               failures.append(f"CACHE: unexpected {cache_result}")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
               summary.write(f"Изменения: {os.environ['CHANGE_REASON']}\n\nИсходный commit: `{os.environ['SOURCE_SHA']}`\n")
