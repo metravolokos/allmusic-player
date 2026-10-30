@@ -393,3 +393,23 @@ encoding и фактическую длину, но гарантии неизм�
 Пользовательская приёмка на Windows 11, включая звук MP3/FLAC, Pause/Seek/Stop,
 повторный Play и Disconnect во время загрузки, остаётся обязательной.
 Подробности: [docs/002-C-CLOUD-PLAYBACK.md](docs/002-C-CLOUD-PLAYBACK.md).
+
+
+## 002-D — Android Qt FFmpeg feasibility spike (Issue #24)
+
+Владелец разрешил только изолированный локальный эксперимент с Qt FFmpeg.
+Draft [PR #25](https://github.com/metravolokos/allmusic-player/pull/25) открыт от
+`codex/002-d-android-cloud`, исходная база — `aa7e18b05c034eb42b53b51ebbc5ecfe76a1f53d`.
+Коммит кода: `b655394b988d6c31ffcca02524e66398584d3183`.
+
+Добавлены синтетические WAV/MP3/FLAC, seekable QBuffer для MP3/FLAC, Play/Pause/
+Stop/Seek и runtime-проба FFmpeg. APK-аудит требует FFmpeg plugin/runtime и
+заметок лицензий, запрещает Android system media plugin и permissions; отдельный
+package ID сохраняет сосуществование с 002-A. Desktop код и прежний WAV тест
+сохранены.
+
+Локальные Android Python тесты (12/12), тесты CI classifier (19/19), проверка
+документации, Python compile и whitespace-проверка пройдены. **Android/ Desktop CI,
+фактическая APK-компиляция, размер, APK artifact и проверка на Huawei пока
+ожидают выполнения/ручного испытания**; локальные Android SDK/CMake/Ninja/adb
+отсутствуют. Результаты этого gateway spike и ручные шаги: [docs/002-D-ANDROID-CLOUD.md](docs/002-D-ANDROID-CLOUD.md).
