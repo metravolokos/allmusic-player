@@ -320,9 +320,10 @@ void MailWebDavProbe::captureResponseMetadata(QNetworkReply *source)
             result.rangeExpectedBytes = parsed->last - parsed->first + 1;
         }
         result.totalSize = parsed->total;
-    } else if (result.contentRangePresent) {
+    } else if (result.contentRangePresent && !result.contentRangeRepeated
+               && contentRange.size() <= 256) {
         static const QRegularExpression unsatisfiedPattern(
-            QStringLiteral("^bytes\\s+\\*/([0-9]+)$"),
+            QStringLiteral("\\Abytes +\\*/([0-9]+)\\z"),
             QRegularExpression::CaseInsensitiveOption);
         const auto unsatisfied = unsatisfiedPattern.match(
             QString::fromLatin1(contentRange.trimmed()));
