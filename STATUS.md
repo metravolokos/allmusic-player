@@ -1,6 +1,6 @@
 # Текущий статус проекта — AllMusic Player
 
-**Дата:** 30.10.2026. **Текущий статус:** 001-E принята владельцем на Windows 11 (5/5 потоковых форматов, локальный Stop/restart, отказ сервера без Range; без замечаний). [PR #11](https://github.com/metravolokos/allmusic-player/pull/11) объединён в `main` (`99274b51469907b515715fcd048f6345acb3972b`). Отдельная post-merge Desktop CI проверка запущена и на момент этой записи ещё не завершена; дальнейшая реализация требует отдельного согласования.
+**Дата:** 30.10.2026. **Текущий статус:** 001-E принята владельцем на Windows 11 (5/5 потоковых форматов, локальный Stop/restart, отказ сервера без Range; без замечаний). [PR #11](https://github.com/metravolokos/allmusic-player/pull/11) объединён в `main` (`99274b51469907b515715fcd048f6345acb3972b`). Post-merge Desktop CI для PR #11 завершилась успешно. [CI-OPT-001, PR #15](https://github.com/metravolokos/allmusic-player/pull/15) объединён в `main` (`2f71fb0`); первые post-merge Desktop/Android CI успешны, повторные тяжёлые сборки пропущены. Дальнейшая функциональная реализация требует отдельного согласования.
 
 ## Утверждено и подготовлено
 
@@ -302,6 +302,6 @@ mock, автоматическое продолжение того же исто
 - [Протокол ручной приёмки владельца в PR #11](https://github.com/metravolokos/allmusic-player/pull/11#issuecomment-6518876866).
 - [PR #11](https://github.com/metravolokos/allmusic-player/pull/11) объединён в `main` коммитом [99274b51469907b515715fcd048f6345acb3972b](https://github.com/metravolokos/allmusic-player/commit/99274b51469907b515715fcd048f6345acb3972b).
 - Проверенный head `b86e8995b97d97951d91ae17352e36d96f4f157d`: [Desktop CI 40981125301](https://github.com/metravolokos/allmusic-player/actions/runs/40981125301) успешен (CTest 4/4 на Linux и Windows, streaming QtTest 25/25, Windows ZIP); [Android APK CI 40981125207](https://github.com/metravolokos/allmusic-player/actions/runs/40981125207) успешен (только проверка сборки APK).
-- [Post-merge Desktop CI 41029396796](https://github.com/metravolokos/allmusic-player/actions/runs/41029396796) поставлен в очередь после объединения. До получения результата считать **ожидающим**, а не пройденным.
+- [Post-merge Desktop CI 41029396796](https://github.com/metravolokos/allmusic-player/actions/runs/41029396796) завершился **успешно**.
 
-**Не подтверждено:** настоящий Cloud.Mail.ru, интернет-соединение вне mock, пользовательский Linux, Android audio и gapless; окончательные production-контракты и fallback ещё не утверждены. В [Issue #13](https://github.com/metravolokos/allmusic-player/issues/13) отдельно поставлена задача CI-OPT-001 по безопасному кэшированию инструментов; она не выполнялась в рамках PR #11. Следующие функциональные этапы не запускаются без разрешения владельца.
+**Не подтверждено:** настоящий Cloud.Mail.ru, интернет-соединение вне mock, пользовательский Linux, Android audio и gapless; окончательные production-контракты и fallback ещё не утверждены. В [Issue #13](https://github.com/metravolokos/allmusic-player/issues/13) отдельно поставлена задача CI-OPT-001 по безопасному кэшированию инструментов; она не выполнялась в рамках PR #11 и позднее завершена отдельно в PR #15. Следующие функциональные этапы не запускаются без разрешения владельца.

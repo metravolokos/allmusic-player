@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 Set-Location (Split-Path $PSScriptRoot -Parent)
 $stage = Join-Path (Get-Location) 'dist/WebDav001A-Windows-x64'
+if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage | Out-Null
 foreach ($name in @('webdav-tests', 'webdav-probe', 'webdav-mock')) {
     Copy-Item "build/desktop-release/$name.exe" $stage
@@ -12,7 +13,15 @@ $crt = Join-Path $env:VCToolsRedistDir 'x64/Microsoft.VC143.CRT'
 Copy-Item "$crt/*.dll" $stage
 Copy-Item docs/001-A-REPORT.md "$stage/README.md"
 Copy-Item docs/DEPENDENCIES.md $stage
-Copy-Item dist/AllMusicPlayer-Windows-x64/licenses "$stage/licenses" -Recurse
+python scripts/collect-licenses.py build/license-sources "$stage/licenses"
+if ($LASTEXITCODE -ne 0) { throw 'License collection failed' }
+@{
+    commit = (& git rev-parse HEAD).Trim()
+    qt = (& qmake -query QT_VERSION).Trim()
+    run = $env:GITHUB_RUN_ID
+    attempt = $env:GITHUB_RUN_ATTEMPT
+    package = 'WebDAV loopback test kit'
+} | ConvertTo-Json | Set-Content "$stage/BUILD-INFO.json"
 $savedPath = $env:PATH
 try {
     $env:PATH = "$env:SystemRoot/System32;$env:SystemRoot"
