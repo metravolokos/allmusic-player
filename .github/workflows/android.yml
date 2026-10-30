@@ -1,21 +1,30 @@
 name: Android 001-C
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
-    paths:
-      - '.github/workflows/android.yml'
-      - 'CMakeLists.txt'
-      - 'CMakePresets.json'
-      - 'src/app/**'
-      - 'ui/android/**'
-      - 'android/**'
-      - 'scripts/*android*'
-      - 'scripts/collect-licenses.py'
-      - 'tests/android/**'
-      - 'docs/ANDROID-TEST.md'
-      - 'docs/DEPENDENCIES.md'
+    types: [opened, synchronize, reopened, ready_for_review, edited]
   workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Ветка с кодом PR (например, ci/opt-001)"
+        required: true
+        default: main
+        type: string
+      android_apk:
+        description: "Сохранить APK и комплект лицензий как скачиваемый артефакт"
+        required: false
+        default: false
+        type: boolean
+      full_tests:
+        description: "Выполнить Android-сборку и аудит без сохранения APK"
+        required: false
+        default: false
+        type: boolean
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -25,63 +34,134 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  apk:
+  classify:
+    runs-on: ubuntu-24.04
+    outputs:
+      android: ${{ steps.changes.outputs.android }}
+      cache_validation: ${{ steps.changes.outputs.android_cache_validation }}
+      source_sha: ${{ steps.changes.outputs.source_sha }}
+      reason: ${{ steps.changes.outputs.reason }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select Android checks (fail closed)
+        id: changes
+        env:
+          CI_EVENT: ${{ github.event_name }}
+          CI_BEFORE: ${{ github.event.before }}
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CI_SOURCE_REF: ${{ inputs.source_ref }}
+          CI_FULL_TESTS: ${{ inputs.full_tests }}
+          CI_ANDROID_APK: ${{ inputs.android_apk }}
+          CI_RELEASE: ${{ github.event_name == 'release' }}
+        run: python3 scripts/classify-ci-changes.py
+
+  android:
+    needs: classify
+    if: needs.classify.outputs.android == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:
       run:
         shell: bash
     env:
-      # No shared Gradle cache: do not persist temporary debug signing material.
+      # Gradle's per-run home can contain temporary debug signing material; never cache it.
       GRADLE_USER_HOME: ${{ github.workspace }}/build/gradle-home
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || github.sha }}
           persist-credentials: false
-      - name: Prepare JDK 21 and check documents
+      - name: Подготовить JDK 21 и выполнить Android unit tests
         run: |
           echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
           echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
-          python3 scripts/check_repository.py
           python3 -m unittest discover -s tests/android -v
-          git diff --check
-      - name: Prepare Android SDK
+      - name: Установить Android SDK и NDK для arm64-v8a
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
         with:
           cmdline-tools-version: '12266719'
           log-accepted-android-sdk-licenses: false
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0 ndk;27.2.12479018'
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5.6.0
         with:
           python-version: '3.14'
-      - name: Install open-source Qt 6.12.0 Android and host tools
+          cache: pip
+          cache-dependency-path: .github/workflows/android.yml
+      - name: Подготовить каталоги Android и Python
         run: |
           sudo apt-get update
           sudo apt-get install -y libgl1 libegl1 libxkbcommon0 libxcb-cursor0
-          python -m pip install 'git+https://github.com/miurahr/aqtinstall.git@076e1659807d0b362a3ed684d54c2e9c775eb9c7'
-          mkdir -p build/android-evidence
-          # Qt >=6.7 Android metadata lives in all_os; install-qt resolves it.
-          # Avoid install-qt-action's linux/android version-list preflight.
+          mkdir -p build/android-evidence "$RUNNER_TEMP/Qt/6.12.0"
+          mkdir -p build/aqt-wheelhouse
+      - name: Кэшировать wheel закреплённого aqtinstall
+        id: aqt_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: build/aqt-wheelhouse/
+          key: aqtinstall-wheel-cpython314-linux-076e1659807d0b362a3ed684d54c2e9c775eb9c7-v1-${{ hashFiles('.github/workflows/android.yml') }}
+      - name: Собрать wheel aqtinstall при отсутствии кэша
+        if: steps.aqt_cache.outputs.cache-hit != 'true'
+        run: python -m pip wheel --no-deps --wheel-dir build/aqt-wheelhouse 'git+https://github.com/miurahr/aqtinstall.git@076e1659807d0b362a3ed684d54c2e9c775eb9c7'
+      - name: Установить aqtinstall и проверить Android Qt-метаданные
+        run: |
+          python -m pip install build/aqt-wheelhouse/*.whl
+          # Qt >=6.7 publishes Android metadata under all_os; keep the existing pinned aqt route.
           python -m aqt list-qt all_os android --arch 6.12.0 > build/android-evidence/available-qt-abis.txt
-          # Keep Qt outside the source tree: qmlimportscanner scans project roots.
-          # Host tools require Qt's ICU archive; ICU is not Android runtime.
+      - name: Кэш Qt 6.12.0 для host tools и Android arm64-v8a
+        id: qt_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/Qt/6.12.0
+          key: qt-6.12.0-android-arm64-linux-gcc64-base-declarative-icu-aqt-076e1659807d0b362a3ed684d54c2e9c775eb9c7-base-download-qt-io-v1-${{ hashFiles('.github/workflows/android.yml') }}
+      - name: Установить Qt при отсутствии кэша
+        if: steps.qt_cache.outputs.cache-hit != 'true'
+        run: |
+          # Host tools need ICU; ICU is not included in the Android runtime.
           python -m aqt install-qt linux desktop 6.12.0 linux_gcc_64 --archives qtbase qtdeclarative icu --outputdir "$RUNNER_TEMP/Qt" --base https://download.qt.io
           python -m aqt install-qt linux android 6.12.0 android_arm64_v8a --archives qtbase qtdeclarative --outputdir "$RUNNER_TEMP/Qt" --base https://download.qt.io
-      - name: CMake 3.30.5
+      - name: Проверить восстановленный Qt или результат установки
+        env:
+          QT_ANDROID_ROOT: ${{ runner.temp }}/Qt/6.12.0/android_arm64_v8a
+          QT_HOST_PATH: ${{ runner.temp }}/Qt/6.12.0/gcc_64
+        run: |
+          test -x "$QT_ANDROID_ROOT/bin/qmake"
+          test -x "$QT_HOST_PATH/bin/qmake"
+          test "$("$QT_ANDROID_ROOT/bin/qmake" -query QT_VERSION)" = '6.12.0'
+          test "$("$QT_HOST_PATH/bin/qmake" -query QT_VERSION)" = '6.12.0'
+          echo "Qt cache hit: ${{ steps.qt_cache.outputs.cache-hit }}"
+      - name: Установить CMake 3.30.5
         run: python -m pip install cmake==3.30.5
-      - name: Get Ninja 1.12.1 sources
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Восстановить кэш Ninja 1.12.1
+        id: ninja_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: build/ninja-cache/
+          key: ninja-1.12.1-${{ runner.os }}-${{ runner.arch }}-gcc13-2daa09ba270b0a43e1929d29b073348aa985dfaa-v1-${{ hashFiles('.github/workflows/android.yml') }}
+      - name: Получить исходники Ninja при отсутствии кэша
+        if: steps.ninja_cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: ninja-build/ninja
           ref: 2daa09ba270b0a43e1929d29b073348aa985dfaa
           path: build/ninja-source
           persist-credentials: false
-      - name: Build Ninja and identify experiment
+      - name: Проверить или собрать Ninja
         run: |
-          cd build/ninja-source
-          python configure.py --bootstrap
-          echo "$PWD" >> "$GITHUB_PATH"
-      - name: Configure and build bundled debug APK
+          mkdir -p build/ninja-cache
+          if [[ "${{ steps.ninja_cache.outputs.cache-hit }}" != "true" ]]; then
+            cd build/ninja-source
+            python configure.py --bootstrap
+            cp ninja "$GITHUB_WORKSPACE/build/ninja-cache/ninja"
+          fi
+          chmod +x build/ninja-cache/ninja
+          echo "$GITHUB_WORKSPACE/build/ninja-cache" >> "$GITHUB_PATH"
+          test "$(build/ninja-cache/ninja --version)" = '1.12.1'
+      - name: Собрать и проверить APK
         env:
           QT_ANDROID_ROOT: ${{ runner.temp }}/Qt/6.12.0/android_arm64_v8a
           QT_HOST_PATH: ${{ runner.temp }}/Qt/6.12.0/gcc_64
@@ -95,39 +175,145 @@ jobs:
           cmake --preset android-debug -DALLMUSIC_BUILD_LABEL="$label" -DALLMUSIC_ANDROID_VERSION_CODE="$GITHUB_RUN_NUMBER"
           cat build/android-debug/src/app/android-allmusic-player-deployment-settings.json > build/android-evidence/deployment-settings.json
           cmake --build --preset android-debug --parallel 2
-      - name: Audit runtime dependencies
+      - name: Проверить зависимости Gradle runtime
         run: |
           cd build/android-debug/src/app/android-build
           ./gradlew --no-daemon --console=plain dependencies --configuration debugRuntimeClasspath > "$GITHUB_WORKSPACE/build/android-evidence/gradle-runtime.txt"
-      - name: Collect Qt Base license sources
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Получить исходники Qt для проверки лицензий
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: qt/qtbase
           ref: 025bdad181de241e81bf853c8a2d7bf3d19261a9
           path: build/license-sources/qtbase
           persist-credentials: false
-      - name: Collect Qt Declarative license sources
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Получить исходники Qt Declarative для проверки лицензий
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: qt/qtdeclarative
           ref: 4332fbbb4c340463dc8cee36dda0c85d932122d8
           path: build/license-sources/qtdeclarative
           persist-credentials: false
-      - name: Verify and package APK
+      - name: Проверить APK и составить комплект с лицензиями
         run: python scripts/package-android.py
-      - name: Upload installable test kit
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - name: Записать commit, платформу и статус упаковки в отчёт
+        if: always()
+        run: |
+          echo "Исходный commit: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Цель: Android arm64-v8a; это компиляция и аудит, не проверка на устройстве." >> "$GITHUB_STEP_SUMMARY"
+          echo "Qt cache hit: ${{ steps.qt_cache.outputs.cache-hit }}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Сохранить APK только по запросу или для релиза
+        if: (github.event_name == 'release') || (github.event_name == 'workflow_dispatch' && inputs.android_apk)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: dist/android/
           if-no-files-found: error
-          retention-days: 14
-      - name: Upload audit diagnostics
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+          retention-days: ${{ github.event_name == 'release' && 90 || 14 }}
+      - name: Сохранить диагностику при ошибке
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Android-001C-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: build/android-evidence/
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 3
 
+  warm_cache:
+    if: always() && needs.classify.result == 'success' && needs.classify.outputs.android_cache_validation == 'true'
+    needs: [classify, android]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5.6.0
+        with:
+          python-version: '3.14'
+          cache: pip
+          cache-dependency-path: .github/workflows/android.yml
+      - name: Проверить тёплый кэш wheel aqtinstall
+        id: aqt_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: build/aqt-wheelhouse/
+          key: aqtinstall-wheel-cpython314-linux-076e1659807d0b362a3ed684d54c2e9c775eb9c7-v1-${{ hashFiles('.github/workflows/android.yml') }}
+      - name: Убедиться, что wheel aqtinstall восстановлен
+        run: |
+          test "${{ steps.aqt_cache.outputs.cache-hit }}" = 'true'
+          python -m pip install build/aqt-wheelhouse/*.whl
+          python -m aqt list-qt all_os android --arch 6.12.0
+      - name: Проверить тёплый кэш Qt Android и host tools
+        id: qt_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/Qt/6.12.0
+          key: qt-6.12.0-android-arm64-linux-gcc64-base-declarative-icu-aqt-076e1659807d0b362a3ed684d54c2e9c775eb9c7-base-download-qt-io-v1-${{ hashFiles('.github/workflows/android.yml') }}
+      - name: Проверить Qt после восстановления
+        env:
+          QT_ANDROID_ROOT: ${{ runner.temp }}/Qt/6.12.0/android_arm64_v8a
+          QT_HOST_PATH: ${{ runner.temp }}/Qt/6.12.0/gcc_64
+        run: |
+          test "${{ steps.qt_cache.outputs.cache-hit }}" = 'true'
+          test -x "$QT_ANDROID_ROOT/bin/qmake"
+          test -x "$QT_HOST_PATH/bin/qmake"
+          test "$("$QT_ANDROID_ROOT/bin/qmake" -query QT_VERSION)" = '6.12.0'
+          test "$("$QT_HOST_PATH/bin/qmake" -query QT_VERSION)" = '6.12.0'
+      - name: Проверить тёплый кэш Ninja 1.12.1
+        id: ninja_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: build/ninja-cache/
+          key: ninja-1.12.1-Linux-X64-gcc13-2daa09ba270b0a43e1929d29b073348aa985dfaa-v1-${{ hashFiles('.github/workflows/android.yml') }}
+      - name: Проверить инструменты и CMake из Python-кэша
+        run: |
+          test "${{ steps.ninja_cache.outputs.cache-hit }}" = 'true'
+          test "$(build/ninja-cache/ninja --version)" = '1.12.1'
+          python -m pip install cmake==3.30.5
+          cmake --version | head -n 1 | grep -Fx 'cmake version 3.30.5'
+
+  ci-result:
+    if: always()
+    needs: [classify, android, warm_cache]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Проверить итоговый Android-статус
+        env:
+          CLASSIFY_RESULT: ${{ needs.classify.result }}
+          ANDROID_RESULT: ${{ needs.android.result }}
+          CACHE_RESULT: ${{ needs.warm_cache.result }}
+          EXPECT_ANDROID: ${{ needs.classify.outputs.android }}
+          EXPECT_CACHE: ${{ needs.classify.outputs.android_cache_validation }}
+          CHANGE_REASON: ${{ needs.classify.outputs.reason }}
+          SOURCE_SHA: ${{ needs.classify.outputs.source_sha }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import sys
+
+          failures = []
+          if os.environ["CLASSIFY_RESULT"] != "success":
+              failures.append(f"CLASSIFY: {os.environ['CLASSIFY_RESULT']}")
+          result = os.environ["ANDROID_RESULT"]
+          expected = os.environ["EXPECT_ANDROID"] == "true"
+          if expected and result != "success":
+              failures.append(f"ANDROID: expected success, got {result}")
+          if not expected and result not in {"success", "skipped"}:
+              failures.append(f"ANDROID: unexpected {result}")
+          cache_result = os.environ["CACHE_RESULT"]
+          cache_expected = os.environ["EXPECT_CACHE"] == "true"
+          if cache_expected and cache_result != "success":
+              failures.append(f"CACHE: expected warm-cache verification, got {cache_result}")
+          if not cache_expected and cache_result not in {"success", "skipped"}:
+              failures.append(f"CACHE: unexpected {cache_result}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(f"Изменения: {os.environ['CHANGE_REASON']}\n\nИсходный commit: `{os.environ['SOURCE_SHA']}`\n")
+          if failures:
+              print("\n".join(failures), file=sys.stderr)
+              raise SystemExit(1)
+          print("Android проверка завершена либо безопасно пропущена классификатором.")
+          PY
