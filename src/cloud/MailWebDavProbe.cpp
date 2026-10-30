@@ -6,6 +6,7 @@
 #include <QNetworkProxy>
 #include <QRegularExpression>
 #include <QSslError>
+#include <QStringList>
 #include <QXmlStreamReader>
 #include <limits>
 
@@ -89,7 +90,9 @@ QString classifyContentRange(const QByteArray &raw, bool repeated)
                 overflow = true;
         }
         labels << (overflow ? QStringLiteral("числа: переполнение qint64")
-            : QStringLiteral("границы: числовые; знаменатель: число или звёздочка"));
+            : (match.captured(3) == QStringLiteral("*")
+                ? QStringLiteral("границы: числовые; знаменатель: звёздочка")
+                : QStringLiteral("границы: числовые; знаменатель: числовой")));
     } else if (unsatisfied.match(QString::fromLatin1(tail)).hasMatch()) {
         labels << QStringLiteral("конструкция: неудовлетворимый диапазон */число");
     } else {

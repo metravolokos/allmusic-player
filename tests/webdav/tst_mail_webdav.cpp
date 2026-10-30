@@ -362,6 +362,9 @@ private slots:
         QTest::newRow("equals") << QByteArray("bytes=0-99/100") << QStringLiteral("разделитель: равно") << false;
         QTest::newRow("missing-space") << QByteArray("bytes0-99/100") << QStringLiteral("разделитель: отсутствует/другой") << false;
         QTest::newRow("tab") << QByteArray("bytes\t0-99/100") << QStringLiteral("разделитель: табуляция") << false;
+        QTest::newRow("non-ascii") << QByteArray("bytes 0-99/100") + char(0x80) << QStringLiteral("не-ASCII") << false;
+        QTest::newRow("signed") << QByteArray("bytes -1-99/100") << QStringLiteral("иная/нечисловая") << false;
+        QTest::newRow("trailing-text") << QByteArray("bytes 0-99/100 private-fixture") << QStringLiteral("иная/нечисловая") << false;
         QTest::newRow("other-unit") << QByteArray("items 0-99/100") << QStringLiteral("unit: другой/неизвестный") << false;
         QTest::newRow("unsatisfied") << QByteArray("bytes */100") << QStringLiteral("неудовлетворимый диапазон") << false;
         QTest::newRow("overflow") << QByteArray("bytes 0-99/9223372036854775808") << QStringLiteral("переполнение") << false;
