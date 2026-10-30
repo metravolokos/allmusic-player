@@ -1,57 +1,60 @@
-# AllMusic Player — проектная документация
+# AllMusic Player
 
-**Статус на 30.10.2026:** исследовательские задачи 000, 001-A, 001-C, 001-B1, 001-B2, 001-D и 001-E завершены в своих согласованных границах. [PR #11](https://github.com/metravolokos/allmusic-player/pull/11) объединён в `main` (`99274b5`); ручная проверка 001-E на Windows 11 пройдена (5/5 потоковых форматов, локальный Stop/restart и no-Range, замечаний нет). Реальный Cloud.Mail.ru и Android-аудио ещё не проверены.
+**[Русская версия](README.ru.md)**
 
-AllMusic Player — персональный музыкальный плеер для Windows, Linux и Android. Музыкальные файлы находятся в папке `/AllMusic` в Облаке Mail, доступ — WebDAV (`https://webdav.cloud.mail.ru`). Ключевые принципы: безопасное чтение, общая кодовая база Qt 6/C++, быстрый локальный каталог, устойчивое потоковое воспроизведение, разумный дисковый кэш и обособленные интерфейсы Desktop/Android.
+**A personal, highly specialized music player project for Windows, Linux, and Android.**
 
-## С чего начать владельцу проекта
+AllMusic Player is designed around the owner's individual music library and specific workflows. The source repository is public for transparency and development convenience, **not** because the project is intended to become a commercial product or a general-purpose player for a broad audience.
 
-1. Задачи 000 и 001-A завершены и приняты.
-2. [Проверка готового Windows-архива](docs/WINDOWS-TEST.md) — основной путь для владельца, Qt и компилятор устанавливать не нужно.
-3. [Сборка и автоматические проверки](docs/BUILD.md) — инструкция разработчику; [зависимости и лицензии](docs/DEPENDENCIES.md).
-4. Текущие результаты и ограничения находятся в `STATUS.md`. Сборка CI не заменяет ручные испытания Windows 10/11, Linux и Huawei.
-5. Учётные данные и личная музыка для локальных тестов не нужны. Стенд 001-A не обращается к облаку.
-6. Исследовательские этапы до 001-E приняты в своих границах; следующий функциональный шаг требует отдельного разрешения. Реальный WebDAV — только отдельно согласованное чтение, без передачи реквизитов в GitHub/CI.
+> **Status: early development / technical prototypes.** This is not a finished application, public release, or supported product.
 
-## Документы
+## Project purpose
 
-- `SPEC.md` — что именно делает программа и как проверить результат.
-- `ARCHITECTURE.md` — как устроена программа; договорённости между подсистемами.
-- `ROADMAP.md` — этапы и критерии их завершения.
-- `AGENTS.md` — постоянные инструкции для Codex.
-- `DECISIONS.md` — утверждённые, предложенные и исследуемые решения.
-- `STATUS.md` — текущее фактическое состояние, без выдуманных успехов.
-- `tasks/000-repository-setup.md` — первая задача Codex.
-- `tasks/001-A-webdav.md` — проверка ключевых рисков.
-- `docs/WEB-DAV-STREAM-TEST.md` — ручная демонстрация 001-B2 на Windows 11.
+The owner determines the requirements, architecture priorities, and acceptance criteria according to personal needs. Features requested by third parties, support for arbitrary installations, and broader usability are not primary development objectives. No public support, compatibility guarantee, or delivery schedule is offered.
 
-## Правило организации работы
+## Technology and intended scope
 
-**Владелец** описывает желаемое поведение и утверждает решения. **ChatGPT** помогает с ТЗ, приоритетами, задачами, проверкой отчётов. **Codex** реализует конкретные задачи, тестирует и предлагает PR. Задача не закончена без перечня проверок и ограничений. К следующему этапу переходить по явному разрешению владельца.
+- **Technology:** Qt 6, C++17, QML, CMake; shared application core with separate Desktop and Android interfaces.
+- **Platforms:** Windows, Linux, Android.
+- **Intended source:** read-only WebDAV access to the owner's cloud-hosted music folder.
+- **Audio formats studied:** MP3, FLAC, AAC-LC (ADTS/M4A), and ALAC (M4A).
+- **Future features:** local library, favorites, playlists, offline cache, and resilient streaming.
 
-## Официальные технические источники
+These describe project goals, **not a list of production-ready features**.
 
-- Mail WebDAV: https://help.mail.ru/cloud/desktop/webdav/
-- Qt Multimedia: https://doc.qt.io/qt-6/qtmultimedia-index.html
-- Qt Android: https://doc.qt.io/qt-6/android.html
-- Android background playback: https://developer.android.com/media/media3/session/background-playback
-- Qt licensing: https://doc.qt.io/qt-6/licensing.html
-- Codex development workflows: https://developers.openai.com/cookbook/examples/codex/iterating-development-workflows-with-codex
+## What has actually been verified?
 
-Документ предназначен для планирования, а не является доказательством работоспособности технологий в целевой среде.
+As of **30 October 2026**:
 
-[Установка тестового Android APK на Huawei](docs/ANDROID-TEST.md) — ранний тестовый экран 001-C; запуск минимального APK на Huawei подтверждён владельцем, но воспроизведение звука на Android не проверялось.
+- The owner completed manual listening tests on Windows 11 for **5/5 synthetic streaming audio formats** using a **local loopback mock WebDAV server**, including Stop/restart and handling a server that does not support HTTP Range.
+- Automated tests and prototype builds have passed on Linux and Windows; Android APK builds and packaging checks have passed. A basic Android application screen was tested on the owner's Huawei device.
+- **Not yet verified:** connection to the real cloud WebDAV account, production streaming over the internet, Android audio playback, production-grade offline caching, or general user compatibility.
 
+Evidence and current limitations: [STATUS.md](STATUS.md), [001-E report](docs/001-E-REPORT.md), [ROADMAP.md](ROADMAP.md).
 
-## Завершённая задача 001-B1
+## Documentation
 
-После завершения 001-C владелец разрешил только локальный Desktop-аудиопрототип.
-[Отчёт](docs/001-B1-REPORT.md), [тест звука Windows/Linux](docs/AUDIO-TEST.md).
-Qt Multimedia/FFmpeg остаётся кандидатом; Android audio и сеть не добавляются.
-Ручная приёмка со слышимым звуком на Windows 11 отражена в `STATUS.md`.
+| Resource | Description |
+| --- | --- |
+| [SPEC.md](SPEC.md) | Product requirements and acceptance expectations |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Design and subsystem boundaries |
+| [STATUS.md](STATUS.md) | Verified progress and unresolved limitations |
+| [ROADMAP.md](ROADMAP.md) | Development phases and next steps |
+| [DECISIONS.md](DECISIONS.md) | Architectural decisions and open questions |
+| [docs/BUILD.md](docs/BUILD.md) | Developer build and test instructions |
+| [docs/CI.md](docs/CI.md) | GitHub Actions checks and artifact policy |
+| [docs/WINDOWS-TEST.md](docs/WINDOWS-TEST.md) | Owner's manual Windows test procedure |
 
-## Завершённые потоковые прототипы и следующие задачи
+Source code and test assets do not require access to the owner's personal music or login details. **Do not upload cloud credentials or personal media to issues, pull requests, or CI.**
 
-001-B2 и 001-E проверялись на локальном loopback WebDAV mock, **не** на реальном Cloud.Mail.ru. Материалы: [отчёт 001-B2](docs/001-B2-REPORT.md), [отчёт 001-E](docs/001-E-REPORT.md), [инструкция Windows 11](docs/WEB-DAV-STREAM-TEST.md), [итог приёмки](https://github.com/metravolokos/allmusic-player/pull/11#issuecomment-6518876866).
+## Development process
 
-Следующая функциональная задача: [Issue #12 — локальные «Избранное» и плейлисты](https://github.com/metravolokos/allmusic-player/issues/12); начинать её только по решению владельца. Оптимизация CI [CI-OPT-001, PR #15](https://github.com/metravolokos/allmusic-player/pull/15) уже объединена в `main`; сборки после проверенного PR не повторяются при штатных изменениях. После отдельного разрешения возможна read-only проверка реального WebDAV и Android audio feasibility.
+This is an **AI-assisted development project**. The owner defines goals, reviews results, and makes acceptance decisions; ChatGPT assists with requirements, planning and review; Codex implements scoped tasks through pull requests. Automated CI and recorded manual tests are used to evaluate changes. Use of AI is not a substitute for testing.
+
+## Participation and security
+
+This is an owner-directed personal project, **not a community-supported software product**. Outside suggestions or pull requests may be considered, declined, or closed without implementation. Read [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [SECURITY.md](SECURITY.md) before participating.
+
+## License
+
+**No project-specific software license has been selected or granted yet.** Public access to this repository does not by itself grant permission to reuse, modify, or redistribute its code. Third-party components retain their respective licenses; see [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md). License selection remains a separate decision by the owner.
