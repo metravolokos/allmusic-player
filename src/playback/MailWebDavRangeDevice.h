@@ -26,6 +26,8 @@ public:
     bool open(OpenMode mode) override;
     bool isSequential() const override { return false; }
     qint64 size() const override { return m_entry.size.value_or(-1); }
+    qint64 pos() const override;
+    qint64 bytesAvailable() const override;
     bool seek(qint64 position) override;
     QString errorString() const;
     qint64 cachedBytes() const;
@@ -70,5 +72,8 @@ private:
     QString m_error;
     bool m_buffering = false;
     std::atomic_bool m_cancelled{false};
+    std::atomic_bool m_sourceOpen{false};
     std::atomic<quint64> m_generation{0};
+    std::atomic<qint64> m_pendingSeek{-1};
+    std::atomic<qint64> m_visiblePosition{0};
 };

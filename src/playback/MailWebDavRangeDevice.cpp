@@ -211,7 +211,8 @@ bool MailWebDavRangeDevice::open(OpenMode mode)
     const QString suffix = m_entry.path.section(u'.', -1).toLower();
     const QUrl origin = m_testOriginEnabled ? m_testOrigin : PinnedMailOrigin;
     const auto checked = WebDavProbe::safePath(m_entry.reference, origin);
-    if (isOpen() || m_cancelled.load() || mode != QIODevice::ReadOnly
+    if (m_sourceOpen.load() || isOpen() || m_cancelled.load()
+        || mode != QIODevice::ReadOnly
         || !m_entry.size || *m_entry.size <= 0
         || *m_entry.size > std::numeric_limits<qint64>::max() / 2
         || (suffix != QStringLiteral("mp3") && suffix != QStringLiteral("flac"))
@@ -219,8 +220,13 @@ bool MailWebDavRangeDevice::open(OpenMode mode)
         setFailure(QStringLiteral("Источник Cloud Mail недопустим или не поддерживает этот формат."));
         return false;
     }
-    if (!QIODevice::open(mode))
+    // The page cache already handles buffering. Disable QIODevice's separate
+    // read buffer so a deferred seek cannot expose stale bytes after a Range
+    // request is interrupted.
+    if (!QIODevice::open(mode | QIODevice::Unbuffered))
         return false;
+    m_sourceOpen.store(true);
+    m_visiblePosition.store(0);
 
     // The fetcher owns a separate private copy. The QIODevice no longer needs
     // the remote path or validator once the source has been validated/opened.
@@ -235,18 +241,33 @@ bool MailWebDavRangeDevice::open(OpenMode mode)
 
 bool MailWebDavRangeDevice::seek(qint64 position)
 {
-    if (position < 0 || position > size() || m_cancelled.load())
+    if (!m_sourceOpen.load() || position < 0 || position > size()
+        || m_cancelled.load())
         return false;
-    if (!QIODevice::seek(position))
-        return false;
-    const quint64 generation = ++m_generation;
-    Q_UNUSED(generation);
+
+    // QIODevice's private cursor and buffer are not thread-safe. Publish the
+    // target here; the read consumer applies the base-class seek after the
+    // outstanding Range request is cancelled.
+    m_pendingSeek.store(position);
+    m_visiblePosition.store(position);
+    ++m_generation;
     if (m_fetcher && m_workerThread.isRunning()) {
         QMetaObject::invokeMethod(m_fetcher, [fetcher = m_fetcher] {
             fetcher->cancelCurrentRequest();
         }, Qt::QueuedConnection);
     }
     return true;
+}
+
+qint64 MailWebDavRangeDevice::pos() const
+{
+    const qint64 pending = m_pendingSeek.load();
+    return pending >= 0 ? pending : m_visiblePosition.load();
+}
+
+qint64 MailWebDavRangeDevice::bytesAvailable() const
+{
+    return qMax<qint64>(0, size() - pos());
 }
 
 QString MailWebDavRangeDevice::errorString() const
@@ -289,6 +310,7 @@ void MailWebDavRangeDevice::cancel()
     if (m_cancelled.exchange(true))
         return;
     ++m_generation;
+    m_pendingSeek.store(-1);
     setBuffering(false);
     {
         QMutexLocker lock(&m_mutex);
@@ -407,23 +429,54 @@ qint64 MailWebDavRangeDevice::readData(char *data, qint64 maxSize)
         return -1;
 
     qint64 offset = QIODevice::pos();
-    if (offset < 0 || offset >= size())
-        return 0;
     quint64 generation = m_generation.load();
     qint64 copied = 0;
-    while (copied < maxSize && offset < size()) {
+    const auto finishRead = [this, &offset](qint64 result) {
+        if (result >= 0)
+            m_visiblePosition.store(offset);
+        return result;
+    };
+    const auto applyPendingSeek = [this, &offset] {
+        const qint64 pending = m_pendingSeek.load();
+        if (pending < 0)
+            return true;
+        if (!QIODevice::seek(pending)) {
+            setFailure(QStringLiteral("Не удалось переместить позицию потока Cloud Mail."));
+            return false;
+        }
+        offset = pending;
+        m_visiblePosition.store(pending);
+        qint64 expected = pending;
+        m_pendingSeek.compare_exchange_strong(expected, -1);
+        return true;
+    };
+
+    if (!applyPendingSeek())
+        return -1;
+
+    for (;;) {
         if (generation != m_generation.load()) {
             generation = m_generation.load();
-            offset = QIODevice::pos();
             copied = 0;
+            if (m_cancelled.load())
+                return -1;
+            if (!applyPendingSeek())
+                return -1;
+            offset = QIODevice::pos();
             if (offset < 0 || offset >= size())
-                return 0;
+                return finishRead(copied);
         }
+        if (copied >= maxSize || offset >= size()) {
+            if (generation != m_generation.load())
+                continue;
+            return finishRead(copied);
+        }
+
         const qint64 pageIndex = offset / PageSize;
         if (!loadPage(pageIndex, generation)) {
             if (generation != m_generation.load())
                 continue;
-            return copied > 0 ? copied : -1;
+            return finishRead(copied > 0 ? copied : -1);
         }
         QMutexLocker lock(&m_mutex);
         if (generation != m_generation.load()) {
@@ -432,12 +485,12 @@ qint64 MailWebDavRangeDevice::readData(char *data, qint64 maxSize)
         }
         const auto it = m_pages.constFind(pageIndex);
         if (it == m_pages.cend())
-            return copied > 0 ? copied : -1;
+            return finishRead(copied > 0 ? copied : -1);
         const qint64 withinPage = offset % PageSize;
         const qint64 available = it->size() - withinPage;
         const qint64 amount = qMin(qMin(maxSize - copied, available), size() - offset);
         if (amount <= 0)
-            return copied;
+            return finishRead(copied);
         std::memcpy(data + copied, it->constData() + withinPage,
                     static_cast<size_t>(amount));
         m_lru.removeAll(pageIndex);
