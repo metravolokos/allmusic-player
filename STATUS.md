@@ -348,7 +348,12 @@ Range одного FLAC завершился общим сообщением о�
 заголовков и тела. Для HTTP 206 поддерживается отсутствие `Content-Length`, если
 Qt Network корректно завершил framing ответа, а фактический объём совпал с
 `Content-Range`. Сильный ETag/If-Range, ограничение 64 КиБ и проверка тела
-сохраняются. Новые Linux/Windows C++ тесты ещё должны пройти CI PR #21.
+сохраняются. На head `87664fc` GitHub пока не создал Actions-запуск;
+Linux/Windows C++/mock-тесты этой доработки ещё **НЕ ПРОВЕРЕНЫ**. Локально
+CMake и Qt SDK отсутствуют, а запуск workflow из этой сессии недоступен.
+Владельцу нужно вручную запустить Desktop workflow с
+`source_ref=codex/002-b-cloud-webdav`, `full_tests=true`, `windows_zip=true`,
+`webdav_test_kit=false` для платформенных тестов и новой Windows-сборки.
 
 002-B **не принята** до повторной успешной ручной Range-проверки владельцем.
 Codex и CI к реальному Cloud Mail не подключались. Подробности владельцу:
