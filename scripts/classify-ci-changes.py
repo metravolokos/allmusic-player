@@ -136,8 +136,11 @@ def git_paths(event):
             raise ValueError("PR не содержит SHA базовой и исходной веток")
         revision = f"{base}...{head}"
     elif event == "push":
+        ref = os.environ.get("CI_REF", "")
         before = os.environ.get("CI_BEFORE", "")
         after = os.environ.get("GITHUB_SHA", "")
+        if ref != "refs/heads/main":
+            raise ValueError("push выполняется не в ожидаемую ветку main")
         if not before or not after or set(before) == {"0"}:
             raise ValueError("push не содержит допустимую базовую версию для сравнения")
         revision = f"{before}..{after}"
@@ -154,13 +157,40 @@ def truthy(value):
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def lightweight_main_push(reason):
+    return {
+        "desktop_linux": False,
+        "desktop_windows": False,
+        "fixtures": False,
+        "android": False,
+        "windows_zip": False,
+        "webdav_test_kit": False,
+        "desktop_cache_validation": False,
+        "android_cache_validation": False,
+        "reason": reason,
+    }
+
+
 def selections_for_event(event):
-    if event in {"pull_request", "push"}:
+    if event == "pull_request":
         try:
             return classify_paths(git_paths(event))
         except (OSError, subprocess.SubprocessError, UnicodeError, ValueError) as error:
             print(f"Классификация не удалась, включаю все проверки: {error}", file=sys.stderr)
             return full_check("ошибка сравнения Git; безопасно включены все проверки")
+    if event == "push":
+        try:
+            paths = git_paths(event)
+            classified = classify_paths(paths)
+            if classified["reason"].startswith(("не удалось", "неизвестный тип")):
+                return classified
+            return lightweight_main_push(
+                "push в защищённый main после обязательной PR-проверки; "
+                "выполнены лёгкие проверки документов и политики CI"
+            )
+        except (OSError, subprocess.SubprocessError, UnicodeError, ValueError) as error:
+            print(f"Классификация не удалась, включаю все проверки: {error}", file=sys.stderr)
+            return full_check("ошибка проверки push в main; безопасно включены все проверки")
     if event == "release" or truthy(os.environ.get("CI_RELEASE")):
         selection = full_check("выпущен релиз; включены полная проверка и упаковка")
         selection["source_sha"] = os.environ.get("GITHUB_SHA", "")

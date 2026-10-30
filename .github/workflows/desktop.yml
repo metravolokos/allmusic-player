@@ -60,6 +60,7 @@ jobs:
         id: changes
         env:
           CI_EVENT: ${{ github.event_name }}
+          CI_REF: ${{ github.ref }}
           CI_BEFORE: ${{ github.event.before }}
           CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -80,6 +81,7 @@ jobs:
       - name: Проверить документы и пробелы в изменениях
         run: |
           python3 scripts/check_repository.py
+          python3 -m unittest discover -s tests/ci -v
 
   fixtures:
     needs: classify

@@ -104,6 +104,87 @@ class ChangeSelection(unittest.TestCase):
         self.assertTrue(result["android"])
         self.assertTrue(result["windows_zip"])
 
+    def test_pull_request_still_checks_desktop_changes(self):
+        environment = {"CI_BASE_SHA": "base", "CI_HEAD_SHA": "head"}
+        completed = subprocess.CompletedProcess(
+            ["git", "diff"], 0, stdout=b"src/playback/LocalPlayback.cpp\0", stderr=b""
+        )
+        with patch.dict(os.environ, environment, clear=False), patch.object(
+                CLASSIFIER.subprocess, "run", return_value=completed):
+            result = CLASSIFIER.selections_for_event("pull_request")
+        self.assertTrue(result["desktop_linux"])
+        self.assertTrue(result["desktop_windows"])
+        self.assertTrue(result["fixtures"])
+
+    def test_protected_main_push_skips_repeat_builds_for_known_changes(self):
+        environment = {
+            "CI_REF": "refs/heads/main",
+            "CI_BEFORE": "previous-main-sha",
+            "GITHUB_SHA": "merged-main-sha",
+        }
+        completed = subprocess.CompletedProcess(
+            ["git", "diff"], 0, stdout=b"src/playback/LocalPlayback.cpp\0", stderr=b""
+        )
+        with patch.dict(os.environ, environment, clear=False), patch.object(
+                CLASSIFIER.subprocess, "run", return_value=completed):
+            result = CLASSIFIER.selections_for_event("push")
+        for job in ("desktop_linux", "desktop_windows", "fixtures", "android",
+                    "windows_zip", "webdav_test_kit", "desktop_cache_validation",
+                    "android_cache_validation"):
+            with self.subTest(job=job):
+                self.assertFalse(result[job])
+        self.assertIn("защищённый main", result["reason"])
+
+    def test_main_push_unknown_file_fails_closed(self):
+        environment = {
+            "CI_REF": "refs/heads/main",
+            "CI_BEFORE": "previous-main-sha",
+            "GITHUB_SHA": "merged-main-sha",
+        }
+        completed = subprocess.CompletedProcess(
+            ["git", "diff"], 0, stdout=b"new-build-system.toml\0", stderr=b""
+        )
+        with patch.dict(os.environ, environment, clear=False), patch.object(
+                CLASSIFIER.subprocess, "run", return_value=completed):
+            result = CLASSIFIER.selections_for_event("push")
+        self.assertTrue(result["desktop_linux"])
+        self.assertTrue(result["desktop_windows"])
+        self.assertTrue(result["android"])
+        self.assertTrue(result["windows_zip"])
+        self.assertTrue(result["webdav_test_kit"])
+
+    def test_main_push_without_valid_before_sha_fails_closed(self):
+        environment = {
+            "CI_REF": "refs/heads/main",
+            "CI_BEFORE": "0" * 40,
+            "GITHUB_SHA": "merged-main-sha",
+        }
+        with patch.dict(os.environ, environment, clear=False):
+            result = CLASSIFIER.selections_for_event("push")
+        self.assertTrue(result["desktop_linux"])
+        self.assertTrue(result["desktop_windows"])
+        self.assertTrue(result["android"])
+
+    def test_push_outside_protected_main_fails_closed(self):
+        environment = {
+            "CI_REF": "refs/heads/feature",
+            "CI_BEFORE": "previous-sha",
+            "GITHUB_SHA": "new-sha",
+        }
+        with patch.dict(os.environ, environment, clear=False):
+            result = CLASSIFIER.selections_for_event("push")
+        self.assertTrue(result["desktop_linux"])
+        self.assertTrue(result["desktop_windows"])
+        self.assertTrue(result["android"])
+
+    def test_release_keeps_full_platform_checks_and_package_audits(self):
+        result = CLASSIFIER.selections_for_event("release")
+        self.assertTrue(result["desktop_linux"])
+        self.assertTrue(result["desktop_windows"])
+        self.assertTrue(result["android"])
+        self.assertTrue(result["windows_zip"])
+        self.assertTrue(result["webdav_test_kit"])
+
     def test_unknown_files_and_empty_diff_fail_closed(self):
         for paths in ([], ["new-build-system.toml"]):
             with self.subTest(paths=paths):
