@@ -377,3 +377,10 @@ Codex и CI к реальному Cloud Mail не подключались. По
   CMake/Qt SDK в этой среде отсутствуют; C++ проверяется через доступный CI.
 - Инструкция и гипотезы: `docs/002-B-CLOUD-WEBDAV.md`. Реальный Cloud Mail
   из Codex/CI не используется; следующую ручную проверку выполняет владелец.
+- CI этой доработки **НЕ ПРОВЕРЕН**: после push и обновления описания PR новый
+  pull_request run не появился. GitHub CLI возвращает `Forbidden`; доступный
+  GitHub-коннектор не предоставляет workflow_dispatch. Это ограничение доступа,
+  а не успешная компиляция. Для продолжения владелец запускает Desktop foundation:
+  `source_ref=codex/002-b-cloud-webdav`, `full_tests=true`, `windows_zip=true`,
+  `webdav_test_kit=false`. До зелёных Linux/Windows C++ тестов эту версию не принимать
+  и не передавать как проверенную сборку для реального Cloud Mail.
