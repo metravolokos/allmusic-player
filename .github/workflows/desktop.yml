@@ -150,6 +150,7 @@ jobs:
             cd build/ninja-source
             python configure.py --bootstrap
             cp ninja "$GITHUB_WORKSPACE/build/ninja-cache/ninja"
+            cd "$GITHUB_WORKSPACE"
           fi
           chmod +x build/ninja-cache/ninja
           echo "$GITHUB_WORKSPACE/build/ninja-cache" >> "$GITHUB_PATH"
@@ -242,6 +243,7 @@ jobs:
             cd build/ninja-source
             python configure.py --bootstrap
             cp ninja.exe "$GITHUB_WORKSPACE/build/ninja-cache/ninja.exe"
+            cd "$GITHUB_WORKSPACE"
           fi
           echo "$GITHUB_WORKSPACE/build/ninja-cache" >> "$GITHUB_PATH"
           test "$(build/ninja-cache/ninja.exe --version)" = '1.12.1'
