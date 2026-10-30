@@ -25,7 +25,7 @@ dependencies {
     implementation 'androidx.core:core:1.17.0'
 }
 
-// A launcher-only spike has no baseline-profile installation feature. AndroidX
+// This test APK has no baseline-profile installation feature. AndroidX
 // lifecycle-runtime pulls this in transitively; it adds startup providers and a
 // broadcast receiver. Keep it out of this minimal APK, without changing Qt.
 configurations.configureEach {

@@ -7,6 +7,8 @@
 #include <QDebug>
 #ifndef Q_OS_ANDROID
 #include "LocalPlayback.h"
+#else
+#include "AndroidAudioTestController.h"
 #endif
 
 int main(int argc, char *argv[])
@@ -31,6 +33,8 @@ int main(int argc, char *argv[])
 
 #ifndef Q_OS_ANDROID
     LocalPlayback playback;
+#else
+    AndroidAudioTestController audioTest;
 #endif
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed,
@@ -38,6 +42,7 @@ int main(int argc, char *argv[])
 #ifdef Q_OS_ANDROID
     engine.rootContext()->setContextProperty(QStringLiteral("buildLabel"),
                                             QStringLiteral(ALLMUSIC_BUILD_LABEL));
+    engine.rootContext()->setContextProperty(QStringLiteral("audioTest"), &audioTest);
 #else
     engine.rootContext()->setContextProperty(QStringLiteral("playback"), &playback);
 #endif

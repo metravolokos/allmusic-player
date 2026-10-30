@@ -5,7 +5,7 @@ import sys
 
 source, destination = map(Path, sys.argv[1:])
 modules = ["qtbase", "qtdeclarative"]
-# Desktop Multimedia only; the Android package retains the original scope.
+# Multimedia notices are included whenever the Android or Desktop package uses it.
 if (source / "qtmultimedia").is_dir():
     modules.append("qtmultimedia")
 for module in modules:
