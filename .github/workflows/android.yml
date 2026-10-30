@@ -113,6 +113,9 @@ jobs:
           python -m pip install build/aqt-wheelhouse/*.whl
           # Qt >=6.7 publishes Android metadata under all_os; keep the existing pinned aqt route.
           python -m aqt list-qt all_os android --arch 6.12.0 > build/android-evidence/available-qt-abis.txt
+          python -m aqt list-qt all_os android --modules 6.12.0 android_arm64_v8a > build/android-evidence/available-qt-modules.txt
+          grep -Eq '(^|[[:space:]])qtmultimedia([[:space:]]|$)' build/android-evidence/available-qt-modules.txt
+          grep -Eq '(^|[[:space:]])qtshadertools([[:space:]]|$)' build/android-evidence/available-qt-modules.txt
       - name: Кэш Qt 6.12.0 для host tools и Android arm64-v8a
         id: qt_cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -124,7 +127,7 @@ jobs:
         run: |
           # Host tools need ICU; ICU is not included in the Android runtime.
           python -m aqt install-qt linux desktop 6.12.0 linux_gcc_64 --archives qtbase qtdeclarative icu --outputdir "$RUNNER_TEMP/Qt" --base https://download.qt.io
-          python -m aqt install-qt linux android 6.12.0 android_arm64_v8a --archives qtbase qtdeclarative qtmultimedia qtshadertools --outputdir "$RUNNER_TEMP/Qt" --base https://download.qt.io
+          python -m aqt install-qt linux android 6.12.0 android_arm64_v8a --archives qtbase qtdeclarative --modules qtmultimedia qtshadertools --outputdir "$RUNNER_TEMP/Qt" --base https://download.qt.io
       - name: Проверить восстановленный Qt или результат установки
         env:
           QT_ANDROID_ROOT: ${{ runner.temp }}/Qt/6.12.0/android_arm64_v8a
