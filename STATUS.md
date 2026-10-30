@@ -400,16 +400,31 @@ encoding и фактическую длину, но гарантии неизм�
 Владелец разрешил только изолированный локальный эксперимент с Qt FFmpeg.
 Draft [PR #25](https://github.com/metravolokos/allmusic-player/pull/25) открыт от
 `codex/002-d-android-cloud`, исходная база — `aa7e18b05c034eb42b53b51ebbc5ecfe76a1f53d`.
-Коммит кода: `b655394b988d6c31ffcca02524e66398584d3183`.
+Проверенный code head: `4804f9c524c7694a7ae0c959544188fcf284657b`.
 
 Добавлены синтетические WAV/MP3/FLAC, seekable QBuffer для MP3/FLAC, Play/Pause/
 Stop/Seek и runtime-проба FFmpeg. APK-аудит требует FFmpeg plugin/runtime и
 заметок лицензий, запрещает Android system media plugin и permissions; отдельный
 package ID сохраняет сосуществование с 002-A. Desktop код и прежний WAV тест
-сохранены.
+сохранены. Для доказательства backend в APK включён только Qt FFmpeg plugin,
+Android system media plugin исключён.
 
-Локальные Android Python тесты (12/12), тесты CI classifier (19/19), проверка
-документации, Python compile и whitespace-проверка пройдены. **Android/ Desktop CI,
-фактическая APK-компиляция, размер, APK artifact и проверка на Huawei пока
-ожидают выполнения/ручного испытания**; локальные Android SDK/CMake/Ninja/adb
-отсутствуют. Результаты этого gateway spike и ручные шаги: [docs/002-D-ANDROID-CLOUD.md](docs/002-D-ANDROID-CLOUD.md).
+Успешны [Android CI #78](https://github.com/metravolokos/allmusic-player/actions/runs/41144063840)
+и [Desktop CI #112](https://github.com/metravolokos/allmusic-player/actions/runs/41144063850):
+Android arm64-v8a APK собран и прошёл package/license audit; Desktop Linux/Windows,
+Windows ZIP audit, Android/Desktop warm-cache пройдены. Локально Android Python
+тесты — 12/12, CI classifier — 19/19, repository docs check, Python compile и
+`git diff --check` — пройдены.
+
+APK: **63 649 117 байт (60.70 MiB)** против 17 936 522 байт у 002-A, прирост
+45 712 595 байт / 3.55x. В APK `QFFmpegMediaPlugin` и `libavcodec.so`,
+`libavformat.so`, `libavutil.so`, `libswresample.so`, `libswscale.so`; system media
+plugin отсутствует. Ноль Android permissions, FFmpeg 9.0.1 LGPL/BSD/ISC/MIT/MPL
+notices, подпись и 16-KiB alignment проверены. [Проверочный APK artifact](https://github.com/metravolokos/allmusic-player/actions/runs/41144063840/artifacts/13019789056)
+доступен до 13.11.2026.
+
+Звук и QBuffer Play/Pause/Stop/Seek на физическом Huawei **НЕ ПРОВЕРЕНЫ**; APK
+ждёт ручной проверки по [инструкции](docs/ANDROID-FFMPEG-SPIKE-TEST.md). Рост APK
+считается существенным: этот PR заканчивается feasibility spike, следующий
+функциональный этап не начинать. Отчёт, границы проверки и рекомендация по
+альтернативам: [docs/002-D-ANDROID-CLOUD.md](docs/002-D-ANDROID-CLOUD.md).
