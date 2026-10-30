@@ -63,6 +63,17 @@ class PublicationBoundary(unittest.TestCase):
                         with self.assertRaises(AssertionError):
                             AUDIT['check_runtime'](apk, 'debugRuntimeClasspath\n' + dependency)
 
+    def test_ffmpeg_backend_and_native_libraries_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            apk = Path(directory) / 'fixture.apk'
+            with zipfile.ZipFile(apk, 'w') as archive:
+                for name in ('liballmusic-player', 'libQt6Quick', 'libQt6Multimedia',
+                             'libQt6Concurrent', 'libplugins_multimedia_androidmediaplugin',
+                             'libplugins_multimedia_ffmpegmediaplugin', 'libavcodec'):
+                    archive.writestr(f'lib/arm64-v8a/{name}_arm64-v8a.so', b'fixture')
+            with self.assertRaises(AssertionError):
+                AUDIT['check_runtime'](apk, 'debugRuntimeClasspath\nandroidx.core:core:1.17.0')
+
     def test_multimedia_module_is_required(self):
         with tempfile.TemporaryDirectory() as directory:
             apk = Path(directory) / 'fixture.apk'

@@ -52,6 +52,9 @@ if(ANDROID)
         BASE "${CMAKE_CURRENT_BINARY_DIR}"
         FILES "${android_audio_tone}")
     target_link_libraries(allmusic-player PRIVATE Qt6::Multimedia)
+    # Keep this playback-only probe on Android's system media backend.
+    # Qt's bundled FFmpeg backend and its runtime libraries are not needed.
+    qt_import_plugins(allmusic-player EXCLUDE Qt6::QFFmpegMediaPlugin)
     set_target_properties(allmusic-player PROPERTIES
         QT_QML_ROOT_PATH "${PROJECT_SOURCE_DIR}/ui/android"
         QT_ANDROID_PACKAGE_SOURCE_DIR "${PROJECT_SOURCE_DIR}/android"
