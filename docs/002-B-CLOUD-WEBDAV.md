@@ -23,7 +23,8 @@ Python или доступ к исходному коду. Приложение 
    и Android.
 2. В GitHub откройте **Actions** → **Desktop foundation** → **Run workflow**.
 3. Укажите ветку PR в `source_ref` — `codex/002-b-cloud-webdav`. Включите
-   `windows_zip=true`; остальные параметры оставьте выключенными.
+   `windows_zip=true` и `full_tests=true`; `webdav_test_kit` оставьте выключенным.
+   Так один запуск проверит Desktop на Linux и Windows, затем упакует Windows ZIP.
 4. Дождитесь зелёного `Desktop CI result` и скачайте артефакт
    `AllMusicPlayer-Windows-x64-…` этого запуска.
 5. Распакуйте ZIP в отдельную папку и запустите `allmusic-player.exe`. Qt и
