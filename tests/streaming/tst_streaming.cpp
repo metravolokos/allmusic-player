@@ -521,8 +521,10 @@ private slots:
                 while (sample > current && !peak.compare_exchange_weak(current, sample)) { }
             }
             if (bytesAtFirstPcm.load() < 0) {
-                bytesAtFirstPcm.store(qMax(transferred.load(), device.cachedBytes()));
-                firstPcmMs.store(startup.elapsed());
+                qint64 unset = -1;
+                if (bytesAtFirstPcm.compare_exchange_strong(
+                        unset, qMax(transferred.load(), device.cachedBytes())))
+                    firstPcmMs.store(startup.elapsed());
             }
         }, Qt::DirectConnection);
         QSignalSpy errors(&player, &QMediaPlayer::errorOccurred);
@@ -531,6 +533,13 @@ private slots:
         player.play();
         QTRY_VERIFY_WITH_TIMEOUT(player.hasAudio() && player.duration() > 30000, 15000);
         QTRY_VERIFY_WITH_TIMEOUT(decodedFrames.load() > 4096 && peak.load() > 0.01f, 15000);
+        qint64 bytesAtPcm = bytesAtFirstPcm.load();
+        if (bytesAtPcm <= 0) {
+            bytesAtPcm = qMax(transferred.load(), device.cachedBytes());
+            qint64 previous = bytesAtFirstPcm.load();
+            if (previous <= 0)
+                bytesAtFirstPcm.compare_exchange_strong(previous, bytesAtPcm);
+        }
         QVERIFY(bytesAtFirstPcm.load() > 0);
         QVERIFY2(bytesAtFirstPcm.load() < audio.size(), "streaming decoder received the whole file before first PCM");
         QVERIFY(player.isSeekable());
@@ -603,14 +612,23 @@ private slots:
                 while (sample > current && !peak.compare_exchange_weak(current, sample)) { }
             }
             if (bytesAtFirstPcm.load() < 0) {
-                bytesAtFirstPcm.store(qMax(transferred.load(), device.cachedBytes()));
-                firstPcmMs.store(startup.elapsed());
+                qint64 unset = -1;
+                if (bytesAtFirstPcm.compare_exchange_strong(
+                        unset, qMax(transferred.load(), device.cachedBytes())))
+                    firstPcmMs.store(startup.elapsed());
             }
         }, Qt::DirectConnection);
         startup.start();
         player.setSourceDevice(&device);
         player.play();
         QTRY_VERIFY_WITH_TIMEOUT(decodedFrames.load() > 4096 && peak.load() > 0.01f, 12000);
+        qint64 bytesAtPcm = bytesAtFirstPcm.load();
+        if (bytesAtPcm <= 0) {
+            bytesAtPcm = qMax(transferred.load(), device.cachedBytes());
+            qint64 previous = bytesAtFirstPcm.load();
+            if (previous <= 0)
+                bytesAtFirstPcm.compare_exchange_strong(previous, bytesAtPcm);
+        }
         QVERIFY(bytesAtFirstPcm.load() > 0);
         QVERIFY2(bytesAtFirstPcm.load() < audio.size(), "decoder consumed the entire file before first PCM");
         QVERIFY2(device.cachedBytes() <= 4 * 64 * 1024, "page cache exceeded its fixed bound");
