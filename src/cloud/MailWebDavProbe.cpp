@@ -7,6 +7,7 @@
 #include <QRegularExpression>
 #include <QSslError>
 #include <QXmlStreamReader>
+#include <limits>
 
 namespace {
 const QUrl MailOrigin(QStringLiteral("https://webdav.cloud.mail.ru"));
@@ -33,13 +34,44 @@ bool isStrongEtag(const QByteArray &tag)
 std::optional<qint64> decimal(const QByteArray &raw)
 {
     static const QRegularExpression digits(QStringLiteral("^[0-9]+$"));
-    if (!digits.match(QString::fromLatin1(raw)).hasMatch())
+    const QByteArray value = raw.trimmed();
+    if (!digits.match(QString::fromLatin1(value)).hasMatch())
         return {};
     bool ok = false;
-    const qint64 value = raw.toLongLong(&ok);
-    if (!ok || value < 0)
+    const qint64 parsed = value.toLongLong(&ok);
+    if (!ok || parsed < 0)
         return {};
-    return value;
+    return parsed;
+}
+
+struct ParsedContentRange {
+    qint64 first = 0;
+    qint64 last = 0;
+    std::optional<qint64> total;
+};
+
+std::optional<ParsedContentRange> parseContentRange(const QByteArray &raw)
+{
+    static const QRegularExpression pattern(
+        QStringLiteral("^bytes\\s+([0-9]+)-([0-9]+)/([0-9]+|\\*)$"),
+        QRegularExpression::CaseInsensitiveOption);
+    const auto match = pattern.match(QString::fromLatin1(raw.trimmed()));
+    if (!match.hasMatch())
+        return {};
+    const auto first = decimal(match.captured(1).toLatin1());
+    const auto last = decimal(match.captured(2).toLatin1());
+    if (!first || !last)
+        return {};
+    ParsedContentRange parsed;
+    parsed.first = *first;
+    parsed.last = *last;
+    const QString total = match.captured(3);
+    if (total != QStringLiteral("*")) {
+        parsed.total = decimal(total.toLatin1());
+        if (!parsed.total)
+            return {};
+    }
+    return parsed;
 }
 
 bool isAudioPath(const QString &path)
@@ -150,6 +182,9 @@ bool MailWebDavProbe::begin(Operation operation, const QString &path, qint64 fil
         return false;
     result = {};
     result.listing = operation == Operation::List;
+    result.rangeCheck = operation == Operation::Range;
+    result.requestedRangeBytes = result.rangeCheck
+        ? qMin(RangeLimit, fileSize >= 0 ? fileSize : RangeLimit) : 0;
     active = true;
     const quint64 ticket = ++operationId;
 
@@ -194,6 +229,84 @@ bool MailWebDavProbe::begin(Operation operation, const QString &path, qint64 fil
 bool MailWebDavProbe::isCurrent(QNetworkReply *candidate) const
 {
     return candidate && candidate == reply;
+}
+
+void MailWebDavProbe::captureResponseMetadata(QNetworkReply *source)
+{
+    if (!source)
+        return;
+    result.status = source->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+
+    const QByteArray contentRange = source->rawHeader("Content-Range");
+    result.contentRangePresent = source->hasRawHeader("Content-Range");
+    result.rangeFirst.reset();
+    result.rangeLast.reset();
+    result.rangeExpectedBytes.reset();
+    result.totalSize.reset();
+    result.contentRangeUnsatisfied = false;
+    if (const auto parsed = parseContentRange(contentRange)) {
+        result.rangeFirst = parsed->first;
+        result.rangeLast = parsed->last;
+        if (parsed->last >= parsed->first
+            && parsed->last - parsed->first < std::numeric_limits<qint64>::max()) {
+            result.rangeExpectedBytes = parsed->last - parsed->first + 1;
+        }
+        result.totalSize = parsed->total;
+    } else if (result.contentRangePresent) {
+        static const QRegularExpression unsatisfiedPattern(
+            QStringLiteral("^bytes\\s+\\*/([0-9]+)$"),
+            QRegularExpression::CaseInsensitiveOption);
+        const auto unsatisfied = unsatisfiedPattern.match(
+            QString::fromLatin1(contentRange.trimmed()));
+        if (unsatisfied.hasMatch()) {
+            result.totalSize = decimal(unsatisfied.captured(1).toLatin1());
+            result.contentRangeUnsatisfied = result.totalSize.has_value();
+        }
+    }
+
+    const QByteArray contentLength = source->rawHeader("Content-Length");
+    result.contentLengthPresent = source->hasRawHeader("Content-Length");
+    result.declaredContentLength = result.contentLengthPresent
+        ? decimal(contentLength) : std::optional<qint64>();
+
+    const QByteArray transferEncoding = source->rawHeader("Transfer-Encoding").trimmed();
+    result.transferEncodingPresent = source->hasRawHeader("Transfer-Encoding");
+    result.transferEncodingChunked = result.transferEncodingPresent
+        && transferEncoding.compare("chunked", Qt::CaseInsensitive) == 0;
+
+    const QByteArray contentEncoding = source->rawHeader("Content-Encoding").trimmed();
+    result.contentEncodingPresent = source->hasRawHeader("Content-Encoding");
+    result.contentEncodingIdentity = !result.contentEncodingPresent
+        || contentEncoding.compare("identity", Qt::CaseInsensitive) == 0;
+
+    const QByteArray responseEtag = source->rawHeader("ETag");
+    result.etagPresent = source->hasRawHeader("ETag");
+    result.strongEtag = result.etagPresent && isStrongEtag(responseEtag);
+    result.etagMatchesIfRange = !result.ifRangeSent || !result.etagPresent
+        || responseEtag == expectedEtag;
+}
+
+void MailWebDavProbe::clearResponseMetadata()
+{
+    result.status = 0;
+    result.bytesReceived = 0;
+    result.bytesReceivedIsLowerBound = false;
+    result.rangeFirst.reset();
+    result.rangeLast.reset();
+    result.rangeExpectedBytes.reset();
+    result.totalSize.reset();
+    result.declaredContentLength.reset();
+    result.contentRangePresent = false;
+    result.contentRangeUnsatisfied = false;
+    result.contentLengthPresent = false;
+    result.transferEncodingPresent = false;
+    result.transferEncodingChunked = false;
+    result.contentEncodingPresent = false;
+    result.contentEncodingIdentity = true;
+    result.etagPresent = false;
+    result.strongEtag = false;
+    result.etagMatchesIfRange = true;
+    result.rangeIssue = RangeIssue::None;
 }
 
 void MailWebDavProbe::send()
@@ -269,23 +382,20 @@ void MailWebDavProbe::send()
     connect(sentReply, &QNetworkReply::metaDataChanged, this, [this, sentReply] {
         if (!active || !isCurrent(sentReply))
             return;
-        const int status = sentReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        result.status = status;
-        result.contentRange = sentReply->rawHeader("Content-Range");
-        result.contentLength = sentReply->rawHeader("Content-Length");
-        result.contentEncoding = sentReply->rawHeader("Content-Encoding");
-        const QByteArray responseEtag = sentReply->rawHeader("ETag");
-        result.etagPresent = !responseEtag.isEmpty();
-        result.strongEtag = isStrongEtag(responseEtag);
+        captureResponseMetadata(sentReply);
+        const int status = result.status;
 
         if ((status >= 300 && status < 400)) {
             finish(Error::Redirect);
             return;
         }
         if (status == 200 && !result.listing) {
+            result.rangeIssue = RangeIssue::RangeIgnored;
             finish(expectedEtag.isEmpty() ? Error::RangeUnsupported : Error::VersionChanged);
             return;
         }
+        if (status == 416 && !result.listing)
+            result.rangeIssue = RangeIssue::RangeUnsatisfiable;
         if (status != 401 && status != (result.listing ? 207 : 206)) {
             finish(httpError(status));
             return;
@@ -293,18 +403,34 @@ void MailWebDavProbe::send()
         if (status == 401)
             return; // The explicit one-time retry is handled after this response completes.
 
-        const QByteArray encoding = result.contentEncoding.trimmed().toLower();
-        if (!encoding.isEmpty() && encoding != "identity") {
+        if (!result.contentEncodingIdentity) {
+            if (result.rangeCheck)
+                result.rangeIssue = RangeIssue::UnsupportedContentEncoding;
             finish(Error::Protocol);
             return;
         }
-        const auto length = decimal(result.contentLength);
-        if (!result.contentLength.isEmpty() && !length) {
+        if (result.contentLengthPresent && !result.declaredContentLength) {
+            if (result.rangeCheck)
+                result.rangeIssue = RangeIssue::InvalidContentLength;
+            finish(Error::Protocol);
+            return;
+        }
+        if (result.rangeCheck && result.transferEncodingPresent
+            && result.contentLengthPresent) {
+            result.rangeIssue = RangeIssue::ConflictingMessageFraming;
+            finish(Error::Protocol);
+            return;
+        }
+        if (result.rangeCheck && result.transferEncodingPresent
+            && !result.transferEncodingChunked) {
+            result.rangeIssue = RangeIssue::UnsupportedTransferEncoding;
             finish(Error::Protocol);
             return;
         }
         const qint64 cap = result.listing ? ListingLimit : requestedLength;
-        if (length && *length > cap) {
+        if (result.declaredContentLength && *result.declaredContentLength > cap) {
+            if (result.rangeCheck)
+                result.rangeIssue = RangeIssue::TooLarge;
             finish(Error::TooLarge);
             return;
         }
@@ -321,10 +447,19 @@ void MailWebDavProbe::send()
         }
         const qint64 limit = result.listing ? ListingLimit : requestedLength;
         if (sentReply->bytesAvailable() > limit - body.size()) {
+            if (result.rangeCheck) {
+                const qint64 observedLimit = limit + 1;
+                result.bytesReceived = qMin(observedLimit,
+                    body.size() + sentReply->bytesAvailable());
+                result.bytesReceivedIsLowerBound = true;
+                result.rangeIssue = RangeIssue::TooLarge;
+            }
             finish(Error::TooLarge);
             return;
         }
         body += sentReply->readAll();
+        if (result.rangeCheck)
+            result.bytesReceived = body.size();
         if (body.size() > limit)
             finish(Error::TooLarge);
     });
@@ -333,15 +468,23 @@ void MailWebDavProbe::send()
         if (!active || !isCurrent(sentReply))
             return;
 
-        result.status = sentReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        result.contentRange = sentReply->rawHeader("Content-Range");
-        result.contentLength = sentReply->rawHeader("Content-Length");
-        result.contentEncoding = sentReply->rawHeader("Content-Encoding");
+        captureResponseMetadata(sentReply);
+        const QByteArray contentRangeValue = sentReply->rawHeader("Content-Range");
         const QByteArray responseEtag = sentReply->rawHeader("ETag");
-        result.etagPresent = !responseEtag.isEmpty();
-        result.strongEtag = isStrongEtag(responseEtag);
-        const auto networkError = sentReply->error();
         const int status = result.status;
+        if (result.rangeCheck && status == 206) {
+            const qint64 available = sentReply->bytesAvailable();
+            if (available > requestedRangeBytes - body.size()) {
+                result.bytesReceived = qMin(requestedRangeBytes + 1, body.size() + available);
+                result.bytesReceivedIsLowerBound = true;
+                result.rangeIssue = RangeIssue::TooLarge;
+                finish(Error::TooLarge);
+                return;
+            }
+            body += sentReply->readAll();
+            result.bytesReceived = body.size();
+        }
+        const auto networkError = sentReply->error();
         if (status == 401) {
             const QByteArray challenge = sentReply->rawHeader("WWW-Authenticate");
             static const QRegularExpression basicChallenge(
@@ -359,12 +502,7 @@ void MailWebDavProbe::send()
                 reply = nullptr;
                 old->disconnect(this);
                 old->deleteLater();
-                result.status = 0;
-                result.contentRange.clear();
-                result.contentLength.clear();
-                result.contentEncoding.clear();
-                result.etagPresent = false;
-                result.strongEtag = false;
+                clearResponseMetadata();
                 send();
                 return;
             }
@@ -375,18 +513,29 @@ void MailWebDavProbe::send()
             finish(Error::Redirect);
             return;
         }
+        if (status == 416 && result.rangeCheck)
+            result.rangeIssue = RangeIssue::RangeUnsatisfiable;
         if (status == 403 || status == 404 || status == 408
             || status == 429 || status >= 500) {
             finish(httpError(status));
             return;
         }
         if (networkError != QNetworkReply::NoError) {
-            finish((tlsFailure || networkError == QNetworkReply::SslHandshakeFailedError) ? Error::Tls
-                : networkError == QNetworkReply::TimeoutError ? Error::Timeout : Error::Network);
+            if (tlsFailure || networkError == QNetworkReply::SslHandshakeFailedError) {
+                finish(Error::Tls);
+            } else if (networkError == QNetworkReply::TimeoutError) {
+                finish(Error::Timeout);
+            } else if (result.rangeCheck && status == 206) {
+                result.rangeIssue = RangeIssue::IncompleteTransfer;
+                finish(Error::Protocol);
+            } else {
+                finish(Error::Network);
+            }
             return;
         }
-        const QByteArray encoding = result.contentEncoding.trimmed().toLower();
-        if (!encoding.isEmpty() && encoding != "identity") {
+        if (!result.contentEncodingIdentity) {
+            if (result.rangeCheck)
+                result.rangeIssue = RangeIssue::UnsupportedContentEncoding;
             finish(Error::Protocol);
             return;
         }
@@ -396,8 +545,9 @@ void MailWebDavProbe::send()
                 finish(Error::Http);
                 return;
             }
-            const auto length = decimal(result.contentLength);
-            if (!result.contentLength.isEmpty() && (!length || *length != body.size())) {
+            if (result.contentLengthPresent
+                && (!result.declaredContentLength
+                    || *result.declaredContentLength != body.size())) {
                 finish(Error::Protocol);
                 return;
             }
@@ -406,6 +556,7 @@ void MailWebDavProbe::send()
         }
 
         if (status == 200) {
+            result.rangeIssue = RangeIssue::RangeIgnored;
             finish(expectedEtag.isEmpty() ? Error::RangeUnsupported : Error::VersionChanged);
             return;
         }
@@ -413,40 +564,76 @@ void MailWebDavProbe::send()
             finish(Error::Http);
             return;
         }
-        if (!expectedEtag.isEmpty() && result.etagPresent && responseEtag != expectedEtag) {
+        if (!result.contentRangePresent) {
+            result.rangeIssue = RangeIssue::MissingContentRange;
+            finish(Error::Protocol);
+            return;
+        }
+        const auto parsedRange = parseContentRange(contentRangeValue);
+        if (!parsedRange) {
+            result.rangeIssue = RangeIssue::InvalidContentRange;
+            finish(Error::Protocol);
+            return;
+        }
+        if (parsedRange->last < parsedRange->first
+            || parsedRange->last == std::numeric_limits<qint64>::max()
+            || (parsedRange->total
+                && (*parsedRange->total <= 0 || parsedRange->last >= *parsedRange->total))) {
+            result.rangeIssue = RangeIssue::InvalidRangeBounds;
+            finish(Error::Protocol);
+            return;
+        }
+        if (parsedRange->first != 0) {
+            result.rangeIssue = RangeIssue::RangeStartMismatch;
+            finish(Error::Protocol);
+            return;
+        }
+        if (parsedRange->total && knownSize >= 0 && *parsedRange->total != knownSize) {
+            result.rangeIssue = RangeIssue::TotalSizeMismatch;
             finish(Error::VersionChanged);
+            return;
+        }
+        const qint64 completeSize = parsedRange->total.value_or(knownSize);
+        const qint64 expectedLast = completeSize >= 0
+            ? qMin(requestedLength - 1, completeSize - 1)
+            : requestedLength - 1;
+        if (parsedRange->last != expectedLast) {
+            result.rangeIssue = RangeIssue::RangeEndMismatch;
+            finish(Error::Protocol);
             return;
         }
 
-        static const QRegularExpression rangePattern(
-            QStringLiteral("^bytes ([0-9]+)-([0-9]+)/([0-9]+)$"));
-        const auto match = rangePattern.match(QString::fromLatin1(result.contentRange));
-        if (!match.hasMatch()) {
-            finish(Error::Protocol);
-            return;
-        }
-        const auto first = decimal(match.captured(1).toLatin1());
-        const auto last = decimal(match.captured(2).toLatin1());
-        const auto total = decimal(match.captured(3).toLatin1());
-        const auto declaredLength = decimal(result.contentLength);
-        if (!first || !last || !total || !declaredLength || *total <= 0
-            || *first != 0 || *last < *first || *total <= *last) {
-            finish(Error::Protocol);
-            return;
-        }
-        if (knownSize >= 0 && *total != knownSize) {
+        result.rangeFirst = parsedRange->first;
+        result.rangeLast = parsedRange->last;
+        const qint64 expectedBytes = expectedLast + 1;
+        result.rangeExpectedBytes = expectedBytes;
+        if (result.ifRangeSent && result.etagPresent && !result.etagMatchesIfRange) {
+            result.rangeIssue = RangeIssue::EtagMismatch;
             finish(Error::VersionChanged);
             return;
         }
-        const qint64 expectedLast = qMin(requestedLength - 1, *total - 1);
-        const qint64 expectedBytes = expectedLast + 1;
-        if (*last != expectedLast || body.size() != expectedBytes
-            || *declaredLength != body.size()) {
+        if (result.contentLengthPresent) {
+            if (!result.declaredContentLength) {
+                result.rangeIssue = RangeIssue::InvalidContentLength;
+                finish(Error::Protocol);
+                return;
+            }
+            if (*result.declaredContentLength != expectedBytes) {
+                result.rangeIssue = RangeIssue::ContentLengthMismatch;
+                finish(Error::Protocol);
+                return;
+            }
+        }
+        if (body.size() != expectedBytes) {
+            result.rangeIssue = RangeIssue::BodyLengthMismatch;
             finish(Error::Protocol);
             return;
         }
         result.bytesReceived = body.size();
-        result.totalSize = *total;
+        // RFC 9110 does not require Content-Length on a 206. QNetworkReply
+        // completes only after the active HTTP framing (length, chunked coding,
+        // close-delimiting, or protocol frames) has ended; Content-Range and
+        // the delivered identity bytes provide the independent size check.
         finish(Error::None);
     });
 }
@@ -586,6 +773,8 @@ void MailWebDavProbe::finish(Error error)
 {
     if (!active)
         return;
+    if (result.rangeCheck && result.bytesReceived < body.size())
+        result.bytesReceived = body.size();
     active = false;
     deadline.stop();
     if (reply) {
@@ -598,8 +787,10 @@ void MailWebDavProbe::finish(Error error)
     result.error = error;
     if (error != Error::None) {
         result.entries.clear();
-        result.bytesReceived = 0;
-        result.totalSize.reset();
+        if (!result.rangeCheck) {
+            result.bytesReceived = 0;
+            result.totalSize.reset();
+        }
     }
     body.fill('\0');
     body.clear();

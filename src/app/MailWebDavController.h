@@ -37,6 +37,7 @@ private:
     void handleCompleted(const MailWebDavProbe::Result &result);
     void dropSession();
     void setStatus(const QString &status);
+    static QString rangeDiagnosticText(const MailWebDavProbe::Result &result);
     static bool isAudio(const QString &path);
     static QString displayName(const QString &path, bool directory);
     static QString errorText(MailWebDavProbe::Error error, int status);

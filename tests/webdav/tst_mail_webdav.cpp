@@ -67,6 +67,7 @@ private slots:
     void initTestCase()
     {
         qRegisterMetaType<MailWebDavProbe::Error>();
+        qRegisterMetaType<MailWebDavProbe::RangeIssue>();
         qRegisterMetaType<MailWebDavProbe::Result>();
     }
 
@@ -229,8 +230,10 @@ private slots:
         QCOMPARE(result.status, 206);
         QCOMPARE(result.bytesReceived, 100);
         QCOMPARE(result.totalSize.value(), 100);
+        QCOMPARE(result.rangeExpectedBytes.value(), 100);
         QVERIFY(result.etagPresent);
         QVERIFY(result.strongEtag);
+        QVERIFY(result.etagMatchesIfRange);
         QVERIFY(result.ifRangeSent);
         QCOMPARE(server->requests.size(), 1);
         const auto &request = server->requests.first();
@@ -260,6 +263,193 @@ private slots:
         QVERIFY(!result.ifRangeSent);
     }
 
+    void rangeAcceptsMissingContentLengthWhenQtCompletesTheResponse()
+    {
+        server->handler = [](const MockWebDav::Request &) {
+            auto response = Response{206, QByteArray(100, 'x'), {
+                {"Content-Range", "bytes 0-99/100"}
+            }};
+            response.omitContentLength = true; // HTTP/1.1 close-delimited framing.
+            return response;
+        };
+        const Result result = range(audio());
+        QCOMPARE(result.error, Error::None);
+        QCOMPARE(result.status, 206);
+        QCOMPARE(result.rangeIssue, MailWebDavProbe::RangeIssue::None);
+        QVERIFY(result.contentRangePresent);
+        QVERIFY(!result.contentLengthPresent);
+        QCOMPARE(result.bytesReceived, 100);
+        QCOMPARE(result.rangeExpectedBytes.value(), 100);
+    }
+
+    void rangeAcceptsChunkedBodyAndUnknownCompleteLength()
+    {
+        server->handler = [](const MockWebDav::Request &) {
+            auto response = Response{206, QByteArray(100, 'x'), {
+                {"Content-Range", "bytes 0-99/*"}, {"ETag", "\"v1\""}
+            }};
+            response.omitContentLength = true;
+            response.chunked = true;
+            return response;
+        };
+        const Result result = range(audio());
+        QCOMPARE(result.error, Error::None);
+        QCOMPARE(result.status, 206);
+        QVERIFY(result.transferEncodingPresent);
+        QVERIFY(result.transferEncodingChunked);
+        QVERIFY(!result.contentLengthPresent);
+        QVERIFY(!result.totalSize.has_value());
+        QCOMPARE(result.rangeExpectedBytes.value(), 100);
+        QCOMPARE(result.bytesReceived, 100);
+        QVERIFY(result.ifRangeSent);
+        QVERIFY(result.etagMatchesIfRange);
+    }
+
+    void rangeRequestUsesEncodedUnicodePath()
+    {
+        server->handler = [](const MockWebDav::Request &) {
+            return Response{206, QByteArray(100, 'x'), {
+                {"Content-Range", "bytes 0-99/100"}, {"Content-Length", "100"}
+            }};
+        };
+        Entry unicode = audio();
+        unicode.path = QString::fromUtf8("/AllMusic/Тест #1.flac");
+        unicode.reference = QStringLiteral("/AllMusic/%D0%A2%D0%B5%D1%81%D1%82%20%231.flac");
+        const Result result = range(unicode);
+        QCOMPARE(result.error, Error::None);
+        QCOMPARE(server->requests.size(), 1);
+        QCOMPARE(server->requests.first().target,
+                 "/AllMusic/%D0%A2%D0%B5%D1%81%D1%82%20%231.flac");
+    }
+
+    void etagMismatchAndWeakEtagAreReportedSafely()
+    {
+        server->handler = [](const MockWebDav::Request &) {
+            return Response{206, QByteArray(100, 'x'), {
+                {"Content-Range", "bytes 0-99/100"},
+                {"Content-Length", "100"}, {"ETag", "\"v2\""}
+            }};
+        };
+        const Result changed = range(audio());
+        QCOMPARE(changed.error, Error::VersionChanged);
+        QCOMPARE(changed.rangeIssue, MailWebDavProbe::RangeIssue::EtagMismatch);
+        QVERIFY(changed.ifRangeSent);
+        QVERIFY(changed.etagPresent);
+        QVERIFY(!changed.etagMatchesIfRange);
+
+        server->handler = [](const MockWebDav::Request &) {
+            return Response{206, QByteArray(100, 'x'), {
+                {"Content-Range", "bytes 0-99/100"},
+                {"Content-Length", "100"}, {"ETag", "W/\"v1\""}
+            }};
+        };
+        Entry weak = audio(100, "W/\"v1\"");
+        const Result weakResult = range(weak);
+        QCOMPARE(weakResult.error, Error::None);
+        QVERIFY(!weakResult.ifRangeSent);
+        QVERIFY(weakResult.etagPresent);
+        QVERIFY(!weakResult.strongEtag);
+    }
+
+    void rangeProtocolFailuresIdentifySafeCause_data()
+    {
+        QTest::addColumn<int>("status");
+        QTest::addColumn<QByteArray>("contentRange");
+        QTest::addColumn<QByteArray>("contentLength");
+        QTest::addColumn<int>("bodyLength");
+        QTest::addColumn<MailWebDavProbe::RangeIssue>("issue");
+        QTest::newRow("missing-content-range") << 206 << QByteArray() << QByteArray("100") << 100
+            << MailWebDavProbe::RangeIssue::MissingContentRange;
+        QTest::newRow("malformed-content-range") << 206 << QByteArray("bytes invalid/100")
+            << QByteArray("100") << 100 << MailWebDavProbe::RangeIssue::InvalidContentRange;
+        QTest::newRow("wrong-start") << 206 << QByteArray("bytes 1-99/100") << QByteArray("99") << 99
+            << MailWebDavProbe::RangeIssue::RangeStartMismatch;
+        QTest::newRow("wrong-end") << 206 << QByteArray("bytes 0-98/100") << QByteArray("99") << 99
+            << MailWebDavProbe::RangeIssue::RangeEndMismatch;
+        QTest::newRow("content-length-conflicts-with-range") << 206
+            << QByteArray("bytes 0-99/100") << QByteArray("99") << 99
+            << MailWebDavProbe::RangeIssue::ContentLengthMismatch;
+    }
+
+    void rangeProtocolFailuresIdentifySafeCause()
+    {
+        QFETCH(int, status);
+        QFETCH(QByteArray, contentRange);
+        QFETCH(QByteArray, contentLength);
+        QFETCH(int, bodyLength);
+        QFETCH(MailWebDavProbe::RangeIssue, issue);
+        server->handler = [=](const MockWebDav::Request &) {
+            QMap<QByteArray, QByteArray> headers;
+            if (!contentRange.isNull())
+                headers.insert("Content-Range", contentRange);
+            headers.insert("Content-Length", contentLength);
+            return Response{status, QByteArray(bodyLength, 'x'), headers};
+        };
+        const Result result = range(audio());
+        QCOMPARE(result.error, Error::Protocol);
+        QCOMPARE(result.rangeIssue, issue);
+        QCOMPARE(result.status, status);
+        QCOMPARE(result.bytesReceived, bodyLength);
+    }
+
+    void bodyLengthIsCheckedWhenContentLengthIsAbsent()
+    {
+        server->handler = [](const MockWebDav::Request &) {
+            auto response = Response{206, QByteArray(99, 'x'), {
+                {"Content-Range", "bytes 0-99/100"}
+            }};
+            response.omitContentLength = true;
+            return response;
+        };
+        const Result result = range(audio());
+        QCOMPARE(result.error, Error::Protocol);
+        QCOMPARE(result.rangeIssue, MailWebDavProbe::RangeIssue::BodyLengthMismatch);
+        QVERIFY(!result.contentLengthPresent);
+        QCOMPARE(result.bytesReceived, 99);
+        QCOMPARE(result.rangeExpectedBytes.value(), 100);
+    }
+
+    void rangeBodyIsStoppedAtRequestedSizeLimit()
+    {
+        server->handler = [](const MockWebDav::Request &) {
+            auto response = Response{206, QByteArray(101, 'x'), {
+                {"Content-Range", "bytes 0-99/100"}
+            }};
+            response.omitContentLength = true;
+            return response;
+        };
+        const Result result = range(audio());
+        QCOMPARE(result.error, Error::TooLarge);
+        QCOMPARE(result.rangeIssue, MailWebDavProbe::RangeIssue::TooLarge);
+        QVERIFY(result.bytesReceivedIsLowerBound);
+        QVERIFY(result.bytesReceived >= 101);
+        QCOMPARE(result.requestedRangeBytes, 100);
+    }
+
+    void totalSizeAndContentEncodingFailuresAreCategorized()
+    {
+        server->handler = [](const MockWebDav::Request &) {
+            return Response{206, QByteArray(100, 'x'), {
+                {"Content-Range", "bytes 0-99/101"},
+                {"Content-Length", "100"}
+            }};
+        };
+        const Result sizeChanged = range(audio());
+        QCOMPARE(sizeChanged.error, Error::VersionChanged);
+        QCOMPARE(sizeChanged.rangeIssue, MailWebDavProbe::RangeIssue::TotalSizeMismatch);
+
+        server->handler = [](const MockWebDav::Request &) {
+            return Response{206, QByteArray(100, 'x'), {
+                {"Content-Range", "bytes 0-99/100"},
+                {"Content-Length", "100"}, {"Content-Encoding", "gzip"}
+            }};
+        };
+        const Result encoded = range(audio());
+        QCOMPARE(encoded.error, Error::Protocol);
+        QCOMPARE(encoded.rangeIssue, MailWebDavProbe::RangeIssue::UnsupportedContentEncoding);
+        QCOMPARE(encoded.bytesReceived, 0);
+    }
+
     void range200IsStoppedWithoutReadingFullBody()
     {
         server->handler = [](const MockWebDav::Request &) {
@@ -268,6 +458,7 @@ private slots:
         const Result result = range(audio());
         QCOMPARE(result.error, Error::VersionChanged);
         QCOMPARE(result.status, 200);
+        QCOMPARE(result.rangeIssue, MailWebDavProbe::RangeIssue::RangeIgnored);
         QCOMPARE(result.bytesReceived, 0);
         QCOMPARE(server->requests.size(), 1);
     }
@@ -278,6 +469,7 @@ private slots:
         const Result result = range(audio());
         QCOMPARE(result.error, Error::RangeUnsupported);
         QCOMPARE(result.status, 416);
+        QCOMPARE(result.rangeIssue, MailWebDavProbe::RangeIssue::RangeUnsatisfiable);
     }
 
     void malformedRangeAndEncodedBodyAreRejected()
@@ -287,17 +479,7 @@ private slots:
                 {"Content-Range", "bytes 0-98/100"}, {"Content-Length", "100"}
             }};
         };
-        QCOMPARE(range(audio()).error, Error::Protocol);
-
-        server->handler = [](const MockWebDav::Request &) {
-            return Response{206, QByteArray(100, 'x'), {
-                {"Content-Range", "bytes 0-99/100"},
-                {"Content-Length", "100"}, {"Content-Encoding", "gzip"}
-            }};
-        };
-        const Result encoded = range(audio());
-        QCOMPARE(encoded.error, Error::Protocol);
-        QCOMPARE(encoded.bytesReceived, 0);
+        QCOMPARE(range(audio()).rangeIssue, MailWebDavProbe::RangeIssue::RangeEndMismatch);
     }
 
     void cancellationStopsPendingRequest()

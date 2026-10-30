@@ -28,7 +28,8 @@ As of **30 October 2026**:
 
 - The owner completed manual listening tests on Windows 11 for **5/5 synthetic streaming audio formats** using a **local loopback mock WebDAV server**, including Stop/restart and handling a server that does not support HTTP Range.
 - Automated tests and prototype builds have passed on Linux and Windows; Android APK builds and packaging checks have passed. A basic Android application screen was tested on the owner's Huawei device.
-- **Not yet verified:** connection to the real cloud WebDAV account, production streaming over the internet, Android audio playback, production-grade offline caching, or general user compatibility.
+- The owner confirmed sign-in and a `/AllMusic` listing from the real Cloud Mail account on Windows 11 (3,590 immediate entries). A separate HTTP Range check for one FLAC file is still **unconfirmed** after a protocol-validation error.
+- **Not yet verified:** HTTP Range behavior on the real Cloud Mail account, production streaming over the internet, Android audio playback, production-grade offline caching, or general user compatibility.
 
 Evidence and current limitations: [STATUS.md](STATUS.md), [001-E report](docs/001-E-REPORT.md), [ROADMAP.md](ROADMAP.md).
 

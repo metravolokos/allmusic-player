@@ -183,6 +183,125 @@ QString MailWebDavController::errorText(MailWebDavProbe::Error error, int status
     return QStringLiteral("Проверка завершилась без результата.");
 }
 
+QString MailWebDavController::rangeDiagnosticText(const MailWebDavProbe::Result &result)
+{
+    using Issue = MailWebDavProbe::RangeIssue;
+    QString issue;
+    switch (result.rangeIssue) {
+    case Issue::None:
+        issue = result.error == MailWebDavProbe::Error::None
+            ? QStringLiteral("диапазон подтверждён") : errorText(result.error, result.status);
+        break;
+    case Issue::RangeIgnored:
+        issue = QStringLiteral("сервер вернул 200 вместо 206; Range не подтверждён");
+        break;
+    case Issue::RangeUnsatisfiable:
+        issue = QStringLiteral("сервер отверг диапазон (416)");
+        break;
+    case Issue::MissingContentRange:
+        issue = QStringLiteral("в ответе 206 отсутствует Content-Range");
+        break;
+    case Issue::InvalidContentRange:
+        issue = QStringLiteral("Content-Range имеет неподдерживаемый формат");
+        break;
+    case Issue::InvalidRangeBounds:
+        issue = QStringLiteral("границы диапазона противоречат друг другу");
+        break;
+    case Issue::RangeStartMismatch:
+        issue = QStringLiteral("начало Content-Range не совпадает с запрошенным байтом 0");
+        break;
+    case Issue::RangeEndMismatch:
+        issue = QStringLiteral("конец Content-Range не совпадает с запрошенной длиной");
+        break;
+    case Issue::TotalSizeMismatch:
+        issue = QStringLiteral("полный размер из Content-Range отличается от PROPFIND");
+        break;
+    case Issue::InvalidContentLength:
+        issue = QStringLiteral("Content-Length присутствует, но не является корректным числом");
+        break;
+    case Issue::ContentLengthMismatch:
+        issue = QStringLiteral("Content-Length не совпадает с длиной Content-Range");
+        break;
+    case Issue::BodyLengthMismatch:
+        issue = QStringLiteral("число полученных байтов не совпадает с Content-Range");
+        break;
+    case Issue::UnsupportedContentEncoding:
+        issue = QStringLiteral("Content-Encoding меняет представление запрошенных байтов");
+        break;
+    case Issue::UnsupportedTransferEncoding:
+        issue = QStringLiteral("Transfer-Encoding не поддержан диагностикой");
+        break;
+    case Issue::ConflictingMessageFraming:
+        issue = QStringLiteral("одновременно заданы Transfer-Encoding и Content-Length");
+        break;
+    case Issue::EtagMismatch:
+        issue = QStringLiteral("ответный ETag не совпал с отправленным If-Range");
+        break;
+    case Issue::IncompleteTransfer:
+        issue = QStringLiteral("Qt Network сообщил о неполном или прерванном теле ответа");
+        break;
+    case Issue::TooLarge:
+        issue = QStringLiteral("ответ превысил предел запрошенного диапазона");
+        break;
+    }
+
+    const QString contentRangeText = !result.contentRangePresent
+        ? QStringLiteral("не указан")
+        : result.contentRangeUnsatisfied && result.totalSize
+            ? QStringLiteral("bytes */%1").arg(*result.totalSize)
+        : result.rangeFirst && result.rangeLast
+            ? QStringLiteral("bytes %1-%2/%3")
+                .arg(*result.rangeFirst)
+                .arg(*result.rangeLast)
+                .arg(result.totalSize ? QString::number(*result.totalSize) : QStringLiteral("*"))
+            : QStringLiteral("присутствует, формат не распознан");
+
+    const QString contentLengthText = !result.contentLengthPresent
+        ? QStringLiteral("не указан")
+        : result.declaredContentLength
+            ? QStringLiteral("%1 байт").arg(*result.declaredContentLength)
+            : QStringLiteral("есть, числовой формат не распознан");
+    const QString transferEncodingText = !result.transferEncodingPresent
+        ? QStringLiteral("не указан; границу сообщения проверил Qt Network")
+        : result.transferEncodingChunked ? QStringLiteral("chunked")
+            : QStringLiteral("есть, значение не поддержано");
+    const QString contentEncodingText = !result.contentEncodingPresent
+        ? QStringLiteral("не указан, трактуется как identity")
+        : result.contentEncodingIdentity ? QStringLiteral("identity")
+            : QStringLiteral("есть, не identity");
+    QString etagText = !result.etagPresent
+        ? QStringLiteral("не указан")
+        : result.strongEtag ? QStringLiteral("сильный")
+            : QStringLiteral("слабый или невалидный");
+    QString ifRangeText = result.ifRangeSent
+        ? QStringLiteral("отправлен") : QStringLiteral("не отправлялся");
+    if (result.ifRangeSent && result.etagPresent)
+        ifRangeText += result.etagMatchesIfRange
+            ? QStringLiteral("; ответный ETag совпал")
+            : QStringLiteral("; ответный ETag не совпал");
+
+    const qint64 expectedBytes = result.rangeExpectedBytes.value_or(result.requestedRangeBytes);
+    const QString statusText = result.status > 0
+        ? QStringLiteral("HTTP %1").arg(result.status)
+        : QStringLiteral("HTTP статус отсутствует");
+    const QString receivedText = result.bytesReceivedIsLowerBound
+        ? QStringLiteral("не менее %1 байт").arg(result.bytesReceived)
+        : QStringLiteral("%1 байт").arg(result.bytesReceived);
+    return QStringLiteral("%1; причина: %2. Content-Range: %3; Content-Length: %4; "
+                          "Transfer-Encoding: %5; получено: %6 из %7 байт; "
+                          "Content-Encoding: %8; ETag: %9; If-Range: %10.")
+        .arg(statusText)
+        .arg(issue)
+        .arg(contentRangeText)
+        .arg(contentLengthText)
+        .arg(transferEncodingText)
+        .arg(receivedText)
+        .arg(expectedBytes)
+        .arg(contentEncodingText)
+        .arg(etagText)
+        .arg(ifRangeText);
+}
+
 void MailWebDavController::handleCompleted(const MailWebDavProbe::Result &result)
 {
     m_busy = false;
@@ -212,22 +331,8 @@ void MailWebDavController::handleCompleted(const MailWebDavProbe::Result &result
         return;
     }
 
-    if (result.error == MailWebDavProbe::Error::None) {
-        const QString etagText = !result.etagPresent ? QStringLiteral("нет")
-            : result.strongEtag ? QStringLiteral("есть, сильный") : QStringLiteral("есть, слабый/невалидный");
-        const QString ifRangeText = result.ifRangeSent ? QStringLiteral("отправлен")
-            : QStringLiteral("не отправлялся (сильный ETag отсутствует)");
-        const QString encodingText = result.contentEncoding.isEmpty()
-            ? QStringLiteral("не указан, принят как identity") : QStringLiteral("identity");
-        setStatus(QStringLiteral("HTTP 206 подтверждён: %1 байт из %2; Content-Range и Content-Length совпали; Content-Encoding: %3; ETag: %4; If-Range: %5.")
-            .arg(result.bytesReceived)
-            .arg(result.totalSize.value_or(0))
-            .arg(encodingText, etagText, ifRangeText));
-        emit stateChanged();
-        return;
-    }
-
-    const QString message = errorText(result.error, result.status);
+    const QString message = result.rangeCheck
+        ? rangeDiagnosticText(result) : errorText(result.error, result.status);
     if (result.error == MailWebDavProbe::Error::Auth || result.error == MailWebDavProbe::Error::Tls) {
         dropSession();
         m_connected = false;

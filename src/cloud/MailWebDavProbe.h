@@ -19,6 +19,16 @@ public:
     };
     Q_ENUM(Error)
 
+    enum class RangeIssue {
+        None, RangeIgnored, RangeUnsatisfiable, MissingContentRange,
+        InvalidContentRange, InvalidRangeBounds, RangeStartMismatch,
+        RangeEndMismatch, TotalSizeMismatch, InvalidContentLength,
+        ContentLengthMismatch, BodyLengthMismatch, UnsupportedContentEncoding,
+        UnsupportedTransferEncoding, ConflictingMessageFraming,
+        EtagMismatch, IncompleteTransfer, TooLarge
+    };
+    Q_ENUM(RangeIssue)
+
     struct Entry {
         QString path;
         QString reference;
@@ -29,17 +39,30 @@ public:
 
     struct Result {
         Error error = Error::None;
+        RangeIssue rangeIssue = RangeIssue::None;
         int status = 0;
         bool listing = false;
+        bool rangeCheck = false;
         QVector<Entry> entries;
         int rejectedEntries = 0;
         qint64 bytesReceived = 0;
+        bool bytesReceivedIsLowerBound = false;
+        qint64 requestedRangeBytes = 0;
+        std::optional<qint64> rangeFirst;
+        std::optional<qint64> rangeLast;
+        std::optional<qint64> rangeExpectedBytes;
         std::optional<qint64> totalSize;
-        QByteArray contentRange;
-        QByteArray contentLength;
-        QByteArray contentEncoding;
+        std::optional<qint64> declaredContentLength;
+        bool contentRangePresent = false;
+        bool contentRangeUnsatisfied = false;
+        bool contentLengthPresent = false;
+        bool transferEncodingPresent = false;
+        bool transferEncodingChunked = false;
+        bool contentEncodingPresent = false;
+        bool contentEncodingIdentity = true;
         bool etagPresent = false;
         bool strongEtag = false;
+        bool etagMatchesIfRange = true;
         bool ifRangeSent = false;
     };
 
@@ -67,6 +90,8 @@ private:
                const QByteArray &etag);
     void send();
     void finish(Error error);
+    void captureResponseMetadata(QNetworkReply *reply);
+    void clearResponseMetadata();
     void parseListing();
     void clearCredentials();
     void initialize();
