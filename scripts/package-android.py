@@ -16,11 +16,11 @@ FORBIDDEN = re.compile(
     r"com[./]google[./](?:android[./]gms|firebase)|"
     r"com\.google\.gms:|play-services|firebase-", re.I)
 EXPECTED_FFMPEG_LIBRARIES = {
-    "libavcodec.so.61",
-    "libavformat.so.61",
-    "libavutil.so.59",
-    "libswresample.so.5",
-    "libswscale.so.8",
+    "libavcodec.so",
+    "libavformat.so",
+    "libavutil.so",
+    "libswresample.so",
+    "libswscale.so",
 }
 EXPECTED_FFMPEG_LICENSES = {
     "LGPL-2.1-or-later", "BSD-3-Clause", "BSD-2-Clause",

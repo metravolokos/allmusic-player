@@ -19,8 +19,8 @@ FFMPEG_NATIVE = (
     'liballmusic-player_arm64-v8a.so', 'libQt6Quick_arm64-v8a.so',
     'libQt6Multimedia_arm64-v8a.so', 'libQt6Concurrent_arm64-v8a.so',
     'libplugins_multimedia_ffmpegmediaplugin_arm64-v8a.so',
-    'libavcodec.so.61', 'libavformat.so.61', 'libavutil.so.59',
-    'libswresample.so.5', 'libswscale.so.8',
+    'libavcodec.so', 'libavformat.so', 'libavutil.so',
+    'libswresample.so', 'libswscale.so',
 )
 
 
@@ -86,7 +86,7 @@ class PublicationBoundary(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             apk = Path(directory) / 'fixture.apk'
             write_apk(apk, native=tuple(name for name in FFMPEG_NATIVE
-                                        if name != 'libavcodec.so.61'))
+                                        if name != 'libavcodec.so'))
             with self.assertRaises(AssertionError):
                 AUDIT['check_runtime'](apk, 'debugRuntimeClasspath\nandroidx.core:core:1.17.0')
 
@@ -95,7 +95,7 @@ class PublicationBoundary(unittest.TestCase):
                 AUDIT['check_runtime'](apk, 'debugRuntimeClasspath\nandroidx.core:core:1.17.0')
 
             write_apk(apk, native=tuple(
-                'libavcodec.so.999' if name == 'libavcodec.so.61' else name
+                'libavcodec.so.999' if name == 'libavcodec.so' else name
                 for name in FFMPEG_NATIVE))
             with self.assertRaises(AssertionError):
                 AUDIT['check_runtime'](apk, 'debugRuntimeClasspath\nandroidx.core:core:1.17.0')

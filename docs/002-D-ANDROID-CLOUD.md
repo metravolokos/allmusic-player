@@ -13,7 +13,7 @@
 исключает Qt Android media plugin. В Qt 6.12 аудиовывод использует отдельный
 Android audio-device слой из Qt Multimedia; наличие Android media plugin для
 вывода декодированного звука не требуется. Экран показывает runtime-сообщение
-Qt FFmpeg. Аудит итогового APK проверяет plugin, точные FFmpeg SONAME,
+Qt FFmpeg. Аудит итогового APK проверяет plugin и точные имена FFmpeg runtime-библиотек,
 arm64-v8a, manifest, notices, подпись, 16-KiB ELF alignment и размер.
 
 Скрипт генерирует короткие синтетические стерео MP3 и FLAC тоны 440 Гц с
