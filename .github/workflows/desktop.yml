@@ -327,8 +327,8 @@ jobs:
         run: |
           echo "Исходный commit: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
           echo "Ветка/событие: $GITHUB_REF_NAME / $GITHUB_EVENT_NAME" >> "$GITHUB_STEP_SUMMARY"
-      - name: Сохранить Windows ZIP по запросу или для релиза
-        if: (github.event_name == 'release') || (github.event_name == 'workflow_dispatch' && inputs.windows_zip)
+      - name: Сохранить Windows ZIP для ручной проверки или релиза
+        if: (github.event_name == 'release') || (github.event_name == 'workflow_dispatch' && inputs.windows_zip) || (github.event_name == 'pull_request' && needs.classify.outputs.windows_zip == 'true')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: AllMusicPlayer-Windows-x64-${{ github.run_id }}
@@ -476,3 +476,4 @@ jobs:
             build/ninja-cache/ninja --version
           fi
           echo "Тёплый кэш Qt проверен; в предыдущем шаге ищите строку Automatic cache hit." >> "$GITHUB_STEP_SUMMARY"
+

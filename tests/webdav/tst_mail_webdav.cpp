@@ -37,6 +37,21 @@ class MailWebDavProbeTests final : public QObject {
         return qvariant_cast<Result>(spy.takeFirst().at(0));
     }
 
+    Result streamRangeAt(const Entry &entry, qint64 offset, qint64 length)
+    {
+        if (!client->setSessionCredentials(QStringLiteral("owner@example.invalid"),
+                                          QStringLiteral("mock-only-secret"))) {
+            QTest::qFail("stream Range credentials were rejected", __FILE__, __LINE__);
+            return Result{Error::InvalidCredentials};
+        }
+        QSignalSpy spy(client, &MailWebDavProbe::completed);
+        if (!client->readRange(entry, offset, length) || !spy.wait(5000)) {
+            QTest::qFail("stream Range request did not emit a result", __FILE__, __LINE__);
+            return Result{Error::Network};
+        }
+        return qvariant_cast<Result>(spy.takeFirst().at(0));
+    }
+
     static QByteArray listing(const QByteArray &extra = {})
     {
         return "<d:multistatus xmlns:d=\"DAV:\">"
@@ -241,6 +256,77 @@ private slots:
         QCOMPARE(request.headers.value("range"), "bytes=0-99");
         QCOMPARE(request.headers.value("if-range"), "\"v1\"");
         QCOMPARE(request.headers.value("accept-encoding"), "identity");
+    }
+
+    void streamRangeReadsValidatedOffsetAndReturnsOnlyBoundedBody()
+    {
+        server->handler = [](const MockWebDav::Request &request) {
+            if (request.headers.value("authorization").isEmpty())
+                return Response{401, {}, {{"WWW-Authenticate", "Basic realm=\"fixture\""}}};
+            return Response{206, QByteArray(40, 's'), {
+                {"Content-Range", "bytes=20-59/100"},
+                {"Content-Length", "40"}, {"ETag", "\"v1\""}
+            }};
+        };
+        const Result result = streamRangeAt(audio(), 20, 40);
+        QCOMPARE(result.error, Error::None);
+        QCOMPARE(result.rangeBytes, QByteArray(40, 's'));
+        QCOMPARE(result.totalSize.value(), 100);
+        QCOMPARE(result.rangeFirst.value(), 20);
+        QCOMPARE(result.rangeLast.value(), 59);
+        QVERIFY(result.ifRangeSent);
+        QCOMPARE(server->requests.size(), 2);
+        QCOMPARE(server->requests.first().headers.value("range"), "bytes=20-59");
+        QVERIFY(!server->requests.first().headers.contains("authorization"));
+        QCOMPARE(server->requests.last().headers.value("range"), "bytes=20-59");
+        QVERIFY(server->requests.last().headers.contains("authorization"));
+        QCOMPARE(server->requests.last().headers.value("if-range"), "\"v1\"");
+    }
+
+    void streamRangeRejectsWrongOffsetAndUnknownTotal()
+    {
+        server->handler = [](const MockWebDav::Request &) {
+            return Response{206, QByteArray(40, 's'), {
+                {"Content-Range", "bytes 19-58/100"}, {"Content-Length", "40"}
+            }};
+        };
+        Result result = streamRangeAt(audio(), 20, 40);
+        QCOMPARE(result.error, Error::Protocol);
+        QCOMPARE(result.rangeIssue, MailWebDavProbe::RangeIssue::RangeStartMismatch);
+        QVERIFY(result.rangeBytes.isEmpty());
+
+        server->handler = [](const MockWebDav::Request &) {
+            return Response{206, QByteArray(40, 's'), {
+                {"Content-Range", "bytes 20-59/*"}, {"Content-Length", "40"}
+            }};
+        };
+        result = streamRangeAt(audio(), 20, 40);
+        QCOMPARE(result.error, Error::Protocol);
+        QCOMPARE(result.rangeIssue, MailWebDavProbe::RangeIssue::TotalSizeMismatch);
+        QVERIFY(result.rangeBytes.isEmpty());
+    }
+
+    void nestedListingIsLimitedToImmediateChildrenOfAllMusic()
+    {
+        const QByteArray rows = child("/AllMusic/album/")
+            + child("/AllMusic/album/song.flac",
+                    "<d:getcontentlength>100</d:getcontentlength>")
+            + child("/AllMusic/album/sub/deep.mp3")
+            + child("/AllMusic/../outside.mp3");
+        server->handler = [rows](const MockWebDav::Request &) {
+            return Response{207, listing(rows)};
+        };
+        QVERIFY(client->setSessionCredentials(QStringLiteral("owner@example.invalid"),
+                                              QStringLiteral("mock-only-secret")));
+        QSignalSpy spy(client, &MailWebDavProbe::completed);
+        QVERIFY(client->listDirectory(QStringLiteral("/AllMusic/album/")));
+        QVERIFY(spy.wait(5000));
+        const Result result = qvariant_cast<Result>(spy.takeFirst().at(0));
+        QCOMPARE(result.error, Error::None);
+        QCOMPARE(result.entries.size(), 1);
+        QCOMPARE(result.entries.first().path, QStringLiteral("/AllMusic/album/song.flac"));
+        QCOMPARE(result.rejectedEntries, 3);
+        QCOMPARE(server->requests.first().target, "/AllMusic/album/");
     }
 
     void rangeUsesAtMost64KiBWhenSizeIsUnknown()

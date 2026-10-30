@@ -1,4 +1,5 @@
 #include "MailWebDavController.h"
+#include "MailWebDavRangeDevice.h"
 
 MailWebDavController::MailWebDavController(QObject *parent) : QObject(parent)
 {
@@ -19,6 +20,7 @@ bool MailWebDavController::checkConnection(QString email, QString appPassword)
 
     dropSession();
     m_entries.clear();
+    m_currentDirectory = QStringLiteral("/AllMusic/");
     emit entriesChanged();
     m_probe = new MailWebDavProbe(this);
     connect(m_probe, &MailWebDavProbe::completed, this,
@@ -64,6 +66,13 @@ bool MailWebDavController::isAudio(const QString &path)
         || lower.endsWith(QStringLiteral(".mp4"));
 }
 
+bool MailWebDavController::isStreamable(const QString &path)
+{
+    const QString lower = path.toLower();
+    return lower.endsWith(QStringLiteral(".mp3"))
+        || lower.endsWith(QStringLiteral(".flac"));
+}
+
 QString MailWebDavController::displayName(const QString &path, bool directory)
 {
     QString cleanPath = path;
@@ -80,10 +89,95 @@ QString MailWebDavController::displayName(const QString &path, bool directory)
 
 bool MailWebDavController::canCheckRange(int index) const
 {
-    if (!m_connected || m_busy || index < 0 || index >= m_entries.size())
+    if (!m_connected || m_busy || m_playbackActive || index < 0
+        || index >= m_entries.size())
         return false;
     const auto &entry = m_entries.at(index);
     return !entry.directory && isAudio(entry.path) && (!entry.size || *entry.size > 0);
+}
+
+bool MailWebDavController::canOpenDirectory(int index) const
+{
+    return m_connected && !m_busy && index >= 0 && index < m_entries.size()
+        && m_entries.at(index).directory;
+}
+
+void MailWebDavController::openDirectory(int index)
+{
+    if (!canOpenDirectory(index) || !m_probe)
+        return;
+    const QString path = m_entries.at(index).path;
+    m_entries.clear();
+    emit entriesChanged();
+    m_busy = true;
+    m_currentDirectory = path;
+    setStatus(QStringLiteral("Читаются непосредственные элементы выбранной папки /AllMusic…"));
+    if (!m_probe->listDirectory(path)) {
+        m_busy = false;
+        setStatus(QStringLiteral("Не удалось открыть папку. Отключитесь и повторите подключение."));
+    }
+    emit stateChanged();
+}
+
+bool MailWebDavController::canGoToParent() const
+{
+    return m_connected && !m_busy && m_currentDirectory != QStringLiteral("/AllMusic/");
+}
+
+void MailWebDavController::goToParent()
+{
+    if (!canGoToParent() || !m_probe)
+        return;
+    QString current = m_currentDirectory;
+    if (current.endsWith(u'/'))
+        current.chop(1);
+    const int slash = current.lastIndexOf(u'/');
+    const QString parent = slash >= 0 ? current.left(slash + 1) : QString();
+    if (!parent.startsWith(QStringLiteral("/AllMusic/")))
+        return;
+    m_entries.clear();
+    emit entriesChanged();
+    m_busy = true;
+    m_currentDirectory = parent;
+    setStatus(QStringLiteral("Читаются непосредственные элементы родительской папки /AllMusic…"));
+    if (!m_probe->listDirectory(parent)) {
+        m_busy = false;
+        setStatus(QStringLiteral("Не удалось открыть родительскую папку."));
+    }
+    emit stateChanged();
+}
+
+bool MailWebDavController::canPlay(int index) const
+{
+    if (!m_connected || m_busy || !m_probe || index < 0 || index >= m_entries.size())
+        return false;
+    const auto &entry = m_entries.at(index);
+    return !entry.directory && isStreamable(entry.path) && entry.size && *entry.size > 0;
+}
+
+void MailWebDavController::play(int index)
+{
+    if (canPlay(index))
+        emit playbackRequested(index);
+}
+
+void MailWebDavController::setPlaybackActive(bool active)
+{
+    if (m_playbackActive == active)
+        return;
+    m_playbackActive = active;
+    emit stateChanged();
+}
+
+MailWebDavRangeDevice *MailWebDavController::takePlaybackDevice(
+    int index, QString *displayLabel, QObject *parent)
+{
+    if (!canPlay(index) || !m_probe)
+        return nullptr;
+    const auto &entry = m_entries.at(index);
+    if (displayLabel)
+        *displayLabel = displayName(entry.path, false);
+    return new MailWebDavRangeDevice(entry, m_probe->email, m_probe->password, parent);
 }
 
 void MailWebDavController::checkRange(int index)
@@ -117,6 +211,8 @@ void MailWebDavController::disconnectCloud()
 
 void MailWebDavController::dropSession()
 {
+    emit disconnectPlayback();
+    m_playbackActive = false;
     if (!m_probe)
         return;
     MailWebDavProbe *old = m_probe;
@@ -146,7 +242,7 @@ QString MailWebDavController::errorText(MailWebDavProbe::Error error, int status
     case Error::Forbidden:
         return QStringLiteral("Доступ запрещён (HTTP 403). Проверьте права доступа в Облаке Mail.");
     case Error::NotFound:
-        return QStringLiteral("Папка /AllMusic не найдена (HTTP 404). Проверка остановлена; папки не создаются и поиск не выполняется.");
+        return QStringLiteral("Каталог или файл не найден внутри /AllMusic (HTTP 404). Папки не создаются и поиск не выполняется.");
     case Error::Redirect:
         return QStringLiteral("Сервер прислал перенаправление. Оно не выполнялось; проверьте адрес WebDAV.");
     case Error::RangeUnsupported:
@@ -313,7 +409,9 @@ void MailWebDavController::handleCompleted(const MailWebDavProbe::Result &result
                     m_entries.push_back(entry);
             }
             m_connected = true;
-            QString text = QStringLiteral("PROPFIND завершён: %1 непосредственных элементов /AllMusic. Список хранится только локально.")
+            if (m_probe && !m_probe->listingPath.isEmpty())
+                m_currentDirectory = m_probe->listingPath;
+            QString text = QStringLiteral("PROPFIND завершён: %1 непосредственных элементов текущей папки /AllMusic. Список хранится только локально.")
                 .arg(m_entries.size());
             if (result.rejectedEntries > 0)
                 text += QStringLiteral(" Отброшено небезопасных ответов: %1.").arg(result.rejectedEntries);

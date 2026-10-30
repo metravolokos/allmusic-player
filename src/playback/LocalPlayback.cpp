@@ -1,4 +1,5 @@
 #include "LocalPlayback.h"
+#include "MailWebDavRangeDevice.h"
 #include "WebDavProbe.h"
 #include "WebDavRangeDevice.h"
 #include <QFile>
@@ -17,7 +18,9 @@ LocalPlayback::LocalPlayback(QObject *parent) : QObject(parent)
             [this](QMediaPlayer::Error code, const QString &) {
         if (code == QMediaPlayer::NoError)
             return;
-        if (m_rangeDevice && !m_rangeDevice->errorString().isEmpty())
+        if (m_mailRangeDevice && !m_mailRangeDevice->errorString().isEmpty())
+            fail(m_mailRangeDevice->errorString());
+        else if (m_rangeDevice && !m_rangeDevice->errorString().isEmpty())
             fail(m_rangeDevice->errorString());
         else if (m_error.isEmpty())
             fail(QStringLiteral("Не удалось воспроизвести файл: он повреждён, недоступен или кодек не поддерживается. Выберите другой файл."));
@@ -43,6 +46,8 @@ LocalPlayback::~LocalPlayback()
     // QMediaPlayer is a value member and is destroyed before QObject deletes
     // child devices. Cancel and detach the source first so its destructor
     // cannot wait for an in-flight network timeout.
+    if (m_mailRangeDevice)
+        m_mailRangeDevice->cancel();
     if (m_rangeDevice)
         m_rangeDevice->cancel();
     if (m_probe)
@@ -87,8 +92,33 @@ void LocalPlayback::detachNetworkSource()
     device->deleteLater();
 }
 
+void LocalPlayback::detachMailSource()
+{
+    auto *device = m_mailRangeDevice;
+    if (!device)
+        return;
+    device->cancel();
+    m_player.stop();
+    m_player.setSource({});
+    if (m_mailRangeDevice == device)
+        m_mailRangeDevice = nullptr;
+    device->deleteLater();
+    if (m_cloudMailActive) {
+        m_cloudMailActive = false;
+        emit cloudMailActiveChanged();
+    }
+    if (m_buffering) {
+        m_buffering = false;
+        emit bufferingChanged();
+    }
+}
+
 void LocalPlayback::resetPlayerSource()
 {
+    if (m_mailRangeDevice) {
+        detachMailSource();
+        return;
+    }
     if (m_rangeDevice) {
         detachNetworkSource();
         return;
@@ -99,7 +129,9 @@ void LocalPlayback::resetPlayerSource()
 
 void LocalPlayback::stop()
 {
-    if (m_rangeDevice) {
+    if (m_mailRangeDevice) {
+        detachMailSource();
+    } else if (m_rangeDevice) {
         detachNetworkSource();
     } else {
         // Local playback keeps its source attached; QMediaPlayer resets its
@@ -109,6 +141,16 @@ void LocalPlayback::stop()
     if (!m_error.isEmpty()) {
         m_error.clear();
         emit errorChanged();
+    }
+}
+
+void LocalPlayback::stopMail()
+{
+    if (m_mailRangeDevice)
+        detachMailSource();
+    if (!m_activeSourceLabel.isEmpty()) {
+        m_activeSourceLabel.clear();
+        emit activeSourceLabelChanged();
     }
 }
 
@@ -139,6 +181,10 @@ void LocalPlayback::togglePlayback()
 bool LocalPlayback::openLocal(const QUrl &url)
 {
     resetPlayerSource();
+    if (!m_activeSourceLabel.isEmpty()) {
+        m_activeSourceLabel.clear();
+        emit activeSourceLabelChanged();
+    }
     setCurrentLoopbackIndex(-1);
     // Never forward a remote URL/UNC path to the experimental backend.
     m_error.clear();
@@ -182,6 +228,8 @@ void LocalPlayback::scanLoopback(int port)
         fail(QStringLiteral("Укажите порт локального тестового WebDAV (1–65535)."));
         return;
     }
+    if (m_mailRangeDevice)
+        stopMail();
     if (m_rangeDevice)
         stop();
     setCurrentLoopbackIndex(-1);
@@ -237,6 +285,10 @@ bool LocalPlayback::openLoopback(int index)
         return false;
     }
     resetPlayerSource();
+    if (!m_activeSourceLabel.isEmpty()) {
+        m_activeSourceLabel.clear();
+        emit activeSourceLabelChanged();
+    }
     setCurrentLoopbackIndex(-1);
     m_networkBytes = 0;
     emit networkBytesChanged();
@@ -264,5 +316,64 @@ bool LocalPlayback::openLoopback(int index)
     emit errorChanged();
     setCurrentLoopbackIndex(index);
     m_player.setSourceDevice(m_rangeDevice);
+    return true;
+}
+
+bool LocalPlayback::openMailDevice(MailWebDavRangeDevice *device, const QString &label)
+{
+    if (!device) {
+        fail(QStringLiteral("Не удалось открыть выбранный файл Cloud Mail."));
+        return false;
+    }
+    resetPlayerSource();
+    setCurrentLoopbackIndex(-1);
+    m_networkBytes = 0;
+    emit networkBytesChanged();
+    if (!device->open(QIODevice::ReadOnly)) {
+        fail(device->errorString());
+        device->cancel();
+        device->deleteLater();
+        return false;
+    }
+    device->setParent(this);
+    m_mailRangeDevice = device;
+    const QPointer<MailWebDavRangeDevice> guardedDevice(device);
+    connect(device, &MailWebDavRangeDevice::bytesFetched, this,
+            [this, guardedDevice](qint64 count) {
+        if (!guardedDevice || m_mailRangeDevice != guardedDevice.data())
+            return;
+        m_networkBytes += count;
+        emit networkBytesChanged();
+    });
+    connect(device, &MailWebDavRangeDevice::bufferingChanged, this,
+            [this, guardedDevice] {
+        if (!guardedDevice || m_mailRangeDevice != guardedDevice.data())
+            return;
+        const bool value = guardedDevice->buffering();
+        if (m_buffering != value) {
+            m_buffering = value;
+            emit bufferingChanged();
+        }
+    });
+    connect(device, &MailWebDavRangeDevice::requestFailed, this,
+            [this, guardedDevice](const QString &message) {
+        if (guardedDevice && m_mailRangeDevice == guardedDevice.data())
+            fail(message);
+    });
+    connect(device, &MailWebDavRangeDevice::sessionInvalid, this,
+            [this, guardedDevice] {
+        if (guardedDevice && m_mailRangeDevice == guardedDevice.data())
+            emit cloudMailSessionInvalid();
+    });
+    m_error.clear();
+    emit errorChanged();
+    if (m_activeSourceLabel != label) {
+        m_activeSourceLabel = label;
+        emit activeSourceLabelChanged();
+    }
+    m_cloudMailActive = true;
+    emit cloudMailActiveChanged();
+    m_player.setSourceDevice(device);
+    m_player.play();
     return true;
 }
