@@ -397,8 +397,15 @@ private slots:
             QVERIFY(result.contentRangeSyntax.contains(category));
         QVERIFY(!result.contentRangeSyntax.contains(QStringLiteral("private-fixture")));
         QVERIFY(result.contentRangeSyntax.size() < 256);
-        if (!accepted)
-            QCOMPARE(result.rangeIssue, MailWebDavProbe::RangeIssue::InvalidContentRange);
+        if (!accepted) {
+            // If Qt discarded the malformed field, the failure is correctly
+            // categorized as missing rather than invalid Content-Range.
+            const auto expectedIssue = category == QStringLiteral("непечатаемые")
+                    && !result.contentRangePresent
+                ? MailWebDavProbe::RangeIssue::MissingContentRange
+                : MailWebDavProbe::RangeIssue::InvalidContentRange;
+            QCOMPARE(result.rangeIssue, expectedIssue);
+        }
     }
 
     void rangeProtocolFailuresIdentifySafeCause_data()
