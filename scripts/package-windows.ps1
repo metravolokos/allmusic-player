@@ -11,7 +11,7 @@ windeployqt --release --no-translations --no-compiler-runtime --skip-plugin-type
 if ($LASTEXITCODE -ne 0) { throw 'Qt deployment failed' }
 
 # Fail closed when Multimedia/plugin/FFmpeg deployment is incomplete.
-foreach ($pattern in @('Qt6Multimedia.dll', 'multimedia/ffmpegmediaplugin.dll', 'avcodec-*.dll', 'avformat-*.dll', 'avutil-*.dll', 'swresample-*.dll', 'swscale-*.dll')) {
+foreach ($pattern in @('Qt6Network.dll', 'Qt6Multimedia.dll', 'multimedia/ffmpegmediaplugin.dll', 'tls/*.dll', 'avcodec-*.dll', 'avformat-*.dll', 'avutil-*.dll', 'swresample-*.dll', 'swscale-*.dll')) {
     if (!(Get-ChildItem (Join-Path $stage $pattern) -ErrorAction SilentlyContinue)) { throw "Missing deployed dependency: $pattern" }
 }
 # Deploy a console test runner too; it verifies PCM with developer paths removed.
@@ -43,6 +43,7 @@ Copy-Item docs/WEB-DAV-STREAM-TEST.md "$stage/WEB-DAV-STREAM-TEST.md"
 Copy-Item scripts/start-webdav-demo.bat "$stage/start-webdav-demo.bat"
 Copy-Item scripts/start-webdav-no-range.bat "$stage/start-webdav-no-range.bat"
 Copy-Item docs/DEPENDENCIES.md "$stage/DEPENDENCIES.md"
+Copy-Item docs/002-B-CLOUD-WEBDAV.md "$stage/CLOUD-WEBDAV-TEST.md"
 python scripts/collect-licenses.py build/license-sources "$stage/licenses"
 if ($LASTEXITCODE -ne 0) { throw 'License collection failed' }
 @{
@@ -51,6 +52,7 @@ if ($LASTEXITCODE -ne 0) { throw 'License collection failed' }
     run = $env:GITHUB_RUN_ID
     attempt = $env:GITHUB_RUN_ATTEMPT
     physical_audio = 'NOT TESTED'
+    real_cloud_webdav = 'NOT TESTED — запускает только владелец на своём компьютере'
 } | ConvertTo-Json | Set-Content "$stage/BUILD-INFO.json"
 Get-ChildItem $stage -Recurse -File | ForEach-Object {
     $hash = Get-FileHash $_.FullName -Algorithm SHA256

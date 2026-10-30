@@ -63,6 +63,8 @@ public:
         qint64 disconnectAfterBytes = -1;
         qsizetype chunkSize = 0;
         int chunkIntervalMs = 0;
+        bool omitContentLength = false;
+        bool chunked = false;
     };
     QVector<Request> requests;
     std::function<Response(const Request &)> handler;
@@ -140,7 +142,13 @@ protected:
                 if (response.disconnectBeforeResponse) { socket->abort(); return; }
                 QByteArray bytes = "HTTP/1.1 " + QByteArray::number(response.status) + " Fixture\r\nConnection: close\r\n";
                 auto headers = response.headers;
-                if (!headers.contains("Content-Length")) headers["Content-Length"] = QByteArray::number(response.body.size());
+                const bool chunked = response.chunked
+                    || headers.value("Transfer-Encoding").toLower().contains("chunked");
+                if (response.chunked && !headers.contains("Transfer-Encoding"))
+                    headers["Transfer-Encoding"] = "chunked";
+                if (!response.omitContentLength && !headers.contains("Content-Length")
+                    && !headers.contains("Transfer-Encoding"))
+                    headers["Content-Length"] = QByteArray::number(response.body.size());
                 for (auto it = headers.cbegin(); it != headers.cend(); ++it) bytes += it.key() + ": " + it.value() + "\r\n";
                 bytes += "\r\n";
                 socket->write(bytes);
@@ -148,7 +156,17 @@ protected:
                 if (response.truncate) bodyLimit /= 2;
                 if (response.disconnectAfterBytes >= 0)
                     bodyLimit = qMin(bodyLimit, response.disconnectAfterBytes);
-                if (response.chunkSize > 0) {
+                if (chunked) {
+                    QByteArray framed;
+                    if (bodyLimit > 0) {
+                        framed += QByteArray::number(bodyLimit, 16) + "\r\n";
+                        framed += response.body.left(bodyLimit);
+                        framed += "\r\n";
+                    }
+                    framed += "0\r\n\r\n";
+                    socket->write(framed);
+                    socket->disconnectFromHost();
+                } else if (response.chunkSize > 0) {
                     auto *writer = new MockResponseWriter(socket, response.body, bodyLimit,
                                                           response.chunkSize, response.chunkIntervalMs);
                     writer->start();

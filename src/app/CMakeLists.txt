@@ -8,6 +8,10 @@ if(ANDROID)
         AndroidAudioTestState.h)
     set(app_qml ${PROJECT_SOURCE_DIR}/ui/android/Main.qml)
 else()
+    target_sources(allmusic-player PRIVATE
+        MailWebDavController.cpp
+        MailWebDavController.h)
+    target_link_libraries(allmusic-player PRIVATE mail-webdav-diagnostic)
     set(app_qml ${PROJECT_SOURCE_DIR}/ui/desktop/Main.qml)
 endif()
 set_source_files_properties(${app_qml} PROPERTIES QT_RESOURCE_ALIAS Main.qml)
