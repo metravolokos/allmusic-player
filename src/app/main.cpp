@@ -35,6 +35,22 @@ int main(int argc, char *argv[])
 #ifndef Q_OS_ANDROID
     LocalPlayback playback;
     MailWebDavController mailWebDav;
+    QObject::connect(&mailWebDav, &MailWebDavController::playbackRequested,
+                     &playback, [&mailWebDav, &playback](int index) {
+        QString label;
+        auto *device = mailWebDav.takePlaybackDevice(index, &label, &playback);
+        playback.openMailDevice(device, label);
+    });
+    QObject::connect(&mailWebDav, &MailWebDavController::disconnectPlayback,
+                     &playback, &LocalPlayback::stopMail);
+    QObject::connect(&playback, &LocalPlayback::cloudMailActiveChanged,
+                     &mailWebDav, [&playback, &mailWebDav] {
+        mailWebDav.setPlaybackActive(playback.cloudMailActive());
+    });
+    QObject::connect(&playback, &LocalPlayback::cloudMailSessionInvalid,
+                     &mailWebDav, &MailWebDavController::disconnectCloud);
+    QObject::connect(&app, &QCoreApplication::aboutToQuit,
+                     &mailWebDav, &MailWebDavController::disconnectCloud);
 #else
     AndroidAudioTestController audioTest;
 #endif
@@ -79,4 +95,3 @@ int main(int argc, char *argv[])
     const int result = app.exec();
     return smokeTest && !capturedFrame ? 1 : result;
 }
-

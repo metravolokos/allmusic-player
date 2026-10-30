@@ -66,6 +66,8 @@ public:
         bool strongEtag = false;
         bool etagMatchesIfRange = true;
         bool ifRangeSent = false;
+        int retryAfterSeconds = -1;
+        QByteArray rangeBytes;
     };
 
     explicit MailWebDavProbe(QObject *parent = nullptr);
@@ -86,10 +88,15 @@ private:
     MailWebDavProbe(const QUrl &origin, TestOriginTag, QObject *parent = nullptr);
     friend class MailWebDavProbeTests;
     friend class MailWebDavController;
+    friend class MailWebDavRangeFetcher;
 
     enum class Operation { List, Range };
     bool begin(Operation operation, const QString &path, qint64 knownSize,
-               const QByteArray &etag);
+               const QByteArray &etag, qint64 offset = 0, qint64 length = 0,
+               bool returnRangeBytes = false);
+    bool listDirectory(const QString &path);
+    bool readRange(const Entry &entry, qint64 offset, qint64 length);
+    bool setSessionCredentials(QString userEmail, QString appPassword);
     void send();
     void finish(Error error);
     void captureResponseMetadata(QNetworkReply *reply);
@@ -108,8 +115,12 @@ private:
     QString email;
     QString password;
     QString requestPath;
+    QString listingPath;
     QByteArray expectedEtag;
+    qint64 rangeOffset = 0;
+    bool returnRangeBytes = false;
     bool authorizationSent = false;
+    bool basicChallengeConfirmed = false;
     qint64 knownSize = -1;
     qint64 requestedLength = 0;
     quint64 operationId = 0;

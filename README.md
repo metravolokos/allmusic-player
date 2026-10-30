@@ -27,9 +27,9 @@ These describe project goals, **not a list of production-ready features**.
 As of **30 October 2026**:
 
 - The owner completed manual listening tests on Windows 11 for **5/5 synthetic streaming audio formats** using a **local loopback mock WebDAV server**, including Stop/restart and handling a server that does not support HTTP Range.
-- Automated tests and prototype builds have passed on Linux and Windows; Android APK builds and packaging checks have passed. A basic Android application screen was tested on the owner's Huawei device.
-- The owner confirmed sign-in and a `/AllMusic` listing from the real Cloud Mail account on Windows 11 (3,590 immediate entries). A separate HTTP Range check for one FLAC file is still **unconfirmed** after a protocol-validation error.
-- **Not yet verified:** HTTP Range behavior on the real Cloud Mail account, production streaming over the internet, Android audio playback, production-grade offline caching, or general user compatibility.
+- Automated tests and prototype builds have passed on Linux and Windows; Android APK builds and packaging checks have passed. The basic Android application screen has been launched manually.
+- The owner confirmed sign-in, a `/AllMusic` listing, and a bounded HTTP 206 Range response from the real Cloud Mail account on Windows 11. The narrow Cloud Mail `Content-Range` compatibility was accepted and merged in PR #21 (`f236e7591e969709e4c0cd40fb5196e97c57f27b`).
+- **Not yet verified:** streaming MP3/FLAC playback over the real Cloud Mail connection (the scope of 002-C), Android cloud streaming, production-grade offline caching, or general user compatibility.
 
 Evidence and current limitations: [STATUS.md](STATUS.md), [001-E report](docs/001-E-REPORT.md), [ROADMAP.md](ROADMAP.md).
 

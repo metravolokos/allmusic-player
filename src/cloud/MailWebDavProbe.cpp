@@ -9,6 +9,7 @@
 #include <QStringList>
 #include <QXmlStreamReader>
 #include <limits>
+#include <utility>
 
 namespace {
 const QUrl MailOrigin(QStringLiteral("https://webdav.cloud.mail.ru"));
@@ -207,6 +208,7 @@ void MailWebDavProbe::clearCredentials()
     email.clear();
     password.fill(QChar(u'\0'));
     password.clear();
+    basicChallengeConfirmed = false;
 }
 
 bool MailWebDavProbe::listAllMusic(const QString &userEmail, const QString &appPassword)
@@ -230,7 +232,31 @@ bool MailWebDavProbe::listAllMusic(const QString &userEmail, const QString &appP
     }
     email = userEmail;
     password = appPassword;
+    listingPath = MusicRoot;
     return begin(Operation::List, MusicRoot, -1, {});
+}
+
+bool MailWebDavProbe::setSessionCredentials(QString userEmail, QString appPassword)
+{
+    if (active || userEmail.isEmpty() || userEmail.size() > 320 || appPassword.isEmpty()
+        || appPassword.size() > 256 || userEmail != userEmail.trimmed()
+        || userEmail.contains(QChar(u'\r')) || userEmail.contains(QChar(u'\n'))
+        || appPassword.contains(QChar(u'\r')) || appPassword.contains(QChar(u'\n'))) {
+        userEmail.fill(QChar(u'\0'));
+        appPassword.fill(QChar(u'\0'));
+        return false;
+    }
+    clearCredentials();
+    email = std::move(userEmail);
+    password = std::move(appPassword);
+    return true;
+}
+
+bool MailWebDavProbe::listDirectory(const QString &path)
+{
+    if (active || email.isEmpty() || password.isEmpty())
+        return false;
+    return begin(Operation::List, path, -1, {});
 }
 
 bool MailWebDavProbe::checkRange(const Entry &entry)
@@ -243,18 +269,45 @@ bool MailWebDavProbe::checkRange(const Entry &entry)
     return begin(Operation::Range, entry.reference, entry.size.value_or(-1), entry.etag);
 }
 
+bool MailWebDavProbe::readRange(const Entry &entry, qint64 offset, qint64 length)
+{
+    if (active || entry.directory || !entry.size || *entry.size <= 0 || offset < 0
+        || length <= 0 || length > RangeLimit || offset >= *entry.size
+        || length > *entry.size - offset || email.isEmpty() || password.isEmpty())
+        return false;
+    return begin(Operation::Range, entry.reference, *entry.size, entry.etag,
+                 offset, length, true);
+}
+
 bool MailWebDavProbe::begin(Operation operation, const QString &path, qint64 fileSize,
-                            const QByteArray &etag)
+                            const QByteArray &etag, qint64 offset, qint64 length,
+                            bool returnBytes)
 {
     if (active)
         return false;
     result = {};
     result.listing = operation == Operation::List;
     result.rangeCheck = operation == Operation::Range;
-    result.requestedRangeBytes = result.rangeCheck
-        ? qMin(RangeLimit, fileSize >= 0 ? fileSize : RangeLimit) : 0;
+    rangeOffset = offset;
+    returnRangeBytes = returnBytes;
+    requestedLength = result.rangeCheck
+        ? (length > 0 ? length
+                      : qMin(RangeLimit, fileSize >= 0 && offset >= 0
+                             ? qMax<qint64>(0, fileSize - offset) : RangeLimit))
+        : 0;
+    result.requestedRangeBytes = requestedLength;
     active = true;
     const quint64 ticket = ++operationId;
+    if (result.rangeCheck && (offset < 0 || requestedLength <= 0
+        || requestedLength > RangeLimit
+        || (fileSize >= 0 && (offset >= fileSize || requestedLength > fileSize - offset)))) {
+        result.rangeIssue = RangeIssue::InvalidRangeBounds;
+        QTimer::singleShot(0, this, [this, ticket] {
+            if (active && operationId == ticket)
+            finish(Error::Protocol);
+        });
+        return true;
+    }
 
     const bool pinned = origin.scheme() == QStringLiteral("https")
         && origin.host() == QStringLiteral("webdav.cloud.mail.ru")
@@ -270,7 +323,8 @@ bool MailWebDavProbe::begin(Operation operation, const QString &path, qint64 fil
 
     const auto checked = WebDavProbe::safePath(path, origin);
     if (!checked || checked->size() > PathLimit
-        || (operation == Operation::List && *checked != MusicRoot)
+        || (operation == Operation::List
+            && *checked != MusicRoot && !checked->startsWith(MusicRoot))
         || (operation == Operation::Range && !checked->startsWith(MusicRoot))) {
         QTimer::singleShot(0, this, [this, ticket] {
             if (active && operationId == ticket)
@@ -280,12 +334,14 @@ bool MailWebDavProbe::begin(Operation operation, const QString &path, qint64 fil
     }
 
     requestPath = *checked;
+    if (operation == Operation::List && !requestPath.endsWith(u'/'))
+        requestPath += u'/';
+    if (operation == Operation::List)
+        listingPath = requestPath;
     knownSize = fileSize;
     expectedEtag = isStrongEtag(etag) ? etag : QByteArray();
-    requestedLength = operation == Operation::Range
-        ? qMin(RangeLimit, fileSize >= 0 ? fileSize : RangeLimit) : 0;
     authChallenges = 0;
-    authorizationSent = false;
+    authorizationSent = basicChallengeConfirmed;
     result.ifRangeSent = operation == Operation::Range && !expectedEtag.isEmpty();
     body.clear();
     tlsFailure = false;
@@ -388,6 +444,8 @@ void MailWebDavProbe::clearResponseMetadata()
     result.strongEtag = false;
     result.etagMatchesIfRange = true;
     result.rangeIssue = RangeIssue::None;
+    result.retryAfterSeconds = -1;
+    result.rangeBytes.clear();
 }
 
 void MailWebDavProbe::send()
@@ -441,8 +499,8 @@ void MailWebDavProbe::send()
             "<d:resourcetype/><d:getcontentlength/><d:getetag/>"
             "</d:prop></d:propfind>");
     } else {
-        request.setRawHeader("Range", "bytes=0-"
-            + QByteArray::number(requestedLength - 1));
+        request.setRawHeader("Range", "bytes=" + QByteArray::number(rangeOffset) + "-"
+            + QByteArray::number(rangeOffset + requestedLength - 1));
         if (!expectedEtag.isEmpty())
             request.setRawHeader("If-Range", expectedEtag);
         reply = manager.get(request);
@@ -474,6 +532,11 @@ void MailWebDavProbe::send()
             result.rangeIssue = RangeIssue::RangeIgnored;
             finish(expectedEtag.isEmpty() ? Error::RangeUnsupported : Error::VersionChanged);
             return;
+        }
+        if (status == 429) {
+            const auto retryAfter = decimal(sentReply->rawHeader("Retry-After"));
+            if (retryAfter && *retryAfter <= 5)
+                result.retryAfterSeconds = static_cast<int>(*retryAfter);
         }
         if (status == 416 && !result.listing)
             result.rangeIssue = RangeIssue::RangeUnsatisfiable;
@@ -576,6 +639,7 @@ void MailWebDavProbe::send()
             if (!authorizationSent && authChallenges == 0 && supportsBasic
                 && !email.isEmpty() && !password.isEmpty()) {
                 ++authChallenges;
+                basicChallengeConfirmed = true;
                 authorizationSent = true;
                 body.fill('\0');
                 body.clear();
@@ -664,7 +728,7 @@ void MailWebDavProbe::send()
             finish(Error::Protocol);
             return;
         }
-        if (parsedRange->first != 0) {
+        if (parsedRange->first != rangeOffset) {
             result.rangeIssue = RangeIssue::RangeStartMismatch;
             finish(Error::Protocol);
             return;
@@ -675,9 +739,14 @@ void MailWebDavProbe::send()
             return;
         }
         const qint64 completeSize = parsedRange->total.value_or(knownSize);
+        const qint64 requestedLast = rangeOffset + requestedLength - 1;
         const qint64 expectedLast = completeSize >= 0
-            ? qMin(requestedLength - 1, completeSize - 1)
-            : requestedLength - 1;
+            ? qMin(requestedLast, completeSize - 1) : requestedLast;
+        if (returnRangeBytes && !parsedRange->total) {
+            result.rangeIssue = RangeIssue::TotalSizeMismatch;
+            finish(Error::Protocol);
+            return;
+        }
         if (parsedRange->last != expectedLast) {
             result.rangeIssue = RangeIssue::RangeEndMismatch;
             finish(Error::Protocol);
@@ -686,7 +755,7 @@ void MailWebDavProbe::send()
 
         result.rangeFirst = parsedRange->first;
         result.rangeLast = parsedRange->last;
-        const qint64 expectedBytes = expectedLast + 1;
+        const qint64 expectedBytes = expectedLast - rangeOffset + 1;
         result.rangeExpectedBytes = expectedBytes;
         if (result.ifRangeSent && result.etagPresent && !result.etagMatchesIfRange) {
             result.rangeIssue = RangeIssue::EtagMismatch;
@@ -817,7 +886,7 @@ void MailWebDavProbe::parseListing()
         }
 
         QUrl base = origin;
-        base.setPath(MusicRoot, QUrl::DecodedMode);
+        base.setPath(listingPath.isEmpty() ? MusicRoot : listingPath, QUrl::DecodedMode);
         if (href.size() > PathLimit) {
             ++result.rejectedEntries;
             continue;
@@ -831,10 +900,12 @@ void MailWebDavProbe::parseListing()
         QString candidate = *checked;
         if (candidate.endsWith(u'/'))
             candidate.chop(1);
-        const QString root = QStringLiteral("/AllMusic");
-        if (candidate == root)
+        QString directory = listingPath;
+        if (directory.endsWith(u'/'))
+            directory.chop(1);
+        if (candidate == directory)
             continue;
-        const QString prefix = root + u'/';
+        const QString prefix = directory + u'/';
         if (!candidate.startsWith(prefix) || candidate.mid(prefix.size()).contains(u'/')) {
             ++result.rejectedEntries;
             continue;
@@ -868,10 +939,15 @@ void MailWebDavProbe::finish(Error error)
     result.error = error;
     if (error != Error::None) {
         result.entries.clear();
+        result.rangeBytes.clear();
         if (!result.rangeCheck) {
             result.bytesReceived = 0;
             result.totalSize.reset();
         }
+    } else if (result.rangeCheck && returnRangeBytes) {
+        result.rangeBytes = body;
+    } else {
+        result.rangeBytes.clear();
     }
     body.fill('\0');
     body.clear();

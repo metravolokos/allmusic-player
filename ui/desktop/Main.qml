@@ -12,7 +12,7 @@ Window {
     minimumWidth: 540
     minimumHeight: 760
     visible: true
-    title: "AllMusic Player — прототип 002-B"
+    title: "AllMusic Player — этап 002-C"
     color: "#f5f6f8"
     readonly property var media: playback.player
     function time(ms) {
@@ -30,7 +30,7 @@ Window {
         anchors.margins: 28
         spacing: 16
         Label { text: "AllMusic Player"; font.pixelSize: 28; font.bold: true }
-        Label { text: "Потоковый прототип через локальный WebDAV · 001-B2"; color: "#526171" }
+        Label { text: "Desktop-плеер: локальные файлы, loopback-мок и потоковый Cloud Mail"; color: "#526171" }
         Button { text: "Выбрать аудиофайл…"; onClicked: picker.open() }
         GroupBox {
             Layout.fillWidth: true
@@ -65,13 +65,13 @@ Window {
         Label { text: "Получено по Range: " + playback.networkBytes + " байт"; color: "#526171" }
         GroupBox {
             Layout.fillWidth: true
-            title: "Диагностика Cloud Mail — только чтение"
+            title: "Cloud Mail — потоковое чтение"
             ColumnLayout {
                 anchors.fill: parent
                 spacing: 8
                 Label {
                     Layout.fillWidth: true
-                    text: "Проверяется только /AllMusic. Используются PROPFIND и отдельный GET Range; перенаправления и команды записи не выполняются. Список остаётся локально и очищается при отключении."
+                    text: "Используются только PROPFIND и ограниченные GET Range внутри /AllMusic. Перенаправления и команды записи не выполняются. Выбор строки не отправляет запрос: нажмите отдельную кнопку воспроизведения."
                     color: "#526171"
                     wrapMode: Text.WordWrap
                 }
@@ -141,6 +141,12 @@ Window {
                         color: "#526171"
                     }
                 }
+                Label {
+                    Layout.fillWidth: true
+                    text: "Текущая папка: " + mailWebDav.currentDirectory
+                    color: "#526171"
+                    elide: Text.ElideMiddle
+                }
                 RowLayout {
                     Layout.fillWidth: true
                     ComboBox {
@@ -151,9 +157,27 @@ Window {
                         enabled: mailWebDav.connected && !mailWebDav.busy
                         Accessible.name: "Непосредственные папки и аудиофайлы в /AllMusic"
                     }
+                    Button {
+                        text: "Открыть папку"
+                        enabled: mailWebDav.canOpenDirectory(mailEntry.currentIndex)
+                        onClicked: mailWebDav.openDirectory(mailEntry.currentIndex)
+                    }
+                    Button {
+                        text: "Наверх"
+                        enabled: mailWebDav.canGoToParent()
+                        onClicked: mailWebDav.goToParent()
+                    }
+                    Button {
+                        text: "Воспроизвести MP3/FLAC"
+                        enabled: mailWebDav.canPlay(mailEntry.currentIndex)
+                        onClicked: mailWebDav.play(mailEntry.currentIndex)
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
                     CheckBox {
                         id: rangeConsent
-                        text: "Разрешаю отдельный Range до 64 КиБ для выбранного файла"
+                        text: "Разрешаю отдельную диагностическую проверку Range до 64 КиБ"
                         enabled: mailWebDav.canCheckRange(mailEntry.currentIndex)
                         onCheckedChanged: if (!enabled) checked = false
                         Accessible.name: "Подтверждение отдельной проверки HTTP Range"
@@ -185,7 +209,8 @@ Window {
         }
         Label {
             Layout.fillWidth: true
-            text: window.media.source.toString() || remoteFile.currentText || "Файл ещё не выбран"
+            text: playback.activeSourceLabel || window.media.source.toString()
+                  || remoteFile.currentText || "Файл ещё не выбран"
             elide: Text.ElideMiddle
             Accessible.name: "Выбранный файл"
         }
@@ -193,18 +218,34 @@ Window {
             Button {
                 text: window.media.playbackState === MediaPlayer.PlayingState ? "Пауза" : "Воспроизвести"
                 enabled: (window.media.hasAudio || window.media.source.toString().length > 0
-                          || playback.currentLoopbackIndex >= 0) && playback.error.length === 0
-                onClicked: playback.togglePlayback()
+                          || playback.currentLoopbackIndex >= 0 || playback.cloudMailActive
+                          || (mailWebDav.connected && mailWebDav.canPlay(mailEntry.currentIndex)))
+                         && playback.error.length === 0
+                onClicked: {
+                    if (window.media.playbackState !== MediaPlayer.StoppedState) {
+                        playback.togglePlayback()
+                    } else if (window.media.source.toString().length === 0
+                               && playback.currentLoopbackIndex < 0
+                               && mailWebDav.connected
+                               && mailWebDav.canPlay(mailEntry.currentIndex)) {
+                        // Stop cancels and destroys the old credential-bearing source.
+                        // A new explicit Play starts a fresh bounded stream for this row.
+                        mailWebDav.play(mailEntry.currentIndex)
+                    } else {
+                        playback.togglePlayback()
+                    }
+                }
             }
             Button {
                 text: "Стоп"
                 enabled: window.media.hasAudio || window.media.source.toString().length > 0
-                         || playback.currentLoopbackIndex >= 0
+                         || playback.currentLoopbackIndex >= 0 || playback.cloudMailActive
                 onClicked: playback.stop()
             }
             Label {
                 text: window.media.playbackState === MediaPlayer.PlayingState ? "Воспроизведение"
                     : window.media.playbackState === MediaPlayer.PausedState ? "Пауза"
+                    : playback.buffering ? "Буферизация…"
                     : window.media.mediaStatus === MediaPlayer.LoadingMedia ? "Загрузка…" : "Остановлено"
             }
         }

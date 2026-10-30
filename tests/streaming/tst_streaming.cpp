@@ -1,4 +1,5 @@
 #include "LocalPlayback.h"
+#include "MailWebDavRangeDevice.h"
 #include "WebDavRangeDevice.h"
 #include "WebDavProbe.h"
 #include "MockWebDav.h"
@@ -14,6 +15,8 @@
 #include <cmath>
 #include <thread>
 #include <limits>
+#include <memory>
+#include <utility>
 
 #if defined(Q_OS_WIN)
 #ifndef NOMINMAX
@@ -24,6 +27,19 @@
 #elif defined(Q_OS_LINUX)
 #include <sys/resource.h>
 #endif
+
+class MailWebDavRangeDeviceTests
+{
+public:
+    static MailWebDavRangeDevice *create(quint16 port, MailWebDavProbe::Entry entry,
+                                         QObject *parent = nullptr)
+    {
+        const QUrl origin(QStringLiteral("http://127.0.0.1:%1").arg(port));
+        return new MailWebDavRangeDevice(origin, MailWebDavRangeDevice::TestOriginTag{},
+            std::move(entry), QStringLiteral("fixture@example.invalid"),
+            QStringLiteral("synthetic-mail-only-secret"), parent);
+    }
+};
 
 class StreamingTests final : public QObject
 {
@@ -46,6 +62,67 @@ class StreamingTests final : public QObject
     qint64 disconnectAfterBytes = -1;
     qsizetype chunkSize = 0;
     int chunkIntervalMs = 0;
+    bool mailSourceTest = false;
+    QString mailTarget = QStringLiteral("/AllMusic/mail-fixture.mp3");
+    QByteArray mailEtag = "\"mail-fixture-v1\"";
+    bool mailLegacyContentRange = false;
+    bool mailIgnoreRange = false;
+    int mail429Responses = 0;
+    int mailDelayNextResponseMs = 0;
+
+    static QByteArray mailAuthorization()
+    {
+        return "Basic " + QByteArray("fixture@example.invalid:synthetic-mail-only-secret").toBase64();
+    }
+
+    void installMailHandler()
+    {
+        mailSourceTest = true;
+        const QByteArray expectedAuthorization = mailAuthorization();
+        server.handler = [this, expectedAuthorization](const MockWebDav::Request &request) {
+            MockWebDav::Response response;
+            if (request.method != "GET" || request.target != mailTarget.toUtf8()) {
+                response.status = 404;
+                return response;
+            }
+            if (request.headers.value("authorization") != expectedAuthorization)
+                return MockWebDav::Response{401, {}, {{"WWW-Authenticate", "Basic realm=\"fixture\""}}};
+            response.delayMs = std::exchange(mailDelayNextResponseMs, 0);
+            if (mail429Responses > 0) {
+                --mail429Responses;
+                response.status = 429;
+                response.headers["Retry-After"] = "0";
+                return response;
+            }
+            const QByteArray range = request.headers.value("range");
+            if (mailIgnoreRange || range.isEmpty()) {
+                response.status = 200;
+                response.body = audio;
+                if (!mailEtag.isEmpty())
+                    response.headers["ETag"] = mailEtag;
+                return response;
+            }
+            const auto parts = range.startsWith("bytes=") ? range.mid(6).split('-') : QList<QByteArray>{};
+            bool startOk = false;
+            bool endOk = false;
+            const qint64 first = parts.value(0).toLongLong(&startOk);
+            const qint64 last = parts.value(1).toLongLong(&endOk);
+            if (!startOk || !endOk || first < 0 || last < first || first >= audio.size()) {
+                response.status = 416;
+                response.headers["Content-Range"] = "bytes */" + QByteArray::number(audio.size());
+                return response;
+            }
+            const qint64 boundedLast = qMin(last, audio.size() - 1);
+            response.status = 206;
+            response.body = audio.mid(first, boundedLast - first + 1);
+            const QByteArray unit = mailLegacyContentRange ? "bytes=" : "bytes ";
+            response.headers["Content-Range"] = unit + QByteArray::number(first) + "-"
+                + QByteArray::number(boundedLast) + "/" + QByteArray::number(audio.size());
+            if (!mailEtag.isEmpty())
+                response.headers["ETag"] = mailEtag;
+            return response;
+        };
+    }
 
     void installHandler()
     {
@@ -151,6 +228,37 @@ class StreamingTests final : public QObject
         return completed;
     }
 
+    bool readMailWithEventLoop(MailWebDavRangeDevice &device, char *data, qint64 length,
+                               qint64 *result, int timeoutMs = 7000)
+    {
+        std::atomic_bool done{false};
+        std::thread reader([&] {
+            *result = device.read(data, length);
+            done.store(true);
+        });
+        QElapsedTimer timer;
+        timer.start();
+        while (!done.load() && timer.elapsed() < timeoutMs) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+            QTest::qWait(2);
+        }
+        const bool completed = done.load();
+        if (!completed)
+            device.cancel();
+        reader.join();
+        return completed;
+    }
+
+    MailWebDavProbe::Entry mailEntry() const
+    {
+        MailWebDavProbe::Entry entry;
+        entry.path = mailTarget.mid(QStringLiteral("/AllMusic/").size());
+        entry.reference = mailTarget;
+        entry.size = audio.size();
+        entry.etag = mailEtag;
+        return entry;
+    }
+
     static qint64 processPeakRssBytes()
     {
 #if defined(Q_OS_WIN)
@@ -196,6 +304,13 @@ private slots:
         disconnectAfterBytes = -1;
         chunkSize = 0;
         chunkIntervalMs = 0;
+        mailSourceTest = false;
+        mailTarget = QStringLiteral("/AllMusic/mail-fixture.mp3");
+        mailEtag = QByteArray("\"mail-fixture-v1\"");
+        mailLegacyContentRange = false;
+        mailIgnoreRange = false;
+        mail429Responses = 0;
+        mailDelayNextResponseMs = 0;
         server.includeB2Marker = true;
         installHandler();
     }
@@ -204,8 +319,15 @@ private slots:
         for (const auto &request : server.requests) {
             QVERIFY(request.method == "GET" || request.method == "PROPFIND");
             QVERIFY(request.target == "/AllMusic" || request.target.startsWith("/AllMusic/"));
-            QVERIFY(!request.headers.contains("authorization"));
             QVERIFY(!request.headers.contains("cookie"));
+            if (mailSourceTest) {
+                QVERIFY(request.method == "GET");
+                QCOMPARE(request.target, mailTarget.toUtf8());
+                if (request.headers.contains("authorization"))
+                    QVERIFY(request.headers.value("authorization") == mailAuthorization());
+            } else {
+                QVERIFY(!request.headers.contains("authorization"));
+            }
         }
         QTRY_COMPARE_WITH_TIMEOUT(server.activeResponses, 0, 6000);
         QCOMPARE(server.activeRangeResponses, 0);
@@ -274,6 +396,242 @@ private slots:
         QVERIFY(failed.first().first().toString().contains("200"));
         QVERIFY(server.requests.first().headers.contains("range"));
         QVERIFY(device.cachedBytes() == 0);
+    }
+    void mailRangeUsesChallengeAndBoundedOffsets()
+    {
+        installMailHandler();
+        mailLegacyContentRange = true;
+        auto *device = MailWebDavRangeDeviceTests::create(
+            server.serverPort(), mailEntry());
+        QVERIFY(device->open(QIODevice::ReadOnly));
+        QByteArray head(32, Qt::Uninitialized);
+        qint64 read = -1;
+        QVERIFY(readMailWithEventLoop(*device, head.data(), head.size(), &read));
+        QCOMPARE(read, qint64(head.size()));
+        QCOMPARE(head, audio.left(head.size()));
+        QVERIFY(device->seek(70000));
+        QByteArray later(32, Qt::Uninitialized);
+        QVERIFY(readMailWithEventLoop(*device, later.data(), later.size(), &read));
+        QCOMPARE(read, qint64(later.size()));
+        QCOMPARE(later, audio.mid(70000, later.size()));
+
+        QCOMPARE(server.requests.size(), 3); // One Basic challenge, then two bounded ranges.
+        QVERIFY(!server.requests[0].headers.contains("authorization"));
+        QVERIFY(server.requests[1].headers.value("authorization") == mailAuthorization());
+        QCOMPARE(server.requests[1].headers.value("range"), "bytes=0-65535");
+        QVERIFY(server.requests[2].headers.value("authorization") == mailAuthorization());
+        QCOMPARE(server.requests[2].headers.value("range"),
+                 "bytes=65536-" + QByteArray::number(qMin<qint64>(131071, audio.size() - 1)));
+        QCOMPARE(server.requests[1].headers.value("if-range"), mailEtag);
+        QCOMPARE(server.requests[2].headers.value("if-range"), mailEtag);
+        QVERIFY(device->cachedBytes() <= 4 * 64 * 1024);
+        device->cancel();
+        delete device;
+    }
+    void mailRangeWithoutStrongEtagStillChecksEveryRange_data()
+    {
+        QTest::addColumn<QByteArray>("etag");
+        QTest::newRow("weak") << QByteArray("W/\"mail-fixture-v1\"");
+        QTest::newRow("absent") << QByteArray();
+    }
+    void mailRangeWithoutStrongEtagStillChecksEveryRange()
+    {
+        QFETCH(QByteArray, etag);
+        installMailHandler();
+        mailEtag = etag;
+        auto *device = MailWebDavRangeDeviceTests::create(
+            server.serverPort(), mailEntry());
+        QVERIFY(device->open(QIODevice::ReadOnly));
+        char byte = 0;
+        qint64 read = -1;
+        QVERIFY(readMailWithEventLoop(*device, &byte, 1, &read));
+        QCOMPARE(read, 1);
+        QCOMPARE(uchar(byte), uchar(audio[0]));
+        QVERIFY(device->seek(70000));
+        QVERIFY(readMailWithEventLoop(*device, &byte, 1, &read));
+        QCOMPARE(read, 1);
+        QCOMPARE(uchar(byte), uchar(audio[70000]));
+        QVERIFY(server.requests.size() >= 3);
+        for (const auto &request : server.requests) {
+            if (request.headers.contains("range"))
+                QVERIFY(!request.headers.contains("if-range"));
+        }
+        QVERIFY(device->cachedBytes() <= 4 * 64 * 1024);
+        device->cancel();
+        delete device;
+    }
+    void mailRangeRetriesOnlySameBoundedRangeAfter429()
+    {
+        installMailHandler();
+        mail429Responses = 1;
+        auto *device = MailWebDavRangeDeviceTests::create(
+            server.serverPort(), mailEntry());
+        QVERIFY(device->open(QIODevice::ReadOnly));
+        char byte = 0;
+        qint64 read = -1;
+        QVERIFY(readMailWithEventLoop(*device, &byte, 1, &read));
+        QCOMPARE(read, 1);
+        QCOMPARE(uchar(byte), uchar(audio[0]));
+        QCOMPARE(server.requests.size(), 3); // challenge + 429 + exactly one retry.
+        for (int i = 1; i < server.requests.size(); ++i)
+            QCOMPARE(server.requests[i].headers.value("range"), "bytes=0-65535");
+        QVERIFY(server.requests[1].headers.contains("authorization"));
+        QVERIFY(server.requests[2].headers.contains("authorization"));
+        QVERIFY(device->cachedBytes() > 0);
+        device->cancel();
+        delete device;
+    }
+    void mailIgnoredRangeFailsWithoutCachingWholeFile()
+    {
+        installMailHandler();
+        mailIgnoreRange = true;
+        auto *device = MailWebDavRangeDeviceTests::create(
+            server.serverPort(), mailEntry());
+        QVERIFY(device->open(QIODevice::ReadOnly));
+        QSignalSpy failed(device, &MailWebDavRangeDevice::requestFailed);
+        char byte = 0;
+        qint64 read = 0;
+        QVERIFY(readMailWithEventLoop(*device, &byte, 1, &read));
+        QCOMPARE(read, -1);
+        QTRY_COMPARE(failed.size(), 1);
+        QVERIFY(failed.first().first().toString().contains("206"));
+        QCOMPARE(device->cachedBytes(), 0);
+        QVERIFY(server.requests.size() >= 2);
+        QCOMPARE(server.requests.last().headers.value("range"), "bytes=0-65535");
+        device->cancel();
+        delete device;
+    }
+    void mailCancelClosesDelayedRangePromptly()
+    {
+        installMailHandler();
+        mailDelayNextResponseMs = 5000;
+        auto *device = MailWebDavRangeDeviceTests::create(
+            server.serverPort(), mailEntry());
+        QVERIFY(device->open(QIODevice::ReadOnly));
+        std::atomic<qint64> read{-2};
+        std::thread reader([&] {
+            char byte = 0;
+            read.store(device->read(&byte, 1));
+        });
+        QTRY_VERIFY_WITH_TIMEOUT(server.requests.size() >= 2
+                                 && server.activeRangeResponses > 0, 2000);
+        QElapsedTimer timer;
+        timer.start();
+        device->cancel();
+        reader.join();
+        QVERIFY(timer.elapsed() < 1500);
+        QCOMPARE(read.load(), -1);
+        QTRY_COMPARE_WITH_TIMEOUT(server.activeRangeResponses, 0, 1000);
+        QCOMPARE(device->cachedBytes(), 0);
+        delete device;
+    }
+    void mailSeekCancelsStaleRangeAndReadsNewPosition()
+    {
+        installMailHandler();
+        mailDelayNextResponseMs = 5000;
+        auto *device = MailWebDavRangeDeviceTests::create(
+            server.serverPort(), mailEntry());
+        QVERIFY(device->open(QIODevice::ReadOnly));
+        std::atomic<qint64> read{-2};
+        std::atomic<char> byte{0};
+        std::thread reader([&] {
+            char value = 0;
+            read.store(device->read(&value, 1));
+            byte.store(value);
+        });
+        QTRY_VERIFY_WITH_TIMEOUT(server.requests.size() >= 2
+                                 && server.activeRangeResponses > 0, 2000);
+        QElapsedTimer timer;
+        timer.start();
+        QVERIFY(device->seek(70000));
+        QTRY_VERIFY_WITH_TIMEOUT(read.load() != -2, 2000);
+        reader.join();
+        QVERIFY(timer.elapsed() < 1500);
+        QCOMPARE(read.load(), 1);
+        QCOMPARE(uchar(byte.load()), uchar(audio[70000]));
+        QVERIFY(server.requests.size() >= 3);
+        QCOMPARE(server.requests.last().headers.value("range"),
+                 "bytes=65536-" + QByteArray::number(qMin<qint64>(131071, audio.size() - 1)));
+        QCOMPARE(device->cachedBytes(),
+                 qMin<qint64>(64 * 1024, audio.size() - 64 * 1024));
+        device->cancel();
+        QTRY_COMPARE_WITH_TIMEOUT(server.activeRangeResponses, 0, 1000);
+        delete device;
+    }
+    void mailMp3AndFlacProducePcm_data()
+    {
+        QTest::addColumn<QString>("name");
+        QTest::newRow("mp3") << QStringLiteral("tone-stream-mp3.mp3");
+        QTest::newRow("flac") << QStringLiteral("tone-stream-flac.flac");
+    }
+    void mailMp3AndFlacProducePcm()
+    {
+        QFETCH(QString, name);
+        QFile file(qEnvironmentVariable("ALLMUSIC_FIXTURES") + "/" + name);
+        QVERIFY2(file.open(QIODevice::ReadOnly), qPrintable(name));
+        audio = file.readAll();
+        mailTarget = QStringLiteral("/AllMusic/") + name;
+        installMailHandler();
+        std::unique_ptr<MailWebDavRangeDevice> device(
+            MailWebDavRangeDeviceTests::create(server.serverPort(), mailEntry()));
+        QVERIFY(device->open(QIODevice::ReadOnly));
+
+        QMediaPlayer player;
+        QAudioBufferOutput output;
+        player.setAudioOutput(nullptr);
+        player.setAudioBufferOutput(&output);
+        std::atomic<qint64> decodedFrames{0};
+        connect(&output, &QAudioBufferOutput::audioBufferReceived, this,
+                [&](const QAudioBuffer &buffer) {
+            if (buffer.isValid())
+                decodedFrames.fetch_add(buffer.frameCount());
+        }, Qt::DirectConnection);
+        player.setSourceDevice(device.get());
+        player.play();
+        QTRY_VERIFY_WITH_TIMEOUT(decodedFrames.load() > 4096, 15000);
+        QVERIFY(device->cachedBytes() <= 4 * 64 * 1024);
+        int boundedGets = 0;
+        for (const auto &request : server.requests) {
+            if (request.method != "GET")
+                continue;
+            ++boundedGets;
+            QVERIFY(request.headers.contains("range"));
+            QVERIFY(request.headers.value("range").size() < 40);
+            QVERIFY(request.headers.contains("if-range"));
+        }
+        QVERIFY(boundedGets > 0);
+        device->cancel();
+        player.stop();
+        player.setSource({});
+        QTRY_COMPARE_WITH_TIMEOUT(server.activeRangeResponses, 0, 1000);
+        disconnect(&output, nullptr, this, nullptr);
+    }
+    void mailPlaybackDisconnectCancelsAndAllowsRestart()
+    {
+        installMailHandler();
+        mailDelayNextResponseMs = 5000;
+        LocalPlayback playback;
+        playback.player()->setAudioOutput(nullptr);
+        auto *first = MailWebDavRangeDeviceTests::create(server.serverPort(), mailEntry());
+        QVERIFY(playback.openMailDevice(first, QStringLiteral("mock-track.mp3")));
+        QTRY_VERIFY_WITH_TIMEOUT(server.requests.size() >= 2
+                                 && server.activeRangeResponses > 0, 3000);
+        QElapsedTimer timer;
+        timer.start();
+        playback.stopMail(); // Same detach path used by Cloud Disconnect and window close.
+        QTRY_COMPARE_WITH_TIMEOUT(server.activeRangeResponses, 0, 1000);
+        QVERIFY(timer.elapsed() < 1500);
+        QVERIFY(!playback.cloudMailActive());
+        QVERIFY(playback.player()->source().isEmpty());
+
+        mailDelayNextResponseMs = 0;
+        const int beforeRestart = server.requests.size();
+        auto *second = MailWebDavRangeDeviceTests::create(server.serverPort(), mailEntry());
+        QVERIFY(playback.openMailDevice(second, QStringLiteral("mock-track.mp3")));
+        QTRY_VERIFY_WITH_TIMEOUT(server.requests.size() > beforeRestart, 3000);
+        QVERIFY(playback.cloudMailActive());
+        playback.stopMail();
+        QTRY_COMPARE_WITH_TIMEOUT(server.activeRangeResponses, 0, 1000);
     }
     void range416FailsClosed()
     {
