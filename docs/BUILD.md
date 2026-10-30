@@ -117,10 +117,13 @@ cmake --build --preset android-debug --parallel 2
 ```
 
 Для Android-конфигурации также установите Qt Multimedia 6.12.0 и Qt Shader Tools.
-Синтетический WAV создаётся скриптом во временном каталоге сборки и включается в
-Qt resource; аудиофайл в Git не добавляется. Для ручной установки используйте
-`docs/ANDROID-TEST.md`; только сборка этой заказанной PR-ветки сохраняет APK
-как artifact.
+Для 002-A синтетический WAV создаётся Python-скриптом. Android FFmpeg spike 002-D
+дополнительно требует host `ffmpeg` и `ffprobe`; скрипт генерирует MP3/FLAC
+сэмплы во временной папке сборки и включает их в Qt resources. Исходные файлы
+не добавляются в Git. Spike включает Qt FFmpeg plugin, исключает Android media
+plugin и проверяет состав библиотек/manifest/лицензий. Для ручной проверки APK
+используйте `docs/ANDROID-FFMPEG-SPIKE-TEST.md`; artifact сохраняется CI только
+для ветки заказанного spike, ручного workflow dispatch или релиза.
 
 Для маркировки CI использует SHA проверяемого merge commit, run ID и attempt;
 versionCode — номер запуска workflow. Пакет самодостаточный, debug, подпись

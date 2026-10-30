@@ -34,6 +34,12 @@ class ChangeSelection(unittest.TestCase):
         self.assertFalse(result["desktop_windows"])
         self.assertTrue(result["android"])
 
+    def test_android_audio_fixture_generator_is_android_only(self):
+        result = CLASSIFIER.classify_paths(["scripts/generate_android_audio_fixtures.py"])
+        self.assertTrue(result["android"])
+        self.assertFalse(result["desktop_linux"])
+        self.assertFalse(result["fixtures"])
+
     def test_shared_build_configuration_checks_all_affected_targets(self):
         result = CLASSIFIER.classify_paths(["CMakeLists.txt"])
         self.assertTrue(result["desktop_linux"])

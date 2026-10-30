@@ -5,7 +5,7 @@ Window {
     width: 400
     height: 720
     visible: true
-    title: "AllMusic Player — тест 002-A"
+    title: "AllMusic Player — FFmpeg spike 002-D"
     color: "#f5f6f8"
 
     Flickable {
@@ -25,7 +25,7 @@ Window {
 
             Text {
                 width: parent.width
-                text: "Проверка локального звука"
+                text: "Android Qt FFmpeg spike"
                 color: "#17212b"
                 font.pixelSize: 25
                 horizontalAlignment: Text.AlignHCenter
@@ -34,7 +34,7 @@ Window {
 
             Text {
                 width: parent.width
-                text: "Короткий синтетический сигнал 440 Гц. Интернет и доступ к файлам не используются."
+                text: "Локальные синтетические WAV, MP3 и FLAC. Интернет и доступ к пользовательским файлам не используются."
                 color: "#526171"
                 font.pixelSize: 16
                 horizontalAlignment: Text.AlignHCenter
@@ -61,11 +61,108 @@ Window {
 
             Text {
                 width: parent.width
+                text: "Аудиодвижок: " + audioTest.backendStatusText
+                color: audioTest.backendStatusText.indexOf("подтверждён") >= 0 ? "#176b38" : "#8a5a00"
+                font.pixelSize: 14
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+            }
+
+            Text {
+                width: parent.width
                 text: audioTest.outputStatusText
                 color: "#526171"
                 font.pixelSize: 14
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WrapAnywhere
+            }
+
+            Text {
+                width: parent.width
+                text: "Тестовый формат: " + audioTest.trackText
+                color: "#17212b"
+                font.pixelSize: 15
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+            }
+
+            Text {
+                width: parent.width
+                text: "Источник: " + audioTest.sourceDeviceText
+                color: "#526171"
+                font.pixelSize: 13
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+            }
+
+            Row {
+                width: parent.width
+                spacing: 8
+
+                Repeater {
+                    model: ["WAV 002-A", "MP3 QBuffer", "FLAC QBuffer"]
+                    delegate: Rectangle {
+                        required property string modelData
+                        width: (parent.width - 16) / 3
+                        height: 48
+                        radius: 10
+                        color: "#dce5ed"
+                        Text {
+                            anchors.centerIn: parent
+                            width: parent.width - 8
+                            text: modelData
+                            color: "#17212b"
+                            font.pixelSize: 12
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: audioTest.selectTrack(index)
+                        }
+                    }
+                }
+            }
+
+            Text {
+                width: parent.width
+                text: audioTest.duration > 0
+                    ? Math.floor(audioTest.position / 60000) + ":"
+                        + ("0" + Math.floor((audioTest.position / 1000) % 60)).slice(-2)
+                        + " / "
+                        + Math.floor(audioTest.duration / 60000) + ":"
+                        + ("0" + Math.floor((audioTest.duration / 1000) % 60)).slice(-2)
+                    : "Позиция / длительность: ожидание источника"
+                color: "#526171"
+                font.pixelSize: 14
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Rectangle {
+                id: seekBar
+                width: parent.width
+                height: 30
+                radius: 8
+                color: "#dce5ed"
+                property real progress: audioTest.duration > 0
+                    ? Math.max(0, Math.min(1, audioTest.position / audioTest.duration)) : 0
+
+                Rectangle {
+                    width: parent.width * seekBar.progress
+                    height: parent.height
+                    radius: parent.radius
+                    color: "#4c8fbe"
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: audioTest.seekEnabled
+                    function moveTo(x) {
+                        audioTest.seekTo(Math.round(audioTest.duration
+                            * Math.max(0, Math.min(1, x / width))))
+                    }
+                    onPressed: moveTo(mouse.x)
+                    onPositionChanged: if (pressed) moveTo(mouse.x)
+                }
             }
 
             Rectangle {
