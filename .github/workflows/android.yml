@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       android: ${{ steps.changes.outputs.android }}
-      cache_validation: ${{ steps.changes.outputs.android_cache_validation }}
+      android_cache_validation: ${{ steps.changes.outputs.android_cache_validation }}
       source_sha: ${{ steps.changes.outputs.source_sha }}
       reason: ${{ steps.changes.outputs.reason }}
     steps:

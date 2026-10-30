@@ -47,7 +47,7 @@ jobs:
       fixtures: ${{ steps.changes.outputs.fixtures }}
       windows_zip: ${{ steps.changes.outputs.windows_zip }}
       webdav_test_kit: ${{ steps.changes.outputs.webdav_test_kit }}
-      cache_validation: ${{ steps.changes.outputs.desktop_cache_validation }}
+      desktop_cache_validation: ${{ steps.changes.outputs.desktop_cache_validation }}
       source_sha: ${{ steps.changes.outputs.source_sha }}
       reason: ${{ steps.changes.outputs.reason }}
     steps:
