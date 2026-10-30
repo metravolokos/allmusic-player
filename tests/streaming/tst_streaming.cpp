@@ -691,6 +691,29 @@ private slots:
         playback.stop();
         QTRY_COMPARE_WITH_TIMEOUT(server.activeRangeResponses, 0, 1000);
     }
+    void localStopRetainsSourceForRestart()
+    {
+        const QString path = qEnvironmentVariable("ALLMUSIC_FIXTURES") + "/tone-mp3.mp3";
+        const QFileInfo info(path);
+        QVERIFY2(info.isFile(), qPrintable(path));
+        const QUrl source = QUrl::fromLocalFile(info.canonicalFilePath());
+
+        LocalPlayback playback;
+        playback.player()->setAudioOutput(nullptr);
+        QVERIFY(playback.openLocal(source));
+        QCOMPARE(playback.currentLoopbackIndex(), -1);
+        playback.togglePlayback();
+        QTRY_COMPARE_WITH_TIMEOUT(playback.player()->playbackState(), QMediaPlayer::PlayingState, 5000);
+
+        playback.stop();
+        QTRY_COMPARE_WITH_TIMEOUT(playback.player()->playbackState(), QMediaPlayer::StoppedState, 3000);
+        QCOMPARE(playback.player()->source(), source);
+        playback.togglePlayback();
+        QTRY_COMPARE_WITH_TIMEOUT(playback.player()->playbackState(), QMediaPlayer::PlayingState, 3000);
+        playback.stop();
+        QTRY_COMPARE_WITH_TIMEOUT(playback.player()->playbackState(), QMediaPlayer::StoppedState, 3000);
+        QCOMPARE(playback.player()->source(), source);
+    }
     void trackSwitchCancelsOldLoadAndContinues()
     {
         exposeSecondFixture = true;
