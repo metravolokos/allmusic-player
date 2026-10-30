@@ -359,7 +359,12 @@ private slots:
         QTest::newRow("rfc") << QByteArray("bytes 0-99/100") << QStringLiteral("границы: числовые") << true;
         QTest::newRow("case-and-ows") << QByteArray("  BYTES  0-99/100\t") << QStringLiteral("разделитель: пробел") << true;
         QTest::newRow("unknown-total") << QByteArray("bytes 0-99/*") << QStringLiteral("границы: числовые") << true;
-        QTest::newRow("equals") << QByteArray("bytes=0-99/100") << QStringLiteral("разделитель: равно") << false;
+        QTest::newRow("mail-equals") << QByteArray("bytes=0-99/100") << QStringLiteral("разделитель: равно") << true;
+        QTest::newRow("mail-equals-case") << QByteArray("BYTES=0-99/100") << QStringLiteral("разделитель: равно") << true;
+        QTest::newRow("mail-equals-space") << QByteArray("bytes= 0-99/100") << QStringLiteral("разделитель: равно") << false;
+        QTest::newRow("mail-double-equals") << QByteArray("bytes==0-99/100") << QStringLiteral("разделитель: равно") << false;
+        QTest::newRow("mail-equals-unknown-total") << QByteArray("bytes=0-99/*") << QStringLiteral("границы: числовые") << false;
+        QTest::newRow("mail-equals-overflow") << QByteArray("bytes=0-99/9223372036854775808") << QStringLiteral("переполнение") << false;
         QTest::newRow("missing-space") << QByteArray("bytes0-99/100") << QStringLiteral("разделитель: отсутствует/другой") << false;
         QTest::newRow("tab") << QByteArray("bytes\t0-99/100") << QStringLiteral("разделитель: табуляция") << false;
         QTest::newRow("non-ascii") << QByteArray("bytes 0-99/100") + char(0x80) << QStringLiteral("не-ASCII") << false;
@@ -423,6 +428,10 @@ private slots:
             << MailWebDavProbe::RangeIssue::RangeStartMismatch;
         QTest::newRow("wrong-end") << 206 << QByteArray("bytes 0-98/100") << QByteArray("99") << 99
             << MailWebDavProbe::RangeIssue::RangeEndMismatch;
+        QTest::newRow("mail-equals-wrong-end") << 206 << QByteArray("bytes=0-98/100") << QByteArray("99") << 99
+            << MailWebDavProbe::RangeIssue::RangeEndMismatch;
+        QTest::newRow("mail-equals-wrong-start") << 206 << QByteArray("bytes=1-99/100") << QByteArray("99") << 99
+            << MailWebDavProbe::RangeIssue::RangeStartMismatch;
         QTest::newRow("content-length-conflicts-with-range") << 206
             << QByteArray("bytes 0-99/100") << QByteArray("99") << 99
             << MailWebDavProbe::RangeIssue::ContentLengthMismatch;
