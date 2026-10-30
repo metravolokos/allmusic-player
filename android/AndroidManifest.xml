@@ -3,7 +3,7 @@
      Permission insertion is deliberately absent. Audit the merged APK as well. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="org.metravolokos.allmusicplayer.spike001c"
+    package="org.metravolokos.allmusicplayer.spike002a"
     android:installLocation="internalOnly"
     android:versionCode="-- %%INSERT_VERSION_CODE%% --"
     android:versionName="-- %%INSERT_VERSION_NAME%% --">
@@ -12,6 +12,12 @@
         tools:node="remove" />
     <uses-permission android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
         tools:node="remove" />
+    <!-- Qt Multimedia's Android plugin also enables recording and camera APIs.
+         This local playback-only experiment does not need those permissions. -->
+    <uses-permission android:name="android.permission.CAMERA" tools:node="remove" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
+    <uses-permission android:name="android.permission.BLUETOOTH" tools:node="remove" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" tools:node="remove" />
     <uses-feature android:glEsVersion="0x00020000" android:required="true" />
     <supports-screens android:anyDensity="true" android:largeScreens="true"
         android:normalScreens="true" android:smallScreens="true" />

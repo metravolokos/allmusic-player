@@ -7,7 +7,7 @@ import zipfile
 
 AUDIT = runpy.run_path(str(Path(__file__).resolve().parents[2] / 'scripts/package-android.py'))
 MANIFEST = '''<manifest xmlns:android="http://schemas.android.com/apk/res/android"
- package="org.metravolokos.allmusicplayer.spike001c">
+ package="org.metravolokos.allmusicplayer.spike002a">
  <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="36"/>
  <application android:allowBackup="false" android:usesCleartextTraffic="false">
  <activity android:name="org.qtproject.qt.android.bindings.QtActivity" android:exported="true">
@@ -23,6 +23,10 @@ class PublicationBoundary(unittest.TestCase):
     def test_permission_and_component_rejections(self):
         for element in ('uses-permission android:name="android.permission.INTERNET"',
                         'uses-permission-sdk-23 android:name="android.permission.READ_MEDIA_AUDIO"',
+                        'uses-permission android:name="android.permission.RECORD_AUDIO"',
+                        'uses-permission android:name="android.permission.CAMERA"',
+                        'uses-permission android:name="android.permission.BLUETOOTH"',
+                        'uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"',
                         'service android:name="UnexpectedService"',
                         'provider android:name="UnexpectedProvider"',
                         'receiver android:name="UnexpectedReceiver"'):
@@ -30,7 +34,7 @@ class PublicationBoundary(unittest.TestCase):
                 AUDIT['check_manifest'](MANIFEST.replace('<application', '<' + element + '/><application'))
 
     def test_identity_platform_and_backup_rejections(self):
-        for before, after in [('spike001c', 'wrong'), ('minSdkVersion="28"', 'minSdkVersion="27"'),
+        for before, after in [('spike002a', 'wrong'), ('minSdkVersion="28"', 'minSdkVersion="27"'),
                               ('targetSdkVersion="36"', 'targetSdkVersion="35"'),
                               ('allowBackup="false"', 'allowBackup="true"'),
                               ('QtActivity', 'WrongActivity')]:
@@ -49,7 +53,8 @@ class PublicationBoundary(unittest.TestCase):
             ]:
                 with self.subTest(abi=abi, dex=dex, dependency=dependency):
                     with zipfile.ZipFile(apk, 'w') as archive:
-                        for name in ('liballmusic-player', 'libQt6Quick'):
+                        for name in ('liballmusic-player', 'libQt6Quick', 'libQt6Multimedia',
+                                     'libQt6Concurrent', 'libplugins_multimedia_androidmediaplugin'):
                             archive.writestr(f'lib/{abi}/{name}_{abi}.so', b'fixture, not ELF')
                         archive.writestr('classes.dex', dex)
                     if accepted:
@@ -57,6 +62,26 @@ class PublicationBoundary(unittest.TestCase):
                     else:
                         with self.assertRaises(AssertionError):
                             AUDIT['check_runtime'](apk, 'debugRuntimeClasspath\n' + dependency)
+
+    def test_ffmpeg_backend_and_native_libraries_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            apk = Path(directory) / 'fixture.apk'
+            with zipfile.ZipFile(apk, 'w') as archive:
+                for name in ('liballmusic-player', 'libQt6Quick', 'libQt6Multimedia',
+                             'libQt6Concurrent', 'libplugins_multimedia_androidmediaplugin',
+                             'libplugins_multimedia_ffmpegmediaplugin', 'libavcodec'):
+                    archive.writestr(f'lib/arm64-v8a/{name}_arm64-v8a.so', b'fixture')
+            with self.assertRaises(AssertionError):
+                AUDIT['check_runtime'](apk, 'debugRuntimeClasspath\nandroidx.core:core:1.17.0')
+
+    def test_multimedia_module_is_required(self):
+        with tempfile.TemporaryDirectory() as directory:
+            apk = Path(directory) / 'fixture.apk'
+            with zipfile.ZipFile(apk, 'w') as archive:
+                archive.writestr('lib/arm64-v8a/liballmusic-player_arm64-v8a.so', b'fixture')
+                archive.writestr('lib/arm64-v8a/libQt6Quick_arm64-v8a.so', b'fixture')
+            with self.assertRaises(AssertionError):
+                AUDIT['check_runtime'](apk, 'debugRuntimeClasspath\nandroidx.core:core:1.17.0')
 
 
 if __name__ == '__main__':

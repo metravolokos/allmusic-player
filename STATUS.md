@@ -1,6 +1,6 @@
 # Текущий статус проекта — AllMusic Player
 
-**Дата:** 30.10.2026. **Текущий статус:** 001-E принята владельцем на Windows 11 (5/5 потоковых форматов, локальный Stop/restart, отказ сервера без Range; без замечаний). [PR #11](https://github.com/metravolokos/allmusic-player/pull/11) объединён в `main` (`99274b51469907b515715fcd048f6345acb3972b`). Post-merge Desktop CI для PR #11 завершилась успешно. [CI-OPT-001, PR #15](https://github.com/metravolokos/allmusic-player/pull/15) объединён в `main` (`2f71fb0`); первые post-merge Desktop/Android CI успешны, повторные тяжёлые сборки пропущены. Дальнейшая функциональная реализация требует отдельного согласования.
+**Дата:** 30.10.2026. **Текущий статус:** 002-A реализована в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19); обязательные CI успешны, APK готов для ручной установки, слышимость на Huawei ожидает владельца. История 001-E: принята владельцем на Windows 11 (5/5 потоковых форматов, локальный Stop/restart, отказ сервера без Range; без замечаний). [PR #11](https://github.com/metravolokos/allmusic-player/pull/11) объединён в `main` (`99274b51469907b515715fcd048f6345acb3972b`). Post-merge Desktop CI для PR #11 завершилась успешно. [CI-OPT-001, PR #15](https://github.com/metravolokos/allmusic-player/pull/15) объединён в `main` (`2f71fb0`); первые post-merge Desktop/Android CI успешны, повторные тяжёлые сборки пропущены. Дальнейшая функциональная реализация требует отдельного согласования.
 
 ## Утверждено и подготовлено
 
@@ -305,3 +305,19 @@ mock, автоматическое продолжение того же исто
 - [Post-merge Desktop CI 41029396796](https://github.com/metravolokos/allmusic-player/actions/runs/41029396796) завершился **успешно**.
 
 **Не подтверждено:** настоящий Cloud.Mail.ru, интернет-соединение вне mock, пользовательский Linux, Android audio и gapless; окончательные production-контракты и fallback ещё не утверждены. В [Issue #13](https://github.com/metravolokos/allmusic-player/issues/13) отдельно поставлена задача CI-OPT-001 по безопасному кэшированию инструментов; она не выполнялась в рамках PR #11 и позднее завершена отдельно в PR #15. Следующие функциональные этапы не запускаются без разрешения владельца.
+
+
+## 002-A — локальное аудио Android (Issue #18)
+
+[PR #19](https://github.com/metravolokos/allmusic-player/pull/19) открыт от ветки
+`codex/002-a-android-audio`, основанной на актуальном `main`. Проверенный head-код:
+`8a3c075f289b44403bf5238853b1f63fccc052e0` (финальная проверенная кодовая версия перед документированием приёмки). PR не объединён.
+
+- [Desktop CI run 41058685268](https://github.com/metravolokos/allmusic-player/actions/runs/41058685268): **успешно**, Ubuntu 24.04 и Windows Server 2022, 5/5 CTest на каждой платформе; Windows ZIP audit пройден.
+- [Android CI run 41058685269](https://github.com/metravolokos/allmusic-player/actions/runs/41058685269): **успешно**. Собран и проверен APK `arm64-v8a`, min API 28 / target 36; 8 Python unit tests пройдены; APK audit подтвердил подпись, alignment, нулевые разрешения, отсутствие GMS/Firebase и FFmpeg runtime. В Android UI используется только Qt Android media plugin.
+- [APK artifact, 17,936,522 bytes](https://github.com/metravolokos/allmusic-player/actions/runs/41058685269/artifacts/12978740288), имя `AllMusicPlayer-002A-Android-arm64-v8a-debug-558cfaf8a1de-41058685269-1`, истекает 13.11.2026.
+- Локально: 8/8 Python-тестов, Python compile, документационная проверка и whitespace check — пройдены. Локальная Qt/Android сборка отсутствовала; сборку подтвердил CI.
+
+Реализация — отдельный Android экран с синтетическим тоном, play/resume, pause, stop, restart и видимыми ошибками. Desktop проигрыватель не менялся. Доступ к облаку, сети, личным файлам и разрешениям Android отсутствует. Выбор production-аудиодвижка не сделан.
+
+**Ручная приёмка владельца на Huawei — ПРИНЯТО (30.10.2026).** Владелец сообщил: «Всё работает, в фоне работает, после блокировки экрана работает, при возврате в приложение работает». Таким образом, локальный тестовый звук и управление работают по отчёту владельца, а сворачивание/блокировка/возврат прошли в его проверенных сценариях. [Протокол приёмки в PR #19](https://github.com/metravolokos/allmusic-player/pull/19#issuecomment-6524008425). Отдельное прослушивание через гарнитуру **не подтверждено**. Важно: тон длится только около 6 секунд; не проверены длительное фоновое воспроизведение, foreground service, media session, медиакнопки, взаимодействие с системным аудиофокусом и реальный WebDAV. [Инструкция](docs/ANDROID-TEST.md), [отчёт](docs/002-A-ANDROID-AUDIO.md).

@@ -1,4 +1,4 @@
-"""Audit the final APK before making an owner-installable 001-C artifact."""
+"""Audit the final APK before making an owner-installable Android test artifact."""
 from pathlib import Path
 import hashlib
 import json
@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = "org.metravolokos.allmusicplayer.spike001c"
+PACKAGE = "org.metravolokos.allmusicplayer.spike002a"
 ANDROID = "{http://schemas.android.com/apk/res/android}"
 FORBIDDEN = re.compile(
     r"com[./]google[./](?:android[./]gms|firebase)|"
@@ -55,12 +55,15 @@ def check_runtime(apk, dependencies):
         assert any("liballmusic-player" in n for n in native)
         assert any("libQt6Quick" in n for n in native), "Qt runtime must be bundled"
         # Licensing scope is deliberately narrow: a new Qt module needs review.
-        allowed_qt = {"Core", "Gui", "Network", "OpenGL", "Qml", "QmlMeta",
-                      "QmlModels", "QmlWorkerScript", "Quick", "QmlBuiltins"}
+        allowed_qt = {"Concurrent", "Core", "Gui", "Multimedia", "Network", "OpenGL",
+                      "Qml", "QmlMeta", "QmlModels", "QmlWorkerScript", "Quick", "QmlBuiltins"}
         for name in native:
             match = re.search(r"/libQt6(\w+)_arm64-v8a\.so$", name)
             assert not match or match[1] in allowed_qt, f"Review Qt module license: {name}"
-            assert not re.search(r"webdav|ffmpeg|avcodec|multimedia|taglib|sqlite", name, re.I)
+            assert not re.search(r"webdav|ffmpeg|avcodec|taglib|sqlite", name, re.I)
+        assert any("libQt6Multimedia" in name for name in native), "Qt Multimedia must be bundled"
+        assert any("libplugins_multimedia_androidmediaplugin" in name for name in native), \
+            "Qt Android media output plugin must be bundled"
         for name in names:
             assert not FORBIDDEN.search(name), f"Forbidden APK entry: {name}"
             assert not name.lower().endswith((".keystore", ".jks", ".testkey", ".pem"))
@@ -151,7 +154,7 @@ def main():
                 "build_label": os.environ["BUILD_LABEL"], "abi": "arm64-v8a",
                 "run": os.environ["GITHUB_RUN_ID"], "attempt": os.environ["GITHUB_RUN_ATTEMPT"],
                 "device_compatibility": "NOT TESTED", "permissions": [],
-                "signing": "ephemeral debug certificate; uninstall previous 001-C before replacement",
+                "signing": "ephemeral debug certificate; uninstall the previous test copy before replacement",
                 "native_libraries": native}
     (output / "BUILD-INFO.json").write_text(json.dumps(metadata, indent=2) + "\n")
     sums = []

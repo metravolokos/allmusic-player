@@ -2,6 +2,10 @@
 # scans it recursively, in addition to the declared platform QML roots.
 qt_add_executable(allmusic-player main.cpp)
 if(ANDROID)
+    target_sources(allmusic-player PRIVATE
+        AndroidAudioTestController.cpp
+        AndroidAudioTestController.h
+        AndroidAudioTestState.h)
     set(app_qml ${PROJECT_SOURCE_DIR}/ui/android/Main.qml)
 else()
     set(app_qml ${PROJECT_SOURCE_DIR}/ui/desktop/Main.qml)
@@ -23,7 +27,7 @@ else()
 endif()
 
 if(ANDROID)
-    set(ALLMUSIC_BUILD_LABEL "001-C-local" CACHE STRING "Non-secret test build identity")
+    set(ALLMUSIC_BUILD_LABEL "002-A-local" CACHE STRING "Non-secret test build identity")
     set(ALLMUSIC_ANDROID_VERSION_CODE "1" CACHE STRING "Android test version code")
     if(NOT ALLMUSIC_BUILD_LABEL MATCHES "^[a-zA-Z0-9._-]+$")
         message(FATAL_ERROR "Invalid test build label")
@@ -33,19 +37,37 @@ if(ANDROID)
     endif()
     target_compile_definitions(allmusic-player PRIVATE
         ALLMUSIC_BUILD_LABEL="${ALLMUSIC_BUILD_LABEL}")
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    set(android_audio_tone "${CMAKE_CURRENT_BINARY_DIR}/android-test-tone.wav")
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/scripts/generate_android_tone.py"
+                "${android_audio_tone}"
+        RESULT_VARIABLE tone_generation_result)
+    if(NOT tone_generation_result EQUAL 0)
+        message(FATAL_ERROR "Could not generate the synthetic Android audio test tone")
+    endif()
+    qt_add_resources(allmusic-player android_audio_test_tone
+        PREFIX "/audio-test"
+        BASE "${CMAKE_CURRENT_BINARY_DIR}"
+        FILES "${android_audio_tone}")
+    target_link_libraries(allmusic-player PRIVATE Qt6::Multimedia)
+    # Keep this playback-only probe on Android's system media backend.
+    # Qt's bundled FFmpeg backend and its runtime libraries are not needed.
+    qt_import_plugins(allmusic-player EXCLUDE Qt6::QFFmpegMediaPlugin)
     set_target_properties(allmusic-player PROPERTIES
         QT_QML_ROOT_PATH "${PROJECT_SOURCE_DIR}/ui/android"
         QT_ANDROID_PACKAGE_SOURCE_DIR "${PROJECT_SOURCE_DIR}/android"
-        QT_ANDROID_PACKAGE_NAME "org.metravolokos.allmusicplayer.spike001c"
-        QT_ANDROID_APP_NAME "AllMusic Player — тест 001-C"
+        QT_ANDROID_PACKAGE_NAME "org.metravolokos.allmusicplayer.spike002a"
+        QT_ANDROID_APP_NAME "AllMusic Player — тест 002-A"
         QT_ANDROID_VERSION_NAME "0.0.1-${ALLMUSIC_BUILD_LABEL}"
         QT_ANDROID_VERSION_CODE "${ALLMUSIC_ANDROID_VERSION_CODE}"
         QT_ANDROID_MIN_SDK_VERSION 28
         QT_ANDROID_TARGET_SDK_VERSION 36
         QT_ANDROID_COMPILE_SDK_VERSION 36
         QT_ANDROID_SDK_BUILD_TOOLS_REVISION "36.0.0")
-    # Android is only a launcher screen. Do not create the loopback spike/tools
-    # or register native desktop executables as cross-platform CTest tests.
+    # Keep the Android local-audio experiment isolated from the Desktop engine,
+    # loopback tools, and native Desktop CTest targets.
     return()
 endif()
 
