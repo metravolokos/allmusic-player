@@ -351,6 +351,47 @@ private slots:
         QVERIFY(!weakResult.strongEtag);
     }
 
+    void rangeSyntax_data()
+    {
+        QTest::addColumn<QByteArray>("field");
+        QTest::addColumn<QString>("category");
+        QTest::addColumn<bool>("accepted");
+        QTest::newRow("rfc") << QByteArray("bytes 0-99/100") << QStringLiteral("границы: числовые") << true;
+        QTest::newRow("case-and-ows") << QByteArray("  BYTES  0-99/100\t") << QStringLiteral("разделитель: пробел") << true;
+        QTest::newRow("unknown-total") << QByteArray("bytes 0-99/*") << QStringLiteral("границы: числовые") << true;
+        QTest::newRow("equals") << QByteArray("bytes=0-99/100") << QStringLiteral("разделитель: равно") << false;
+        QTest::newRow("missing-space") << QByteArray("bytes0-99/100") << QStringLiteral("разделитель: отсутствует/другой") << false;
+        QTest::newRow("tab") << QByteArray("bytes\t0-99/100") << QStringLiteral("разделитель: табуляция") << false;
+        QTest::newRow("other-unit") << QByteArray("items 0-99/100") << QStringLiteral("unit: другой/неизвестный") << false;
+        QTest::newRow("unsatisfied") << QByteArray("bytes */100") << QStringLiteral("неудовлетворимый диапазон") << false;
+        QTest::newRow("overflow") << QByteArray("bytes 0-99/9223372036854775808") << QStringLiteral("переполнение") << false;
+        QTest::newRow("overflow-first") << QByteArray("bytes 9223372036854775808-99/100") << QStringLiteral("переполнение") << false;
+        QTest::newRow("overflow-last") << QByteArray("bytes 0-9223372036854775808/100") << QStringLiteral("переполнение") << false;
+        QTest::newRow("private-text") << QByteArray("bytes private-fixture/100") << QStringLiteral("иная/нечисловая") << false;
+        QTest::newRow("non-numeric-total") << QByteArray("bytes 0-99/private-fixture") << QStringLiteral("иная/нечисловая") << false;
+        QTest::newRow("long") << QByteArray(257, 'x') << QStringLiteral("более 256") << false;
+        QTest::newRow("control") << QByteArray("bytes 0-99/100") + char(1) << QStringLiteral("непечатаемые") << false;
+        QTest::newRow("combined") << QByteArray("bytes 0-99/100, bytes 0-99/100") << QStringLiteral("запятая") << false;
+        QTest::newRow("duplicate") << QByteArray("bytes 0-99/100\r\ncontent-range: bytes 0-99/100") << QStringLiteral("пол") << false;
+    }
+
+    void rangeSyntax()
+    {
+        QFETCH(QByteArray, field);
+        QFETCH(QString, category);
+        QFETCH(bool, accepted);
+        server->handler = [field](const MockWebDav::Request &) {
+            return Response{206, QByteArray(100, 'x'), {{"Content-Range", field}}};
+        };
+        const Result result = range(audio());
+        QCOMPARE(result.error, accepted ? Error::None : Error::Protocol);
+        QVERIFY(result.contentRangeSyntax.contains(category));
+        QVERIFY(!result.contentRangeSyntax.contains(QStringLiteral("private-fixture")));
+        QVERIFY(result.contentRangeSyntax.size() < 256);
+        if (!accepted)
+            QCOMPARE(result.rangeIssue, MailWebDavProbe::RangeIssue::InvalidContentRange);
+    }
+
     void rangeProtocolFailuresIdentifySafeCause_data()
     {
         QTest::addColumn<int>("status");

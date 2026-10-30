@@ -292,7 +292,7 @@ QString MailWebDavController::rangeDiagnosticText(const MailWebDavProbe::Result 
                           "Content-Encoding: %8; ETag: %9; If-Range: %10.")
         .arg(statusText)
         .arg(issue)
-        .arg(contentRangeText)
+        .arg(contentRangeText + QStringLiteral("; синтаксис: ") + result.contentRangeSyntax)
         .arg(contentLengthText)
         .arg(transferEncodingText)
         .arg(receivedText)

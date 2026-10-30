@@ -53,6 +53,8 @@ public:
         std::optional<qint64> rangeExpectedBytes;
         std::optional<qint64> totalSize;
         std::optional<qint64> declaredContentLength;
+        QString contentRangeSyntax; // Fixed vocabulary only; never contains header fragments.
+        bool contentRangeRepeated = false;
         bool contentRangePresent = false;
         bool contentRangeUnsatisfied = false;
         bool contentLengthPresent = false;

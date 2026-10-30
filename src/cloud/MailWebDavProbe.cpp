@@ -50,10 +50,65 @@ struct ParsedContentRange {
     std::optional<qint64> total;
 };
 
+// RFC 9110 14.4: bytes SP first-last/(complete-length / "*").
+// Diagnostics use fixed labels only, bounded before regex/conversion. They are
+// deliberately independent of acceptance and cannot authorize a Range response.
+QString classifyContentRange(const QByteArray &raw, bool repeated)
+{
+    if (repeated)
+        return QStringLiteral("повторённое поле");
+    if (raw.size() > 256)
+        return QStringLiteral("длина: более 256 байт");
+    const QByteArray value = raw.trimmed();
+    for (const unsigned char c : raw) {
+        if ((c < 0x20 && c != '\t') || c >= 0x7f)
+            return QStringLiteral("непечатаемые или не-ASCII символы");
+    }
+    if (value.contains(','))
+        return QStringLiteral("список/объединённые поля (запятая)");
+    QStringList labels;
+    labels << QStringLiteral("длина: до 256 байт");
+    const bool bytes = value.left(5).compare("bytes", Qt::CaseInsensitive) == 0;
+    labels << (bytes ? QStringLiteral("unit: bytes") : QStringLiteral("unit: другой/неизвестный"));
+    if (!bytes)
+        return labels.join(QStringLiteral("; "));
+    const QByteArray tail = value.mid(5);
+    labels << (tail.startsWith(' ') ? QStringLiteral("разделитель: пробел")
+        : tail.startsWith('\t') ? QStringLiteral("разделитель: табуляция")
+        : tail.startsWith('=') ? QStringLiteral("разделитель: равно")
+        : QStringLiteral("разделитель: отсутствует/другой"));
+    static const QRegularExpression shape(
+        QStringLiteral("^[ \t=]*([0-9]+)-([0-9]+)/([0-9]+|\\*)$"));
+    static const QRegularExpression unsatisfied(QStringLiteral("^ +\\*/([0-9]+)$"));
+    const auto match = shape.match(QString::fromLatin1(tail));
+    if (match.hasMatch()) {
+        bool overflow = false;
+        for (int i = 1; i <= 3; ++i) {
+            if (match.captured(i) != QStringLiteral("*")
+                && !decimal(match.captured(i).toLatin1()))
+                overflow = true;
+        }
+        labels << (overflow ? QStringLiteral("числа: переполнение qint64")
+            : QStringLiteral("границы: числовые; знаменатель: число или звёздочка"));
+    } else if (unsatisfied.match(QString::fromLatin1(tail)).hasMatch()) {
+        labels << QStringLiteral("конструкция: неудовлетворимый диапазон */число");
+    } else {
+        labels << QStringLiteral("конструкция: иная/нечисловая");
+    }
+    return labels.join(QStringLiteral("; "));
+}
+
 std::optional<ParsedContentRange> parseContentRange(const QByteArray &raw)
 {
+    if (raw.size() > 256)
+        return {};
+    // Only HTTP OWS at the field edges. Never trim CR/LF or other controls.
+    for (const unsigned char c : raw) {
+        if ((c < 0x20 && c != '\t') || c >= 0x7f)
+            return {};
+    }
     static const QRegularExpression pattern(
-        QStringLiteral("^bytes\\s+([0-9]+)-([0-9]+)/([0-9]+|\\*)$"),
+        QStringLiteral("\\Abytes +([0-9]+)-([0-9]+)/([0-9]+|\\*)\\z"),
         QRegularExpression::CaseInsensitiveOption);
     const auto match = pattern.match(QString::fromLatin1(raw.trimmed()));
     if (!match.hasMatch())
@@ -239,12 +294,22 @@ void MailWebDavProbe::captureResponseMetadata(QNetworkReply *source)
 
     const QByteArray contentRange = source->rawHeader("Content-Range");
     result.contentRangePresent = source->hasRawHeader("Content-Range");
+    int rangeFields = 0;
+    for (const auto &pair : source->rawHeaderPairs()) {
+        if (pair.first.compare("Content-Range", Qt::CaseInsensitive) == 0)
+            ++rangeFields;
+    }
+    // Qt may coalesce duplicate fields into a comma-separated rawHeader value.
+    result.contentRangeRepeated = rangeFields > 1 || contentRange.contains(',');
+    result.contentRangeSyntax = result.contentRangePresent
+        ? classifyContentRange(contentRange, rangeFields > 1) : QStringLiteral("поле отсутствует");
     result.rangeFirst.reset();
     result.rangeLast.reset();
     result.rangeExpectedBytes.reset();
     result.totalSize.reset();
     result.contentRangeUnsatisfied = false;
-    if (const auto parsed = parseContentRange(contentRange)) {
+    if (const auto parsed = result.contentRangeRepeated
+            ? std::optional<ParsedContentRange>() : parseContentRange(contentRange)) {
         result.rangeFirst = parsed->first;
         result.rangeLast = parsed->last;
         if (parsed->last >= parsed->first
@@ -296,6 +361,8 @@ void MailWebDavProbe::clearResponseMetadata()
     result.rangeExpectedBytes.reset();
     result.totalSize.reset();
     result.declaredContentLength.reset();
+    result.contentRangeSyntax.clear();
+    result.contentRangeRepeated = false;
     result.contentRangePresent = false;
     result.contentRangeUnsatisfied = false;
     result.contentLengthPresent = false;
@@ -570,7 +637,7 @@ void MailWebDavProbe::send()
             return;
         }
         const auto parsedRange = parseContentRange(contentRangeValue);
-        if (!parsedRange) {
+        if (!parsedRange || result.contentRangeRepeated) {
             result.rangeIssue = RangeIssue::InvalidContentRange;
             finish(Error::Protocol);
             return;
