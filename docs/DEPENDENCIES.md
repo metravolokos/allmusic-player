@@ -142,7 +142,9 @@ upstream source + coin/provisioning Qt (commit ef25002ed292b132d1ed3246bfcee1d24
 
 ## Android 002-A — локальный тест звука
 
-Для локального Android-прототипа подключается Qt Multimedia 6.12.0; дополнительно
+## Android 002-A — локальный WAV через системный media backend
+
+В прежнем локальном Android-прототипе 002-A подключается Qt Multimedia 6.12.0; дополнительно
 устанавливается Qt Shader Tools как зависимость сборки этого модуля. Android
 плагин и библиотека Qt Multimedia упаковываются в тестовый APK. В сборке ожидается
 плагин `androidmediaplugin`, который использует платформенный аудиовывод Android.
