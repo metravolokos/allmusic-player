@@ -7,6 +7,7 @@
 #include <QDebug>
 #ifndef Q_OS_ANDROID
 #include "LocalPlayback.h"
+#include "MailWebDavController.h"
 #else
 #include "AndroidAudioTestController.h"
 #endif
@@ -33,6 +34,7 @@ int main(int argc, char *argv[])
 
 #ifndef Q_OS_ANDROID
     LocalPlayback playback;
+    MailWebDavController mailWebDav;
 #else
     AndroidAudioTestController audioTest;
 #endif
@@ -45,6 +47,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("audioTest"), &audioTest);
 #else
     engine.rootContext()->setContextProperty(QStringLiteral("playback"), &playback);
+    engine.rootContext()->setContextProperty(QStringLiteral("mailWebDav"), &mailWebDav);
 #endif
     engine.loadFromModule(QStringLiteral("AllMusicPlayer"), QStringLiteral("Main"));
     if (engine.rootObjects().isEmpty())

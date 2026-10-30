@@ -44,6 +44,7 @@ AllMusic Player создаётся для конкретной медиатек�
 | [docs/BUILD.md](docs/BUILD.md) | Сборка и тестирование |
 | [docs/CI.md](docs/CI.md) | Автоматические проверки GitHub Actions |
 | [docs/WINDOWS-TEST.md](docs/WINDOWS-TEST.md) | Ручная проверка на Windows |
+| [docs/002-B-CLOUD-WEBDAV.md](docs/002-B-CLOUD-WEBDAV.md) | Безопасная проверка Cloud Mail WebDAV владельцем |
 
 Для разработки и тестов не нужны личная музыка и данные аккаунта владельца. **Не публикуйте пароли, токены и личные аудиофайлы в Issues, PR и CI.**
 

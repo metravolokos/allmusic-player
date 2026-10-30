@@ -7,12 +7,12 @@ import QtMultimedia
 
 Window {
     id: window
-    width: 800
-    height: 680
+    width: 900
+    height: 1020
     minimumWidth: 540
-    minimumHeight: 600
+    minimumHeight: 760
     visible: true
-    title: "AllMusic Player — прототип 001-B2"
+    title: "AllMusic Player — прототип 002-B"
     color: "#f5f6f8"
     readonly property var media: playback.player
     function time(ms) {
@@ -63,6 +63,126 @@ Window {
             wrapMode: Text.WordWrap
         }
         Label { text: "Получено по Range: " + playback.networkBytes + " байт"; color: "#526171" }
+        GroupBox {
+            Layout.fillWidth: true
+            title: "Диагностика Cloud Mail — только чтение"
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 8
+                Label {
+                    Layout.fillWidth: true
+                    text: "Проверяется только /AllMusic. Используются PROPFIND и отдельный GET Range; перенаправления и команды записи не выполняются. Список остаётся локально и очищается при отключении."
+                    color: "#526171"
+                    wrapMode: Text.WordWrap
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: "Важно: пароль внешнего приложения Mail может давать права записи на стороне аккаунта. Ограничение методов действует только в этом приложении. Не вводите основной пароль почты."
+                    color: "#8a4b00"
+                    wrapMode: Text.WordWrap
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: "Адрес и пароль не сохраняются в настройках. Поля очищаются после нажатия, пароль остаётся только во временной памяти сессии до отключения."
+                    color: "#526171"
+                    wrapMode: Text.WordWrap
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    TextField {
+                        id: mailEmail
+                        Layout.fillWidth: true
+                        placeholderText: "Адрес почты Mail"
+                        maximumLength: 320
+                        enabled: !mailWebDav.busy && !mailWebDav.connected
+                        inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoAutoUppercase
+                        Accessible.name: "Адрес почты Mail"
+                    }
+                    TextField {
+                        id: mailAppPassword
+                        Layout.fillWidth: true
+                        placeholderText: "Пароль внешнего приложения"
+                        maximumLength: 256
+                        echoMode: TextInput.Password
+                        passwordMaskDelay: 0
+                        enabled: !mailWebDav.busy && !mailWebDav.connected
+                        Accessible.name: "Пароль внешнего приложения Mail"
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Button {
+                        text: "Проверить подключение"
+                        enabled: !mailWebDav.busy && !mailWebDav.connected
+                                 && mailEmail.text.length > 0 && mailAppPassword.text.length > 0
+                        onClicked: {
+                            mailWebDav.checkConnection(mailEmail.text, mailAppPassword.text)
+                            mailEmail.text = ""
+                            mailAppPassword.text = ""
+                        }
+                    }
+                    Button {
+                        text: "Отменить"
+                        enabled: mailWebDav.busy
+                        onClicked: mailWebDav.cancel()
+                    }
+                    Button {
+                        text: "Отключиться"
+                        enabled: mailWebDav.connected || mailWebDav.busy
+                        onClicked: {
+                            mailWebDav.disconnectCloud()
+                            mailEmail.text = ""
+                            mailAppPassword.text = ""
+                            rangeConsent.checked = false
+                        }
+                    }
+                    Label {
+                        text: mailWebDav.entryCount + " элементов"
+                        color: "#526171"
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    ComboBox {
+                        id: mailEntry
+                        Layout.fillWidth: true
+                        model: mailWebDav.entries
+                        textRole: "label"
+                        enabled: mailWebDav.connected && !mailWebDav.busy
+                        Accessible.name: "Непосредственные папки и аудиофайлы в /AllMusic"
+                    }
+                    CheckBox {
+                        id: rangeConsent
+                        text: "Разрешаю отдельный Range до 64 КиБ для выбранного файла"
+                        enabled: mailWebDav.canCheckRange(mailEntry.currentIndex)
+                        onCheckedChanged: if (!enabled) checked = false
+                        Accessible.name: "Подтверждение отдельной проверки HTTP Range"
+                    }
+                    Button {
+                        text: "Проверить Range"
+                        enabled: rangeConsent.checked
+                                 && mailWebDav.canCheckRange(mailEntry.currentIndex)
+                        onClicked: {
+                            mailWebDav.checkRange(mailEntry.currentIndex)
+                            rangeConsent.checked = false
+                        }
+                    }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: mailWebDav.status
+                    color: "#34445a"
+                    wrapMode: Text.WordWrap
+                    Accessible.role: Accessible.AlertMessage
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: "Создание пароля внешнего приложения и описание Cloud Mail WebDAV: https://help.mail.ru/cloud/desktop/webdav/"
+                    color: "#526171"
+                    wrapMode: Text.WordWrap
+                }
+            }
+        }
         Label {
             Layout.fillWidth: true
             text: window.media.source.toString() || remoteFile.currentText || "Файл ещё не выбран"
@@ -119,4 +239,5 @@ Window {
         }
         Item { Layout.fillHeight: true }
     }
+    Component.onDestruction: mailWebDav.disconnectCloud()
 }
