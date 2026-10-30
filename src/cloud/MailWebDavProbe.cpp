@@ -113,7 +113,17 @@ std::optional<ParsedContentRange> parseContentRange(const QByteArray &raw)
     static const QRegularExpression pattern(
         QStringLiteral("\\Abytes +([0-9]+)-([0-9]+)/([0-9]+|\\*)\\z"),
         QRegularExpression::CaseInsensitiveOption);
-    const auto match = pattern.match(QString::fromLatin1(raw.trimmed()));
+    // Cloud Mail was observed returning bytes=first-last/total in HTTP 206.
+    // This is NOT RFC 9110 Content-Range syntax. Permit only this narrowly
+    // defined legacy variant in this pinned Cloud Mail diagnostic client;
+    // all range, size, framing, ETag, and byte-count checks remain mandatory.
+    static const QRegularExpression mailLegacyPattern(
+        QStringLiteral("\\Abytes=([0-9]+)-([0-9]+)/([0-9]+)\\z"),
+        QRegularExpression::CaseInsensitiveOption);
+    const QString field = QString::fromLatin1(raw.trimmed());
+    auto match = pattern.match(field);
+    if (!match.hasMatch())
+        match = mailLegacyPattern.match(field);
     if (!match.hasMatch())
         return {};
     const auto first = decimal(match.captured(1).toLatin1());
