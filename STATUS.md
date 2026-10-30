@@ -1,6 +1,6 @@
 # Текущий статус проекта — AllMusic Player
 
-**Дата:** 30.10.2026. **Текущий статус:** в работе 002-A по Issue #18; CI и APK-артефакт ожидаются. История 001-E: принята владельцем на Windows 11 (5/5 потоковых форматов, локальный Stop/restart, отказ сервера без Range; без замечаний). [PR #11](https://github.com/metravolokos/allmusic-player/pull/11) объединён в `main` (`99274b51469907b515715fcd048f6345acb3972b`). Post-merge Desktop CI для PR #11 завершилась успешно. [CI-OPT-001, PR #15](https://github.com/metravolokos/allmusic-player/pull/15) объединён в `main` (`2f71fb0`); первые post-merge Desktop/Android CI успешны, повторные тяжёлые сборки пропущены. Дальнейшая функциональная реализация требует отдельного согласования.
+**Дата:** 30.10.2026. **Текущий статус:** 002-A реализована в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19); обязательные CI успешны, APK готов для ручной установки, слышимость на Huawei ожидает владельца. История 001-E: принята владельцем на Windows 11 (5/5 потоковых форматов, локальный Stop/restart, отказ сервера без Range; без замечаний). [PR #11](https://github.com/metravolokos/allmusic-player/pull/11) объединён в `main` (`99274b51469907b515715fcd048f6345acb3972b`). Post-merge Desktop CI для PR #11 завершилась успешно. [CI-OPT-001, PR #15](https://github.com/metravolokos/allmusic-player/pull/15) объединён в `main` (`2f71fb0`); первые post-merge Desktop/Android CI успешны, повторные тяжёлые сборки пропущены. Дальнейшая функциональная реализация требует отдельного согласования.
 
 ## Утверждено и подготовлено
 
@@ -309,18 +309,15 @@ mock, автоматическое продолжение того же исто
 
 ## 002-A — локальное аудио Android (Issue #18)
 
-Выполняется по прямому запросу владельца: отдельный Android экран воспроизводит
-встроенный синтетический WAV через Qt Multimedia, с паузой, продолжением,
-остановкой, повтором и сообщениями о состоянии/ошибках. Личные файлы, сеть и
-реальное облако не используются; приложение не запрашивает Android-разрешения.
-Qt Multimedia остаётся экспериментом 002-A, не выбором production-движка.
+[PR #19](https://github.com/metravolokos/allmusic-player/pull/19) открыт от ветки
+`codex/002-a-android-audio`, основанной на актуальном `main`. Проверенный head-код:
+`5e460738dd9880daa2e059844bf28e547394c27c`. PR не объединён.
 
-Ветка `codex/002-a-android-audio`, PR и результаты CI добавляются после публикации.
-Локально пройдены Python-тесты генератора и APK-аудитора, `py_compile`,
-`check_repository.py` и `git diff --check`. Локальная C++/Android сборка не
-запускалась: в среде нет Qt SDK и Android SDK/NDK. До CI Android компиляция,
-аудит APK и C++ QtTest остаются **НЕ ПРОВЕРЕНЫ**. Задача сохраняет APK из
-успешного CI PR для ручной проверки (14 дней). Huawei, слышимый звук и Bluetooth
-остаются **НЕ ПРОВЕРЕНЫ** до прослушивания владельцем.
+- [Desktop CI run 41055782664](https://github.com/metravolokos/allmusic-player/actions/runs/41055782664): **успешно**, Ubuntu 24.04 и Windows Server 2022, 5/5 CTest на каждой платформе; Windows ZIP audit пройден.
+- [Android CI run 41055782629](https://github.com/metravolokos/allmusic-player/actions/runs/41055782629): **успешно**. Собран и проверен APK `arm64-v8a`, min API 28 / target 36; 8 Python unit tests пройдены; APK audit подтвердил подпись, alignment, нулевые разрешения, отсутствие GMS/Firebase и FFmpeg runtime. В Android UI используется только Qt Android media plugin.
+- [APK artifact, 17,936,532 bytes](https://github.com/metravolokos/allmusic-player/actions/runs/41055782629/artifacts/12976693161), имя `AllMusicPlayer-002A-Android-arm64-v8a-debug-ce287d77c2a1-41055782629-1`, истекает 13.11.2026.
+- Локально: 8/8 Python-тестов, Python compile, документационная проверка и whitespace check — пройдены. Локальная Qt/Android сборка отсутствовала; сборку подтвердил CI.
 
-[Пошаговая инструкция](docs/ANDROID-TEST.md), [отчёт 002-A](docs/002-A-ANDROID-AUDIO.md).
+Реализация — отдельный Android экран с синтетическим тоном, play/resume, pause, stop, restart и видимыми ошибками. Desktop проигрыватель не менялся. Доступ к облаку, сети, личным файлам и разрешениям Android отсутствует. Выбор production-аудиодвижка не сделан.
+
+**Huawei nova 15 Pro / EMUI 15, слышимость, маршруты динамик/гарнитура: НЕ ПРОВЕРЕНЫ** до ручной установки и прослушивания владельцем. [Инструкция проверки](docs/ANDROID-TEST.md), [отчёт](docs/002-A-ANDROID-AUDIO.md).
