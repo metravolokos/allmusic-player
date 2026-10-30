@@ -77,18 +77,22 @@ class StreamingTests final : public QObject
             response.disconnectAfterBytes = disconnectAfterBytes;
             response.chunkSize = chunkSize;
             response.chunkIntervalMs = chunkIntervalMs;
-            if (retry429Responses > 0) {
+            const QByteArray expectedTarget = "/AllMusic/" + fixtureName.toUtf8();
+            const QByteArray secondTarget = "/AllMusic/" + secondFixtureName.toUtf8();
+            const QByteArray range = request.headers.value("range");
+            // Fault injection is scoped to this fixture and first page so a
+            // late request from an earlier test cannot consume the 429.
+            if (retry429Responses > 0 && request.method == "GET"
+                && request.target == expectedTarget && range == "bytes=0-65535") {
                 --retry429Responses;
-                rangeReceiving429 = request.headers.value("range");
+                rangeReceiving429 = range;
                 response.status = 429;
                 response.headers["Retry-After"] = "0";
                 return response;
             }
             if (!rangeReceiving429.isEmpty() && request.method == "GET"
-                && request.headers.value("range") == rangeReceiving429)
+                && request.target == expectedTarget && range == rangeReceiving429)
                 sameRangeRetried = true;
-            const QByteArray expectedTarget = "/AllMusic/" + fixtureName.toUtf8();
-            const QByteArray secondTarget = "/AllMusic/" + secondFixtureName.toUtf8();
             if (request.method != "GET"
                 || (request.target != expectedTarget
                     && !(exposeSecondFixture && request.target == secondTarget))) {
@@ -100,7 +104,6 @@ class StreamingTests final : public QObject
                 response.headers["Content-Range"] = "bytes */" + QByteArray::number(audio.size());
                 return response;
             }
-            const QByteArray range = request.headers.value("range");
             if (ignoreRange || range.isEmpty()) {
                 response.status = 200;
                 response.body = audio;
@@ -410,15 +413,22 @@ private slots:
     }
     void transient429HonorsRetryAfter()
     {
+        fixtureName = QStringLiteral("retry-mp3.mp3");
         retry429Responses = 1;
-        WebDavRangeDevice device(server.serverPort(), "/AllMusic/tone-mp3.mp3", audio.size(), etag);
+        WebDavRangeDevice device(server.serverPort(), "/AllMusic/retry-mp3.mp3", audio.size(), etag);
         QVERIFY(device.open(QIODevice::ReadOnly));
         char byte = 0;
         qint64 read = -1;
         QVERIFY(readWithEventLoop(device, &byte, 1, &read));
         QCOMPARE(read, 1);
         QCOMPARE(uchar(byte), uchar(audio[0]));
-        QCOMPARE(server.requests.size(), 2);
+        int targetRangeRequests = 0;
+        for (const auto &request : server.requests) {
+            if (request.method == "GET" && request.target == "/AllMusic/retry-mp3.mp3"
+                && request.headers.value("range") == "bytes=0-65535")
+                ++targetRangeRequests;
+        }
+        QCOMPARE(targetRangeRequests, 2);
         QCOMPARE(rangeReceiving429, QByteArray("bytes=0-65535"));
         QVERIFY(sameRangeRetried);
         QVERIFY(device.cachedBytes() > 0);
