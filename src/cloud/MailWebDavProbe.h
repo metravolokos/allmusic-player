@@ -82,6 +82,7 @@ private:
     QString password;
     QString requestPath;
     QByteArray expectedEtag;
+    bool authorizationSent = false;
     qint64 knownSize = -1;
     qint64 requestedLength = 0;
     quint64 operationId = 0;

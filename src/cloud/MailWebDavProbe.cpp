@@ -2,7 +2,6 @@
 
 #include "WebDavProbe.h"
 
-#include <QAuthenticator>
 #include <QNetworkRequest>
 #include <QNetworkProxy>
 #include <QRegularExpression>
@@ -15,10 +14,13 @@ const QString MusicRoot = QStringLiteral("/AllMusic/");
 constexpr qint64 ListingLimit = 4 * 1024 * 1024;
 constexpr qint64 RangeLimit = 64 * 1024;
 constexpr int EntryLimit = 5000;
+constexpr qsizetype PathLimit = 8192;
+constexpr qsizetype EtagLimit = 1024;
 
 bool isStrongEtag(const QByteArray &tag)
 {
-    if (tag.size() < 2 || tag.front() != '"' || tag.back() != '"')
+    if (tag.size() < 2 || tag.size() > EtagLimit
+        || tag.front() != '"' || tag.back() != '"')
         return false;
     for (qsizetype i = 1; i < tag.size() - 1; ++i) {
         const auto c = static_cast<unsigned char>(tag[i]);
@@ -91,19 +93,6 @@ void MailWebDavProbe::initialize()
 {
     deadline.setSingleShot(true);
     connect(&deadline, &QTimer::timeout, this, [this] { finish(Error::Timeout); });
-    connect(&manager, &QNetworkAccessManager::authenticationRequired, this,
-            [this](QNetworkReply *challengedReply, QAuthenticator *authenticator) {
-        if (!active || !isCurrent(challengedReply) || !authenticator)
-            return;
-        if (authChallenges >= 1 || email.isEmpty() || password.isEmpty()) {
-            finish(Error::Auth);
-            return;
-        }
-        ++authChallenges;
-        authenticator->setUser(email);
-        authenticator->setPassword(password);
-        body.clear();
-    });
 }
 
 MailWebDavProbe::~MailWebDavProbe()
@@ -124,7 +113,8 @@ bool MailWebDavProbe::listAllMusic(const QString &userEmail, const QString &appP
 {
     if (active)
         return false;
-    if (userEmail.isEmpty() || userEmail != userEmail.trimmed()
+    if (userEmail.isEmpty() || userEmail.size() > 320 || appPassword.size() > 256
+        || userEmail != userEmail.trimmed()
         || appPassword.isEmpty() || userEmail.contains(QChar(u'\r'))
         || userEmail.contains(QChar(u'\n')) || appPassword.contains(QChar(u'\r'))
         || appPassword.contains(QChar(u'\n'))) {
@@ -176,7 +166,8 @@ bool MailWebDavProbe::begin(Operation operation, const QString &path, qint64 fil
     }
 
     const auto checked = WebDavProbe::safePath(path, origin);
-    if (!checked || (operation == Operation::List && *checked != MusicRoot)
+    if (!checked || checked->size() > PathLimit
+        || (operation == Operation::List && *checked != MusicRoot)
         || (operation == Operation::Range && !checked->startsWith(MusicRoot))) {
         QTimer::singleShot(0, this, [this, ticket] {
             if (active && operationId == ticket)
@@ -191,6 +182,7 @@ bool MailWebDavProbe::begin(Operation operation, const QString &path, qint64 fil
     requestedLength = operation == Operation::Range
         ? qMin(RangeLimit, fileSize >= 0 ? fileSize : RangeLimit) : 0;
     authChallenges = 0;
+    authorizationSent = false;
     result.ifRangeSent = operation == Operation::Range && !expectedEtag.isEmpty();
     body.clear();
     tlsFailure = false;
@@ -223,6 +215,26 @@ void MailWebDavProbe::send()
     request.setAttribute(QNetworkRequest::AuthenticationReuseAttribute,
                          QNetworkRequest::Manual);
     request.setRawHeader("Accept-Encoding", "identity");
+    if (authorizationSent) {
+        QByteArray userBytes = email.toUtf8();
+        QByteArray passwordBytes = password.toUtf8();
+        QByteArray credentials = userBytes;
+        credentials.append(':');
+        credentials.append(passwordBytes);
+        userBytes.fill('\0');
+        userBytes.clear();
+        passwordBytes.fill('\0');
+        passwordBytes.clear();
+        QByteArray encoded = credentials.toBase64();
+        credentials.fill('\0');
+        credentials.clear();
+        QByteArray authorization = "Basic " + encoded;
+        encoded.fill('\0');
+        encoded.clear();
+        request.setRawHeader("Authorization", authorization);
+        authorization.fill('\0');
+        authorization.clear();
+    }
 
     if (result.listing) {
         request.setRawHeader("Depth", "1");
@@ -279,7 +291,7 @@ void MailWebDavProbe::send()
             return;
         }
         if (status == 401)
-            return; // QNAM may emit authenticationRequired before the final response.
+            return; // The explicit one-time retry is handled after this response completes.
 
         const QByteArray encoding = result.contentEncoding.trimmed().toLower();
         if (!encoding.isEmpty() && encoding != "identity") {
@@ -330,11 +342,40 @@ void MailWebDavProbe::send()
         result.strongEtag = isStrongEtag(responseEtag);
         const auto networkError = sentReply->error();
         const int status = result.status;
+        if (status == 401) {
+            const QByteArray challenge = sentReply->rawHeader("WWW-Authenticate");
+            static const QRegularExpression basicChallenge(
+                QStringLiteral("(?:^|,)\\s*basic(?:\\s|$)"),
+                QRegularExpression::CaseInsensitiveOption);
+            const bool supportsBasic = basicChallenge.match(
+                QString::fromLatin1(challenge)).hasMatch();
+            if (!authorizationSent && authChallenges == 0 && supportsBasic
+                && !email.isEmpty() && !password.isEmpty()) {
+                ++authChallenges;
+                authorizationSent = true;
+                body.fill('\0');
+                body.clear();
+                QNetworkReply *old = reply;
+                reply = nullptr;
+                old->disconnect(this);
+                old->deleteLater();
+                result.status = 0;
+                result.contentRange.clear();
+                result.contentLength.clear();
+                result.contentEncoding.clear();
+                result.etagPresent = false;
+                result.strongEtag = false;
+                send();
+                return;
+            }
+            finish(Error::Auth);
+            return;
+        }
         if (status >= 300 && status < 400) {
             finish(Error::Redirect);
             return;
         }
-        if (status == 401 || status == 403 || status == 404 || status == 408
+        if (status == 403 || status == 404 || status == 408
             || status == 429 || status >= 500) {
             finish(httpError(status));
             return;
@@ -509,6 +550,10 @@ void MailWebDavProbe::parseListing()
 
         QUrl base = origin;
         base.setPath(MusicRoot, QUrl::DecodedMode);
+        if (href.size() > PathLimit) {
+            ++result.rejectedEntries;
+            continue;
+        }
         const auto checked = WebDavProbe::safePath(href, base);
         if (!responseOk || !checked) {
             ++result.rejectedEntries;
