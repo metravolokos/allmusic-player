@@ -474,8 +474,8 @@ void MailWebDavProbe::send()
         const int status = result.status;
         if (result.rangeCheck && status == 206) {
             const qint64 available = sentReply->bytesAvailable();
-            if (available > requestedRangeBytes - body.size()) {
-                result.bytesReceived = qMin(requestedRangeBytes + 1, body.size() + available);
+            if (available > requestedLength - body.size()) {
+                result.bytesReceived = qMin(requestedLength + 1, body.size() + available);
                 result.bytesReceivedIsLowerBound = true;
                 result.rangeIssue = RangeIssue::TooLarge;
                 finish(Error::TooLarge);
