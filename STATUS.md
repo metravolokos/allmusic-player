@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 12928)
+Total output lines: 434
+
 # Текущий статус проекта — AllMusic Player
 
 **Дата:** 30.10.2026. **Текущий статус:** 002-A принята владельцем в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19). 002-B принята и объединена в `main` коммитом `f236e7591e969709e4c0cd40fb5196e97c57f27b`; поздние промежуточные заметки ниже сохранены как история. Выполняется 002-C по Issue #22: read-only MP3/FLAC поток Cloud Mail в Desktop; реализация и тесты подготовлены в рабочей копии, CI и ручная проверка Windows 11 ещё ожидают PR. Codex/CI к личному Cloud Mail не подключаются. 002-C не принята до Windows 11 ручного испытания владельцем.
@@ -201,49 +204,7 @@ Windows 11: MP3, FLAC, AAC ADTS, AAC M4A, ALAC M4A, пауза/продолже�
 на head `677a8626a35c55b5e88359fb3b5788d7af8aaf9a` — success.
 Проверки повреждённого файла/офлайна на физическом ПК и Linux остаются отдельно
 неподтверждёнными, не блокируют обычную Windows-приёмку B1 по D-026.
-PR #8 готов к рассмотрению; сам факт этих результатов **не разрешает merge**.
-001-B2 начинать только после решения владельца.
-
-## 001-B2 — текущая работа
-
-Разрешение владельца получено 29.10.2026. Scope ограничен loopback mock и
-`/AllMusic`; без реального Mail, авторизации, записи/удаления, Android audio,
-медиатеки, постоянного аудиокэша и gapless.
-
-Реализованы `WebDavRangeDevice` (64-КиБ страницы, максимум 4 страницы в RAM,
-ETag/If-Range, fail-closed при HTTP 200), Desktop-интеграция, loopback mock и
-Windows one-click launcher. Ветка `task/001-b2-webdav-stream` создана от PR #8
-merge `b2232ff`; текущий PR #9.
-
-[Desktop CI 40943552384](https://github.com/metravolokos/allmusic-player/actions/runs/40943552384)
-на head `f4bb308` прошёл Linux и Windows: Linux 4/4 CTest, включая streaming
-10/10 и WebDAV 86/86; Windows сборка, тесты, smoke и Windows x64 архив прошли.
-[Android CI 40943552169](https://github.com/metravolokos/allmusic-player/actions/runs/40943552169)
-прошёл как регрессия 001-C. Архив доступен в [AllMusicPlayer-Windows-x64](https://github.com/metravolokos/allmusic-player/actions/runs/40943552384/artifacts/12927309414)
-и [WebDAV kit](https://github.com/metravolokos/allmusic-player/actions/runs/40943552384/artifacts/12928921132).
-
-Измерение Qt 6.12.0 / FFmpeg 9.0.1 на Linux: 31 мс до первого ненулевого PCM,
-65 536 байт Range payload из 385 604 байт файла, кэш адаптера 254 532 байта
-(предел 262 144), 9 216 PCM frames, peak 0.0441908, 4 HTTP requests. Автотест
-подтвердил seek на незагруженную область; 200, смена ETag, неожиданный сервер,
-обрыв и отмена обрабатываются fail-closed. Это декодирование PCM, не слышимый
-звук. Точный размер внутреннего кэша FFmpeg неизвестен.
-
-Основная ручная функциональная приёмка B2 на **Windows 11 — ПРОЙДЕНА (5/5)**,
-по сообщению владельца 29.10.2026: слышимый потоковый FLAC, пауза/продолжение/стоп,
-seek к ~25-й секунде, новый GET Range, ошибка HTTP 200 с прекращением воспроизведения.
-[Протокол владельца в PR #9](https://github.com/metravolokos/allmusic-player/pull/9#issuecomment-6507500307).
-[Desktop CI 40944887711](https://github.com/metravolokos/allmusic-player/actions/runs/40944887711)
-и [Android CI 40944887824](https://github.com/metravolokos/allmusic-player/actions/runs/40944887824)
-для проверенного head `ab8320a` — success; 4/4 проверки PR зелёные.
-Решение о приёмке ограничено loopback mock, без реального Mail, Android audio,
-оценки внешней сети и полного спектра потоковых форматов. D-027 остаётся
-исследовательским вопросом для настоящего WebDAV и выбора архитектуры.
-[Задача](tasks/001-B2-webdav-stream.md), [инструкция](docs/WEB-DAV-STREAM-TEST.md),
-[отчёт](docs/001-B2-REPORT.md). PR #9 не объединять без отдельного разрешения владельца.
-
-
-## 001-D — архитектурные выводы после 001-A, 001-B1 и 001-B2
+PR #8 готов к рассмотрению; сам фа…928 tokens truncated…оды после 001-A, 001-B1 и 001-B2
 
 Задача выполнена документационно; код прототипов не переписывался. PR #9 объединён в main коммитом 93e8cb8d7314673052f141940d2bd896188b2fac. Post-merge [Desktop CI run 40951045356](https://github.com/metravolokos/allmusic-player/actions/runs/40951045356) завершился success: документация, Ubuntu/Linux и Windows Server jobs успешны. Android audio эта проверка не покрывала.
 
@@ -410,7 +371,7 @@ Issue #22 фиксирует, что ручная проверка получи�
 
 ## 002-C — потоковое воспроизведение Cloud Mail (Issue #22)
 
-В рабочей копии добавлен read-only `QIODevice` для ограниченных Range-запросов
+В ветке `codex/002-c-cloud-playback` добавлен read-only `QIODevice` для ограниченных Range-запросов
 через закреплённый клиент Mail WebDAV и отдельный worker-поток. Буфер ограничен
 четырьмя страницами по 64 КиБ; Desktop UI даёт явное воспроизведение MP3/FLAC,
 навигацию по непосредственным подпапкам `/AllMusic`, seek и индикацию буферизации.
@@ -418,11 +379,13 @@ Issue #22 фиксирует, что ручная проверка получи�
 
 Mock-покрытие добавлено для авторизации challenge, стандартного и узкого Mail
 `Content-Range`, seek/отмены, слабого/отсутствующего ETag, одного повтора 429,
-отказа при 200, перезапуска и MP3/FLAC PCM. **Эти C++ тесты ещё не запускались**:
-в этой среде нет CMake, Ninja и Qt SDK. Desktop/Android CI должны запуститься
-на draft PR. Windows ZIP будет запрошен только если удастся запустить workflow
-`Desktop foundation` с `source_ref`, `full_tests=true`, `windows_zip=true`,
-`webdav_test_kit=false`. Реальный Cloud Mail не используется Codex и CI.
+отказа при 200, перезапуска и MP3/FLAC PCM. C++/Qt тесты прошли в Desktop CI
+на Linux и Windows; Android CI, оба Desktop warm-cache job и итоговые обязательные
+статусы тоже прошли. Проверена ветка на кодовом коммите
+`18ac040cb0e53dbb221e7d1d2b7c98e6951cf149` (Desktop run #103,
+Android run #69). Локально C++ сборка недоступна: в среде нет CMake, Ninja и Qt SDK.
+Windows ZIP `AllMusicPlayer-Windows-x64-41131451763` собран и доступен как artifact
+Desktop workflow до 13.11.2026. Реальный Cloud Mail не используется Codex и CI.
 
 Сильный ETag отправляется в `If-Range`. При слабом или отсутствующем ETag каждый
 ответ по-прежнему проверяет HTTP 206, точный диапазон, общий размер, framing,

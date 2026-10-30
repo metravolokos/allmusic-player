@@ -55,8 +55,10 @@ Codex и CI используют только синтетические ауд�
 запуск, MP3/FLAC декодирование в PCM. Сохраняются существующие Desktop
 streaming/WebDAV и Android проверки.
 
-До публикации PR автоматические C++ проверки не следует считать пройденными.
-Результаты Linux/Windows Desktop CI и Android CI записываются в PR и STATUS.
+Desktop CI и Android CI прошли на кодовом коммите
+`18ac040cb0e53dbb221e7d1d2b7c98e6951cf149`; Windows ZIP собран как Actions artifact.
+Это подтверждает mock и сборку, но не работу с реальным Cloud Mail или слышимость
+на Windows. Ручная приёмка владельца остаётся обязательной.
 
 ## Ручная проверка владельца на Windows 11
 
