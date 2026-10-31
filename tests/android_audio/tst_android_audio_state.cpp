@@ -7,6 +7,15 @@ class AndroidAudioTestStateTest final : public QObject
     Q_OBJECT
 
 private slots:
+    void formatSelectorAcceptsOnlyKnownSources()
+    {
+        QVERIFY(AndroidAudioTestState::isValidTrackIndex(0));
+        QVERIFY(AndroidAudioTestState::isValidTrackIndex(1));
+        QVERIFY(AndroidAudioTestState::isValidTrackIndex(2));
+        QVERIFY(!AndroidAudioTestState::isValidTrackIndex(-1));
+        QVERIFY(!AndroidAudioTestState::isValidTrackIndex(3));
+    }
+
     void preparingDisablesPlaybackControls()
     {
         const auto actions = AndroidAudioTestState::actions(AndroidAudioTestState::Value::Preparing);

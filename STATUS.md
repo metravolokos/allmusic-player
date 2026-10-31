@@ -3,7 +3,7 @@ Total output lines: 434
 
 # Текущий статус проекта — AllMusic Player
 
-**Дата:** 30.10.2026. **Текущий статус:** 002-A принята владельцем в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19). 002-B принята и объединена в `main` коммитом `f236e7591e969709e4c0cd40fb5196e97c57f27b`; поздние промежуточные заметки ниже сохранены как история. Выполняется 002-C по Issue #22: read-only MP3/FLAC поток Cloud Mail в Desktop; реализация и тесты подготовлены в рабочей копии, CI и ручная проверка Windows 11 ещё ожидают PR. Codex/CI к личному Cloud Mail не подключаются. 002-C не принята до Windows 11 ручного испытания владельцем.
+**Дата:** 31.10.2026. **Текущий статус:** 002-A принята владельцем в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19). 002-B принята и объединена в `main` коммитом `f236e7591e969709e4c0cd40fb5196e97c57f27b`; поздние промежуточные заметки ниже сохранены как история. Выполняется 002-C по Issue #22: read-only MP3/FLAC поток Cloud Mail в Desktop; реализация и тесты подготовлены в рабочей копии, CI и ручная проверка Windows 11 ещё ожидают PR. Codex/CI к личному Cloud Mail не подключаются. 002-C не принята до Windows 11 ручного испытания владельцем.
 
 ## Утверждено и подготовлено
 
@@ -397,34 +397,31 @@ encoding и фактическую длину, но гарантии неизм�
 
 ## 002-D — Android Qt FFmpeg feasibility spike (Issue #24)
 
-Владелец разрешил только изолированный локальный эксперимент с Qt FFmpeg.
-Draft [PR #25](https://github.com/metravolokos/allmusic-player/pull/25) открыт от
-`codex/002-d-android-cloud`, исходная база — `aa7e18b05c034eb42b53b51ebbc5ecfe76a1f53d`.
-Проверенный code head: `4804f9c524c7694a7ae0c959544188fcf284657b`.
+Draft PR #25 открыт в ветке codex/002-d-android-cloud от исходной базы
+aa7e18b05c034eb42b53b51ebbc5ecfe76a1f53d. В отчёте владельца (31.10.2026)
+подтверждено: Qt FFmpeg загружается, устройство аудиовывода определяется,
+позиция WAV движется, но звук не слышен; переключатели формата не работали,
+поэтому MP3/FLAC не были проверены.
 
-Добавлены синтетические WAV/MP3/FLAC, seekable QBuffer для MP3/FLAC, Play/Pause/
-Stop/Seek и runtime-проба FFmpeg. APK-аудит требует FFmpeg plugin/runtime и
-заметок лицензий, запрещает Android system media plugin и permissions; отдельный
-package ID сохраняет сосуществование с 002-A. Desktop код и прежний WAV тест
-сохранены. Для доказательства backend в APK включён только Qt FFmpeg plugin,
-Android system media plugin исключён.
+В диагностическом обновлении исправляется QML ошибка делегата Repeater:
+добавлен обязательный index, выделение выбранной кнопки и строка текущего
+формата. Автоматическая проверка Android проверяет QML привязки выбора; QtTest
+проверяет границы трёх допустимых источников. Добавлены экранные поля для
+hasAudio, активной дорожки, ошибок плеера, выбранного/default выхода,
+громкости/mute и счётчиков PCM из QAudioBufferOutput. Сохраняются только
+метрики буферов (число, кадры, ненулевые samples, peak/RMS); сами PCM не
+записываются.
 
-Успешны [Android CI #78](https://github.com/metravolokos/allmusic-player/actions/runs/41144063840)
-и [Desktop CI #112](https://github.com/metravolokos/allmusic-player/actions/runs/41144063850):
-Android arm64-v8a APK собран и прошёл package/license audit; Desktop Linux/Windows,
-Windows ZIP audit, Android/Desktop warm-cache пройдены. Локально Android Python
-тесты — 12/12, CI classifier — 19/19, repository docs check, Python compile и
-`git diff --check` — пройдены.
+Отдельная кнопка запускает 0.75-секундный синус 440 Гц через QAudioSink на
+выбранном аудиовыходе, минуя QMediaPlayer и FFmpeg. В исходниках Qt 6.12
+Android QAudioSink реализован через AAudio; QMediaPlayer FFmpeg выводит звук
+через Qt audio sink. Это позволяет различить отсутствие PCM и неисправность
+нижнего Android audio path, но исходная причина тишины пока НЕ УСТАНОВЛЕНА.
+Подробности и порядок проверки нового APK: docs/ANDROID-FFMPEG-SPIKE-TEST.md.
 
-APK: **63 649 117 байт (60.70 MiB)** против 17 936 522 байт у 002-A, прирост
-45 712 595 байт / 3.55x. В APK `QFFmpegMediaPlugin` и `libavcodec.so`,
-`libavformat.so`, `libavutil.so`, `libswresample.so`, `libswscale.so`; system media
-plugin отсутствует. Ноль Android permissions, FFmpeg 9.0.1 LGPL/BSD/ISC/MIT/MPL
-notices, подпись и 16-KiB alignment проверены. [Проверочный APK artifact](https://github.com/metravolokos/allmusic-player/actions/runs/41144063840/artifacts/13019789056)
-доступен до 13.11.2026.
-
-Звук и QBuffer Play/Pause/Stop/Seek на физическом Huawei **НЕ ПРОВЕРЕНЫ**; APK
-ждёт ручной проверки по [инструкции](docs/ANDROID-FFMPEG-SPIKE-TEST.md). Рост APK
-считается существенным: этот PR заканчивается feasibility spike, следующий
-функциональный этап не начинать. Отчёт, границы проверки и рекомендация по
-альтернативам: [docs/002-D-ANDROID-CLOUD.md](docs/002-D-ANDROID-CLOUD.md).
+Известно только, что runtime FFmpeg загружен и default output перечисляется.
+Эти факты не подтверждают наличие аудиодорожки, ненулевые декодированные PCM,
+фактический маршрут, состояние QAudioSink или слышимый сигнал. Движение позиции
+не доказывает вывод звука. Возможные причины остаются гипотезами до экрана
+диагностики и прослушивания. Этап 002-D остаётся НЕ ПРИНЯТ до успешной
+ручной проверки звука владельцем на Huawei.

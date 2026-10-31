@@ -79,9 +79,36 @@ Window {
 
             Text {
                 width: parent.width
-                text: "Тестовый формат: " + audioTest.trackText
+                text: "Выбранный формат: " + audioTest.trackText
                 color: "#17212b"
                 font.pixelSize: 15
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+            }
+
+            Text {
+                width: parent.width
+                text: audioTest.playerAudioStatusText
+                color: "#526171"
+                font.pixelSize: 13
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+            }
+
+            Text {
+                width: parent.width
+                text: audioTest.pcmStatusText
+                color: audioTest.pcmStatusText.indexOf("ненулевых 0") >= 0 ? "#8a5a00" : "#526171"
+                font.pixelSize: 13
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+            }
+
+            Text {
+                width: parent.width
+                text: audioTest.syntheticOutputStatusText
+                color: "#526171"
+                font.pixelSize: 13
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
             }
@@ -103,16 +130,21 @@ Window {
                     model: ["WAV 002-A", "MP3 QBuffer", "FLAC QBuffer"]
                     delegate: Rectangle {
                         required property string modelData
+                        required property int index
+                        property bool selected: audioTest.selectedTrackIndex === index
                         width: (parent.width - 16) / 3
                         height: 48
                         radius: 10
-                        color: "#dce5ed"
+                        color: selected ? "#1769aa" : "#dce5ed"
+                        border.width: selected ? 2 : 0
+                        border.color: "#0e4f83"
                         Text {
                             anchors.centerIn: parent
                             width: parent.width - 8
                             text: modelData
-                            color: "#17212b"
+                            color: selected ? "white" : "#17212b"
                             font.pixelSize: 12
+                            font.bold: selected
                             horizontalAlignment: Text.AlignHCenter
                             wrapMode: Text.WordWrap
                         }
@@ -162,6 +194,26 @@ Window {
                     }
                     onPressed: moveTo(mouse.x)
                     onPositionChanged: if (pressed) moveTo(mouse.x)
+                }
+            }
+
+            Rectangle {
+                width: parent.width
+                height: 54
+                radius: 12
+                color: audioTest.syntheticOutputTestEnabled ? "#596f7e" : "#aab6c2"
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "Короткий тест аудиовыхода (QAudioSink)"
+                    color: "white"
+                    font.pixelSize: 15
+                    font.bold: true
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: audioTest.syntheticOutputTestEnabled
+                    onClicked: audioTest.startSyntheticOutputTest()
                 }
             }
 
