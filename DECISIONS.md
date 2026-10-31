@@ -229,13 +229,15 @@ MediaSession и постоянный кэш не входят. Сборка и p
 состояние ошибки, текущий QAudioOutput device/volume/mute и агрегированные
 счётчики QAudioBufferOutput. Короткий синтетический PCM сигнал через QAudioSink
 на том же устройстве проверяет Android audio path отдельно. Qt 6.12 Android
-реализует QAudioSink через AAudio; исходник также проверяет открытие stream и
-  предупреждает, если параметры потока не совпали с запросом. В Qt FFmpeg
-  AudioRenderer ([Qt FFmpeg audio renderer](https://github.com/qt/qtmultimedia/blob/6.12/src/plugins/multimedia/ffmpeg/playbackengine/qffmpegaudiorenderer.cpp)) отправляет данные в sink и отдаёт декодированные кадры
-  QAudioBufferOutput. Эти места задают проверяемые гипотезы, не доказывают
-  неисправность конкретного устройства. Если direct sink слышен при молчащем player,
-следует исследовать декодер/связку QMediaPlayer и output. Если оба теста молчат,
-сначала проверить устройство, системную громкость и маршрут. Это диагностические
+реализует QAudioSink через AAudio; исходник проверяет открытие stream и
+предупреждает, если параметры потока не совпали с запросом. В Qt FFmpeg
+AudioRenderer ([Qt FFmpeg audio renderer](https://github.com/qt/qtmultimedia/blob/6.12/src/plugins/multimedia/ffmpeg/playbackengine/qffmpegaudiorenderer.cpp)) отправляет данные в sink и отдаёт декодированные кадры
+QAudioBufferOutput. Renderer пропускает callback буфера, пока предыдущая
+передача в sink не завершилась. Поэтому отсутствие callback не доказывает
+отсутствие декодирования. Эти места задают гипотезы, не доказывают неисправность
+конкретного устройства. Если direct sink слышен при молчащем player, следует
+исследовать связку QMediaPlayer/FFmpeg с output. Если оба теста молчат, сначала
+проверить устройство, системную громкость и маршрут. Это диагностические
 развилки, а не установленные причины. PCM не сохраняется.
 
 Архитектурный выбор о production engine не возникает. Не добавлять Android

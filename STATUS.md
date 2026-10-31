@@ -415,9 +415,11 @@ hasAudio, активной дорожки, ошибок плеера, выбра
 Отдельная кнопка запускает 0.75-секундный синус 440 Гц через QAudioSink на
 выбранном аудиовыходе, минуя QMediaPlayer и FFmpeg. В исходниках Qt 6.12
 Android QAudioSink реализован через AAudio; QMediaPlayer FFmpeg выводит звук
-через Qt audio sink. Это позволяет различить отсутствие PCM и неисправность
-нижнего Android audio path, но исходная причина тишины пока НЕ УСТАНОВЛЕНА.
-Подробности и порядок проверки нового APK: docs/ANDROID-FFMPEG-SPIKE-TEST.md.
+через Qt audio sink. Это позволяет сравнить два пути, но счётчик
+QAudioBufferOutput неоднозначен: renderer сначала пишет в sink, и отсутствие
+callback само по себе не доказывает сбой декодирования. Исходная причина тишины
+пока НЕ УСТАНОВЛЕНА. Подробности и порядок проверки нового APK:
+docs/ANDROID-FFMPEG-SPIKE-TEST.md.
 
 Известно только, что runtime FFmpeg загружен и default output перечисляется.
 Эти факты не подтверждают наличие аудиодорожки, ненулевые декодированные PCM,
@@ -425,3 +427,20 @@ Android QAudioSink реализован через AAudio; QMediaPlayer FFmpeg �
 не доказывает вывод звука. Возможные причины остаются гипотезами до экрана
 диагностики и прослушивания. Этап 002-D остаётся НЕ ПРИНЯТ до успешной
 ручной проверки звука владельцем на Huawei.
+
+
+## Проверка диагностической сборки — 31.10.2026
+
+Проверенный кодовый head: 7a3dd1d197a5b0e29fe0acdbbb7e69116b4977c8.
+Android CI #83 прошёл сборку arm64 APK, Android тесты и аудит пакета:
+63,763,805 bytes (60.81 MiB), artifact
+[AllMusicPlayer-002D-QtFFmpeg-Android-arm64-v8a-debug-961941e7eb8a-41173380387-1](https://github.com/metravolokos/allmusic-player/actions/runs/41173380387/artifacts/13032272080).
+В APK ноль Android permissions; Qt FFmpeg runtime и license notices проверены,
+Android system media plugin отсутствует. Artifact действует до 14.11.2026.
+
+Desktop CI #117 завершился успешно: документация и классификатор, Linux CTest
+6/6, Windows CTest, Windows ZIP package audit и cache jobs. Windows ZIP audit
+artifact [AllMusicPlayer-Windows-x64](https://github.com/metravolokos/allmusic-player/actions/runs/41173380452/artifacts/13032357235)
+содержит собранное тестовое приложение и синтетические материалы. Проверки
+сборки подтверждают компиляцию и состав пакета, но не слышимость на устройстве.
+Ручная Huawei проверка остаётся обязательной.
