@@ -79,6 +79,7 @@ private:
     std::atomic_bool m_sourceOpen{false};
     std::atomic_bool m_retiring{false};
     std::atomic_bool m_interruptRequested{false};
+    std::atomic_bool m_readInProgress{false};
     std::atomic<quint64> m_generation{0};
     std::atomic<qint64> m_pendingSeek{-1};
     std::atomic<qint64> m_visiblePosition{0};

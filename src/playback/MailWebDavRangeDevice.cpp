@@ -15,6 +15,12 @@
 
 namespace {
 const QUrl PinnedMailOrigin(QStringLiteral("https://webdav.cloud.mail.ru"));
+
+struct ResetAtomicFlag final
+{
+    std::atomic_bool &flag;
+    ~ResetAtomicFlag() { flag.store(false); }
+};
 }
 
 // Runs every Cloud Mail GET on its own Qt network thread. It reuses the same
@@ -259,7 +265,7 @@ bool MailWebDavRangeDevice::seek(qint64 position)
     m_pendingSeek.store(position);
     m_visiblePosition.store(position);
     ++m_generation;
-    if (m_fetcher && m_workerThread.isRunning()) {
+    if (m_readInProgress.load() && m_fetcher && m_workerThread.isRunning()) {
         QMetaObject::invokeMethod(m_fetcher, [fetcher = m_fetcher] {
             fetcher->cancelCurrentRequest();
         }, Qt::QueuedConnection);
@@ -353,7 +359,7 @@ void MailWebDavRangeDevice::interruptPendingRead()
         return;
     m_interruptRequested.store(true);
     ++m_generation;
-    if (!m_fetcher || !m_workerThread.isRunning())
+    if (!m_readInProgress.load() || !m_fetcher || !m_workerThread.isRunning())
         return;
     const auto interrupt = [fetcher = m_fetcher] { fetcher->cancelCurrentRequest(); };
     if (QThread::currentThread() == &m_workerThread)
@@ -475,6 +481,9 @@ qint64 MailWebDavRangeDevice::readData(char *data, qint64 maxSize)
         return -1;
     if (m_interruptRequested.load())
         return -1;
+
+    m_readInProgress.store(true);
+    const ResetAtomicFlag readFlag{m_readInProgress};
 
     qint64 offset = QIODevice::pos();
     quint64 generation = m_generation.load();
