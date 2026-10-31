@@ -19,7 +19,7 @@ CI проверяет изменения проекта. Обычный Draft PR
 - проверка синтаксиса Python CI-скриптов;
 - лёгкие офлайн-тесты Android fixtures/package audit из `tests/android/`, без Qt, Android SDK, NDK или APK.
 
-Эти проверки не подтверждают сборку Windows, Linux или Android binary. Подготовка к скачиваемому APK остаётся доступна через ручной `workflow_dispatch` с `source_ref` и `android_apk`.
+Эти проверки не подтверждают сборку Windows, Linux или Android binary. Draft PR не создаёт скачиваемый APK. Для Ready PR при запуске Android binary job после успешной сборки и package/license audit APK-комплект автоматически загружается в Artifacts того же Android workflow. Отдельный ручной `workflow_dispatch` для APK не требуется. Ручной `workflow_dispatch` с `source_ref` и `android_apk` сохраняется как дополнительная возможность.
 
 ### Ready full mode
 
@@ -52,9 +52,9 @@ GitHub API подтвердил, что `main` защищена и требуе�
 
 ## Артефакты и безопасность
 
-- Обычный Draft или Ready PR не загружает Windows ZIP, Android APK или комплект лицензий. Если packaging change требует проверки комплекта, сборка/аудит могут создать временные файлы runner-а, но workflow не публикует их как PR artifact.
+- Draft PR не загружает Windows ZIP или Android APK. Ready PR, требующий Android binary job, **автоматически публикует Android APK и комплект лицензий только после успешной сборки и аудита APK** (14 дней), чтобы владелец мог установить приложение без ручного запуска workflow. Готовые Windows ZIP и WebDAV test kit из обычного PR не публикуются; если изменена упаковка, её проверяют на runner без автоматической выдачи ZIP.
 - Синтетические тестовые аудиофикстуры могут сохраняться только на один день для платформенных тестов. Диагностика при ошибке сохраняется на три дня.
-- Ручной `workflow_dispatch` сохраняет ZIP/APK только при выбранном флажке; релиз сохраняет комплекты 90 дней. Ручные артефакты хранятся 14 дней.
+- Ручной `workflow_dispatch` сохраняет ZIP/APK только при выбранном флажке; релиз сохраняет комплекты 90 дней. Ready PR Android и ручные артефакты хранятся 14 дней.
 - APK audit проверяет manifest с единственным `INTERNET` разрешением, подпись и выравнивание, ABI, Media3/Qt runtime и Maven license metadata. Неизвестная Maven-лицензия останавливает аудит.
 - Windows ZIP содержит FFmpeg/Qt notices; WebDAV test kit собирает Qt Base/Declarative notices; Android kit содержит Qt/NDK notices, Media3 Apache-2.0 и распознанные лицензии Gradle runtime.
 - Workflow сохраняют `permissions: contents: read`, `persist-credentials: false` в checkout и `concurrency.cancel-in-progress`. В кэши не попадают Gradle home, Android SDK/NDK, signing files, credentials, секреты, токены, ключи или медиатека.
@@ -66,7 +66,7 @@ GitHub API подтвердил, что `main` защищена и требуе�
 3. Для Windows отметьте `windows_zip`, `webdav_test_kit` или обе опции. Для Android отметьте `android_apk` для скачиваемого комплекта либо `full_tests` для сборки и аудита без сохранения APK. Desktop `full_tests` запускает Linux и Windows.
 4. Скачайте выбранный артефакт со страницы run. Отчёт и `BUILD-INFO.json` содержат source SHA.
 
-`source_ref`, `full_tests`, `android_apk` и package inputs сохранены. APK/ZIP доступны по ручному запросу или при релизе; автоматической выгрузки артефактов с PR нет.
+`source_ref`, `full_tests`, `android_apk` и package inputs сохранены. APK для Ready PR с Android binary job загружается автоматически после аудита. Ручная сборка остаётся для отдельных запросов, Windows ZIP — по ручному запросу или при релизе. Автоматическая выгрузка после Ready не разрешает merge без обязательных успешных CI и ручного подтверждения владельца.
 
 ## Кэши
 

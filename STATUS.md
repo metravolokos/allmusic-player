@@ -6,6 +6,68 @@ Total output lines: 434
 
 # Текущий статус проекта — AllMusic Player
 
+## 002-E — Issue #32: Android-медиатека (31.10.2026)
+
+### Ответ на UX-ревью PR #33
+
+В [замечании к PR](https://github.com/metravolokos/allmusic-player/pull/33#issuecomment-6547825802)
+обнаружено, что Play/Pause/Stop/Seek располагались в `ListView.footer`, а поиск —
+в прокручиваемом `ListView.header`. Компоновка разделена: закреплённый верхний
+`topPanel` содержит подключение, каталог, поиск, сортировку и счётчик; между
+панелями прокручивается только `cloudList`; закреплённый снизу `playerPanel`
+содержит выбор/Play, Play/Pause/Stop, позицию и seek. Форма реквизитов скрывается
+после подключения; отключение и отмена подключения доступны сверху. Локальные
+синтетические треки свёрнуты в панели плеера.
+Контрактные Android tests теперь проверяют отсутствие `header`/`footer` у списка,
+закрепление панелей, виртуализированный источник, размещение Play/Seek вне списка
+и сворачивание формы подключения.
+
+Быстрые локальные проверки после правки: Android Python tests (20), CI tests
+(31), repository check (100 файлов), `py_compile` и `git diff --check` — пройдены.
+Полные Android/Desktop сборки не запускались по плану ревью. Реальная проверка
+удобства и QML-компиляция на Android остаются **НЕ ПРОВЕРЕНЫ**.
+
+Уточнение владельца от 31.10.2026: Android-приложение поддерживает только
+вертикальную ориентацию. Для QtActivity в `android/AndroidManifest.xml`
+установлен `screenOrientation="portrait"`, а Android contract test проверяет
+это значение из XML. Отдельная landscape-компоновка не требуется. Проверка
+поиска с открытой экранной клавиатурой на физическом устройстве остаётся
+**НЕ ПРОВЕРЕНА** до сборки целевого APK и теста Huawei.
+
+Новая ветка `issue-32-android-cloud-library` и [Draft PR #33](https://github.com/metravolokos/allmusic-player/pull/33)
+созданы от `main` SHA `6f91d6a2ed202e9b7c9ab28050536d00cfdf8cdd`. Android-каталог переведён на
+виртуализированный `ListView`. Локальная `QSortFilterProxyModel` фильтрует
+Unicode-названия без учёта регистра, применяет русскую числовую сортировку
+А→Я / Я→А и сохраняет исходный `sourceIndex` при фильтрации и перестановке.
+Скрытый фильтром выбор очищается; новый снимок списка при смене каталога или
+сессии сбрасывает выбор. Добавлены счётчик результатов, сообщение «Совпадений
+нет», очистка поиска и `adjustResize` для экранной клавиатуры. Сетевые классы,
+Range-клиент, Media3 и безопасность WebDAV не менялись.
+
+Добавлены QtTest сценарии для кириллицы, Unicode-нормализации, дублирующихся
+отображаемых имён, двух направлений сортировки, соответствия source row,
+сброса снимка и 5 000 синтетических элементов. Python-проверки Android проверяют
+контракт виртуализированного списка, source index и локальное управление
+фильтром. Выполнены Android Python tests (18), CI tests (31), проверка документов
+(100 файлов) и `git diff --check`. C++/QML сборка, QtTest с 5 000 строками и
+числовой подсчёт созданных QML-делегатов пока **НЕ ПРОВЕРЕНЫ**: в рабочей среде
+нет CMake, Qt 6 и Android SDK/NDK; найденный `qmltestrunner` ожидает отсутствующий
+Qt 5.
+
+Draft fast CI на кодовом SHA `d69ecf9808bd2a0d8abf34609b238633312cc4d3`:
+[Desktop run #41231949506](https://github.com/metravolokos/allmusic-player/actions/runs/41231949506)
+и [Android run #41231949533](https://github.com/metravolokos/allmusic-player/actions/runs/41231949533).
+Классификаторы, документация, CI-тесты и быстрые Android offline tests прошли;
+platform jobs были пропущены. Обязательные `Desktop CI result` и
+`Android CI result` завершились ожидаемой ошибкой merge gate для режима
+`draft-fast`. Полная платформенная проверка не запускалась.
+
+APK пока не сформирован: workflow не сохраняет APK в обычном Draft CI; нужен
+ручной `workflow_dispatch` Android workflow с `source_ref=issue-32-android-cloud-library`
+и `android_apk=true`. Доступная GitHub-интеграция не предоставляет запуска
+`workflow_dispatch`. Реальный Cloud Mail не подключался; ручная проверка на
+Huawei не выполнена.
+
 ## CI-OPT-002 — Issue #30 (31.10.2026)
 
 Рабочая ветка `issue-30-ci-opt-002` создана отдельно от PR #29 и основана на
