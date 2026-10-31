@@ -42,9 +42,10 @@ def main():
         raise SystemExit(f"OpenSSL source SHA-256 mismatch: {digest}")
 
     source = args.work / f"openssl-{VERSION}"
-    if not source.exists():
-        with tarfile.open(archive, "r:gz") as bundle:
-            bundle.extractall(args.work, filter="data")
+    if source.exists():
+        shutil.rmtree(source)
+    with tarfile.open(archive, "r:gz") as bundle:
+        bundle.extractall(args.work, filter="data")
     if not (source / "Configure").is_file() or not (source / "LICENSE.txt").is_file():
         raise SystemExit("Pinned OpenSSL source archive is incomplete")
 
@@ -55,7 +56,7 @@ def main():
     env = os.environ.copy()
     env["ANDROID_NDK_ROOT"] = str(ndk)
     env["PATH"] = str(toolchain) + os.pathsep + env.get("PATH", "")
-    env["CFLAGS"] = "-O2 -fPIC -Wl,-z,max-page-size=16384"
+    env["CFLAGS"] = "-O2 -fPIC"
     env["LDFLAGS"] = "-Wl,-z,max-page-size=16384"
     run(["./Configure", "shared", "android-arm64", "-D__ANDROID_API__=28",
          f"--prefix={args.work / 'install'}", "no-tests"], cwd=source, env=env)
