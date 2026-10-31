@@ -520,7 +520,7 @@ qint64 MailWebDavRangeDevice::readData(char *data, qint64 maxSize)
             if (!applyPendingSeek())
                 return -1;
             if (m_interruptRequested.load())
-                return finishRead(copied);
+                return copied > 0 ? finishRead(copied) : -1;
             offset = QIODevice::pos();
             if (offset < 0 || offset >= size())
                 return finishRead(copied);
