@@ -8,8 +8,8 @@ Total output lines: 434
 
 ## 002-E — Issue #32: Android-медиатека (31.10.2026)
 
-Новая ветка `issue-32-android-cloud-library` создана от `main` SHA
-`6f91d6a2ed202e9b7c9ab28050536d00cfdf8cdd`. Android-каталог переведён на
+Новая ветка `issue-32-android-cloud-library` и [Draft PR #33](https://github.com/metravolokos/allmusic-player/pull/33)
+созданы от `main` SHA `6f91d6a2ed202e9b7c9ab28050536d00cfdf8cdd`. Android-каталог переведён на
 виртуализированный `ListView`. Локальная `QSortFilterProxyModel` фильтрует
 Unicode-названия без учёта регистра, применяет русскую числовую сортировку
 А→Я / Я→А и сохраняет исходный `sourceIndex` при фильтрации и перестановке.
@@ -26,8 +26,21 @@ Range-клиент, Media3 и безопасность WebDAV не меняли�
 (100 файлов) и `git diff --check`. C++/QML сборка, QtTest с 5 000 строками и
 числовой подсчёт созданных QML-делегатов пока **НЕ ПРОВЕРЕНЫ**: в рабочей среде
 нет CMake, Qt 6 и Android SDK/NDK; найденный `qmltestrunner` ожидает отсутствующий
-Qt 5. Реальный Cloud Mail не подключался. APK ожидает успешной Android CI-сборки;
-ручная проверка на Huawei не выполнена.
+Qt 5.
+
+Draft fast CI на кодовом SHA `d69ecf9808bd2a0d8abf34609b238633312cc4d3`:
+[Desktop run #41231949506](https://github.com/metravolokos/allmusic-player/actions/runs/41231949506)
+и [Android run #41231949533](https://github.com/metravolokos/allmusic-player/actions/runs/41231949533).
+Классификаторы, документация, CI-тесты и быстрые Android offline tests прошли;
+platform jobs были пропущены. Обязательные `Desktop CI result` и
+`Android CI result` завершились ожидаемой ошибкой merge gate для режима
+`draft-fast`. Полная платформенная проверка не запускалась.
+
+APK пока не сформирован: workflow не сохраняет APK в обычном Draft CI; нужен
+ручной `workflow_dispatch` Android workflow с `source_ref=issue-32-android-cloud-library`
+и `android_apk=true`. Доступная GitHub-интеграция не предоставляет запуска
+`workflow_dispatch`. Реальный Cloud Mail не подключался; ручная проверка на
+Huawei не выполнена.
 
 ## CI-OPT-002 — Issue #30 (31.10.2026)
 
