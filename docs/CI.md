@@ -100,4 +100,12 @@ SDK/NDK занимали около 0,77 минуты установки вме�
 
 ### Draft fast mode
 
-Измерение одного Draft fast запуска и разница с полным fail-closed профилем будут добавлены после получения фактических job durations.
+Измерен один Draft запуск после документационного commit 97b6671450e31b854dcea24964953206892bf523: [Desktop #41213093024](https://github.com/metravolokos/allmusic-player/actions/runs/41213093024) и [Android #41213092971](https://github.com/metravolokos/allmusic-player/actions/runs/41213092971). `documentation`, `tests/ci`, Android offline/package-audit checks и оба обязательных итоговых статуса прошли. Linux, Windows, Android binary, fixtures и cache validation jobs были пропущены; APK и другие артефакты не публиковались.
+
+| Профиль | Фактическое runner time | Эквивалент с Windows ×2 | Округлённый эквивалент по минутам jobs |
+|---|---:|---:|---:|
+| Полный fail-closed reference | 20.22 мин. | 28.55 мин. | 37 мин. |
+| Draft fast run | 0.43 мин. (26 сек.) | 0.43 мин. | 6 мин. |
+| Разница для этой пары запусков | 19.78 мин. | 28.12 мин. | 31 мин. |
+
+По взвешенному runner time измеренная разница составляет 98.5%. Это сравнение одного Draft fast запуска с одним намеренно fail-closed полным запуском, а не обещание такой же экономии для всех PR или сводная годовая экономия.

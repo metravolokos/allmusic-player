@@ -15,7 +15,7 @@ Desktop/Android зависимости Cloud WebDAV и итоговые отчё
 остаётся Draft. Полный fail-closed CI прошёл: [Desktop #41212231519](https://github.com/metravolokos/allmusic-player/actions/runs/41212231519)
 и [Android #41212231535](https://github.com/metravolokos/allmusic-player/actions/runs/41212231535);
 20.22 фактических runner-minutes / 28.55 с Windows ×2.
-Требуемые статусы и защита `main` не менялись. Draft-run и измеренная разница будут добавлены после отдельной лёгкой проверки.
+Требуемые статусы и защита `main` не менялись. Draft fast CI прошёл: [Desktop #41213093024](https://github.com/metravolokos/allmusic-player/actions/runs/41213093024) и [Android #41213092971](https://github.com/metravolokos/allmusic-player/actions/runs/41213092971), 26 секунд фактического runner time. В этой паре запусков разница с полным fail-closed CI составляет 19.78 фактических минут / 28.12 взвешенных минут; детали в docs/CI.md.
 
 **Дата:** 31.10.2026. **Текущий статус:** 002-A принята владельцем в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19); 002-B и Desktop 002-C приняты в `main`. Android Media3 по Issue #26 прошёл Android/Desktop CI и ручную проверку на Huawei. Android Cloud Mail по Issue #24 принят владельцем и объединён в `main` через [PR #29](https://github.com/metravolokos/allmusic-player/pull/29), commit `c511cf252f5c8dd4d5a481b3b91e5e18379accc5`; CI и согласованные Huawei сценарии пройдены. Навигация по вложенным папкам для медиатеки владельца неприменима; неудобство длинного списка отложено в отдельный UX backlog. CI использует только mock; пароль и медиатека владельца не используются.
 
