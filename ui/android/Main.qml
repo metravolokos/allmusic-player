@@ -55,6 +55,18 @@ Window {
                 radius: 8
                 color: "white"
                 border.color: "#d5dce3"
+                // QtQuick.TextInput does not have placeholderText (unlike Controls.TextField).
+                // Draw a non-interactive hint behind the plain TextInput so the
+                // Android APK does not require the Qt Quick Controls module.
+                Text {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    verticalAlignment: Text.AlignVCenter
+                    text: "Адрес почты Cloud Mail"
+                    color: "#7f8e9b"
+                    font.pixelSize: 15
+                    visible: emailInput.text.length === 0
+                }
                 TextInput {
                     id: emailInput
                     anchors.fill: parent
@@ -62,7 +74,6 @@ Window {
                     verticalAlignment: TextInput.AlignVCenter
                     font.pixelSize: 15
                     color: "#17212b"
-                    placeholderText: "Адрес почты Cloud Mail"
                     inputMethodHints: Qt.ImhEmailCharactersOnly
                     enabled: !media3.cloudConnected && !media3.cloudBusy
                 }
@@ -74,6 +85,15 @@ Window {
                 radius: 8
                 color: "white"
                 border.color: "#d5dce3"
+                Text {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    verticalAlignment: Text.AlignVCenter
+                    text: "Пароль внешнего приложения"
+                    color: "#7f8e9b"
+                    font.pixelSize: 15
+                    visible: passwordInput.text.length === 0
+                }
                 TextInput {
                     id: passwordInput
                     anchors.fill: parent
@@ -81,7 +101,6 @@ Window {
                     verticalAlignment: TextInput.AlignVCenter
                     font.pixelSize: 15
                     color: "#17212b"
-                    placeholderText: "Пароль внешнего приложения"
                     echoMode: TextInput.Password
                     inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText
                     enabled: !media3.cloudConnected && !media3.cloudBusy
