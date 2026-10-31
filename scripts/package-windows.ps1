@@ -73,7 +73,17 @@ try {
     & "$stage/playback-tests.exe" -o "$root/build/packaged-playback.txt,txt"
     if ($LASTEXITCODE -ne 0) { throw 'Packaged PCM decoding tests failed' }
     & "$stage/streaming-tests.exe" -o "$root/build/packaged-streaming.txt,txt"
-    if ($LASTEXITCODE -ne 0) { throw 'Packaged WebDAV streaming tests failed' }
+    if ($LASTEXITCODE -ne 0) {
+        # Show only synthetic test failure summaries; never print HTTP headers.
+        if (Test-Path "$root/build/packaged-streaming.txt") {
+            Get-Content "$root/build/packaged-streaming.txt" |
+                Where-Object { $_ -match '^(FAIL!|Totals:)' } |
+                Select-Object -First 30 |
+                ForEach-Object { Write-Host $_ }
+        }
+        throw 'Packaged WebDAV streaming tests failed'
+    }
+    Write-Host 'Packaged WebDAV streaming tests passed'
     $process = Start-Process "$stage/allmusic-player.exe" -ArgumentList '--smoke-test', "$root/build/package-smoke.png" -WorkingDirectory $stage -PassThru
     if (!$process.WaitForExit(30000)) { $process.Kill(); throw 'Packaged app timed out' }
     if ($process.ExitCode -ne 0) { throw "Packaged app failed: $($process.ExitCode)" }
