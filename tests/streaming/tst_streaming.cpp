@@ -1152,7 +1152,11 @@ private slots:
         QVERIFY(device->open(QIODevice::ReadOnly));
         std::atomic<qint64> firstRead{0};
         std::thread reader([&] { char byte = 0; firstRead = device->read(&byte, 1); });
-        QTRY_VERIFY_WITH_TIMEOUT(!server.requests.isEmpty(), 2000);
+        // The fixture's first request is a Basic challenge. Wait until the
+        // credentialed, deliberately delayed Range GET is actually in flight.
+        QTRY_VERIFY_WITH_TIMEOUT(server.requests.size() >= 2
+                                     && server.requests[1].headers.contains("authorization"),
+                                 2000);
 
         QElapsedTimer timer;
         timer.start();
@@ -1180,7 +1184,7 @@ private slots:
         }
         QCOMPARE(resumedRead.load(), 1);
         QCOMPARE(uchar(resumedByte), uchar(audio[1]));
-        QCOMPARE(server.requests.size(), 2);
+        QTRY_COMPARE_WITH_TIMEOUT(server.requests.size(), 4, 2000);
         delete device;
     }
 };
