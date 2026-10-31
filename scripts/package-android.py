@@ -20,6 +20,8 @@ GOOGLE_FORBIDDEN = re.compile(
     r"com[./]google[./](?:android[./]gms|firebase)|"
     r"com\.google\.gms:|play-services|firebase-", re.I)
 MEDIA3_VERSION = "1.11.1"
+OPENSSL_VERSION = "3.5.9"
+OPENSSL_SHA256 = "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a"
 EXPECTED_ASSETS = {
     "assets/audio/synthetic-440hz.mp3",
     "assets/audio/synthetic-660hz.flac",
@@ -85,6 +87,11 @@ def check_runtime(apk, dependencies):
         assert not missing_assets, f"Synthetic Android test assets missing: {sorted(missing_assets)}"
         native = sorted(n for n in names if n.startswith("lib/") and n.endswith(".so"))
         assert native and {n.split("/")[1] for n in native} == {"arm64-v8a"}
+        native_basenames = {Path(name).name for name in native}
+        assert {"libcrypto_3.so", "libssl_3.so"}.issubset(native_basenames), \
+            "Pinned OpenSSL 3 runtime is missing from APK"
+        assert "libplugins_tls_qopensslbackend_arm64-v8a.so" in native_basenames, \
+            "Qt OpenSSL TLS backend is missing from APK"
         assert any("liballmusic-player" in n for n in native)
         assert any("libQt6Quick" in n for n in native), "Qt runtime must be bundled"
         # Licensing scope is deliberately narrow: a new Qt module needs review.
@@ -114,6 +121,39 @@ def check_runtime(apk, dependencies):
         assert b"Landroidx/media3/decoder/ffmpeg/" not in dex_data, \
             "Media3 FFmpeg decoder classes must not be packaged"
     return native
+
+
+def audit_openssl_runtime(apk, readelf, evidence):
+    temporary = evidence / "openssl-elf"
+    temporary.mkdir(parents=True, exist_ok=True)
+    expected = {
+        "libcrypto_3.so": ("libcrypto_3.so", set()),
+        "libssl_3.so": ("libssl_3.so", {"libcrypto_3.so"}),
+    }
+    report = []
+    with zipfile.ZipFile(apk) as archive:
+        for basename, (soname, needed) in expected.items():
+            matches = [name for name in archive.namelist()
+                       if name.startswith("lib/arm64-v8a/") and Path(name).name == basename]
+            assert len(matches) == 1, f"Expected one arm64 {basename}: {matches}"
+            library = temporary / basename
+            library.write_bytes(archive.read(matches[0]))
+            header = subprocess.check_output([str(readelf), "-h", str(library)], text=True)
+            assert "AArch64" in header, f"Wrong architecture: {basename}"
+            dynamic = subprocess.check_output([str(readelf), "-d", str(library)], text=True)
+            sonames = re.findall(r"\(SONAME\).*?\[(.*?)\]", dynamic)
+            assert sonames == [soname], f"Unexpected {basename} SONAME: {sonames}"
+            actual_needed = set(re.findall(r"\(NEEDED\).*?\[(.*?)\]", dynamic))
+            if basename == "libssl_3.so":
+                assert needed.issubset(actual_needed), f"{basename} does not link to libcrypto_3.so"
+            assert not any("libcrypto.so" == name or "libssl.so" == name
+                           for name in actual_needed), f"Unsuffixed OpenSSL dependency: {basename}"
+            program = subprocess.check_output([str(readelf), "-lW", str(library)], text=True)
+            loads = [line.split() for line in program.splitlines() if line.strip().startswith("LOAD ")]
+            assert loads and all(int(line[-1], 16) >= 16384 for line in loads), \
+                f"{basename} does not support 16 KiB page alignment"
+            report.append(f"{matches[0]}: SONAME={soname}; NEEDED={sorted(actual_needed)}; LOAD alignment >= 16384")
+    return report
 
 
 def runtime_coordinates(dependencies):
@@ -203,6 +243,8 @@ def main():
     # Also verify 16 KiB ELF LOAD alignment of each bundled native library.
     native = check_runtime(apk, (evidence / "gradle-runtime.txt").read_text())
     readelf = sdk / "ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+    openssl_report = audit_openssl_runtime(apk, readelf, evidence)
+    (evidence / "openssl-runtime.txt").write_text("\n".join(openssl_report) + "\n")
     temporary = ROOT / "build/android-elf-audit"
     temporary.mkdir(parents=True, exist_ok=True)
     elf_evidence = []
@@ -220,6 +262,22 @@ def main():
     shutil.copyfile(apk, output / (os.environ["ARTIFACT_NAME"] + ".apk"))
     subprocess.run(["python", str(ROOT / "scripts/collect-licenses.py"),
                     str(ROOT / "build/license-sources"), str(output / "licenses")], check=True)
+    openssl_dir = ROOT / "build/android-openssl"
+    assert (openssl_dir / "OPENSSL-SOURCE.txt").is_file()
+    source_record = (openssl_dir / "OPENSSL-SOURCE.txt").read_text(encoding="utf-8")
+    expected_source = (f"OpenSSL {OPENSSL_VERSION}\n"
+                       f"Source: https://github.com/openssl/openssl/releases/download/openssl-{OPENSSL_VERSION}/openssl-{OPENSSL_VERSION}.tar.gz\n"
+                       f"SHA-256: {OPENSSL_SHA256}\n")
+    assert source_record.startswith(expected_source)
+    source_archive = openssl_dir.parent / "openssl-source" / f"openssl-{OPENSSL_VERSION}.tar.gz"
+    assert source_archive.is_file()
+    assert hashlib.sha256(source_archive.read_bytes()).hexdigest() == OPENSSL_SHA256
+    assert (openssl_dir / "OpenSSL-LICENSE.txt").is_file()
+    assert "Apache License" in (openssl_dir / "OpenSSL-LICENSE.txt").read_text(encoding="utf-8")
+    shutil.copyfile(openssl_dir / "OpenSSL-LICENSE.txt",
+                    output / "licenses/OpenSSL-3.5.9-Apache-2.0.txt")
+    shutil.copyfile(openssl_dir / "OPENSSL-SOURCE.txt",
+                    output / "licenses/OpenSSL-3.5.9-SOURCE.txt")
     media3_license = ROOT / "licenses/Media3-1.11.1-Apache-2.0.txt"
     assert media3_license.is_file(), "Media3 Apache-2.0 license text missing"
     java_license_dir = output / "licenses/java"

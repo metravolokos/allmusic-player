@@ -191,3 +191,14 @@ Package audit сохраняет runtime-граф Gradle, проверяет lic
 и собирает `LICENSE`/`NOTICE` из AAR/JAR, где они есть. Qt и NDK notices
 собираются отдельным этапом. Это аудит конкретного тестового комплекта, не
 юридическое заключение для публичного релиза.
+
+Для Qt Android TLS дополнительно собирается OpenSSL 3.5.9 из официального
+релизного архива `openssl-3.5.9.tar.gz`, SHA-256
+`603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a`.
+`scripts/build-android-openssl.py` проверяет digest до распаковки и собирает
+shared arm64-v8a runtime NDK r27c / API 28. Результат получает SONAME
+`libcrypto_3.so`/`libssl_3.so`, соответствующий Qt суффиксу `_3`. APK audit
+проверяет архитектуру AArch64, SONAME, NEEDED, 16 KiB LOAD alignment и хэш
+исходного архива. OpenSSL Apache-2.0 LICENSE и источник с digest включаются в
+скачиваемый комплект; это проверка конкретной тестовой поставки, не юридическое
+заключение для публичного релиза.

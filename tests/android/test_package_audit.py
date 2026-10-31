@@ -22,13 +22,17 @@ DEX = b'Landroidx/media3/exoplayer/ExoPlayerImpl;\nMedia3PlaybackAdapter'
 ASSETS = ('assets/audio/synthetic-440hz.mp3',
           'assets/audio/synthetic-660hz.flac',
           'assets/audio/synthetic-880hz.wav')
-NATIVE = ('liballmusic-player', 'libQt6Core', 'libQt6Gui', 'libQt6Quick')
+NATIVE = ('liballmusic-player', 'libQt6Core', 'libQt6Gui', 'libQt6Quick',
+          'libcrypto_3', 'libssl_3', 'libplugins_tls_qopensslbackend_arm64-v8a')
 
 
-def write_test_apk(path, abi='arm64-v8a', extra_native=(), dex=DEX, assets=ASSETS):
+def write_test_apk(path, abi='arm64-v8a', extra_native=(), dex=DEX, assets=ASSETS,
+                   native=NATIVE):
     with zipfile.ZipFile(path, 'w') as archive:
-        for name in NATIVE + tuple(extra_native):
-            archive.writestr(f'lib/{abi}/{name}_{abi}.so', b'fixture, not ELF')
+        for name in tuple(native) + tuple(extra_native):
+            suffix = ('.so' if name.endswith('_arm64-v8a')
+                      or name in {'libcrypto_3', 'libssl_3'} else f'_{abi}.so')
+            archive.writestr(f'lib/{abi}/{name}{suffix}', b'fixture, not ELF')
         archive.writestr('classes.dex', dex)
         for name in assets:
             archive.writestr(name, b'synthetic test asset')
@@ -95,6 +99,13 @@ class PublicationBoundary(unittest.TestCase):
             apk = Path(directory) / 'fixture.apk'
             write_test_apk(apk, extra_native=('libQt6Multimedia',
                                               'libplugins_multimedia_androidmediaplugin'))
+            with self.assertRaises(AssertionError):
+                AUDIT['check_runtime'](apk, DEPENDENCIES)
+
+    def test_openssl_runtime_is_required(self):
+        with tempfile.TemporaryDirectory() as directory:
+            apk = Path(directory) / 'fixture.apk'
+            write_test_apk(apk, native=NATIVE[:-2])
             with self.assertRaises(AssertionError):
                 AUDIT['check_runtime'](apk, DEPENDENCIES)
 

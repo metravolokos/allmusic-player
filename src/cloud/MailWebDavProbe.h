@@ -5,6 +5,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVector>
+#include <QStringList>
 #include <optional>
 
 // Read-only diagnostic client for the fixed Cloud Mail WebDAV origin.
@@ -29,6 +30,19 @@ public:
     };
     Q_ENUM(RangeIssue)
 
+    enum class NetworkCategory {
+        None, DnsLookup, ConnectionRefused, RemoteHostClosed, TemporaryFailure,
+        Proxy, TlsBackendUnavailable, TlsHandshake, Timeout, Cancelled, Unknown
+    };
+    Q_ENUM(NetworkCategory)
+
+    struct TlsCapabilities {
+        bool available = false;
+        QString activeBackend;
+        QStringList availableBackends;
+        QString runtimeVersion;
+    };
+
     struct Entry {
         QString path;
         QString reference;
@@ -39,7 +53,14 @@ public:
 
     struct Result {
         Error error = Error::None;
+        bool preflight = false;
         RangeIssue rangeIssue = RangeIssue::None;
+        NetworkCategory networkCategory = NetworkCategory::None;
+        int networkErrorCode = -1;
+        bool sslBackendAvailable = false;
+        QString activeSslBackend;
+        QStringList availableSslBackends;
+        QString sslRuntimeVersion;
         int status = 0;
         bool listing = false;
         bool rangeCheck = false;
@@ -74,9 +95,13 @@ public:
     ~MailWebDavProbe() override;
 
     bool listAllMusic(const QString &email, const QString &appPassword);
+    bool preflight();
     bool checkRange(const Entry &entry);
     void cancel();
     bool busy() const { return active; }
+
+    static TlsCapabilities tlsCapabilities();
+    static NetworkCategory networkCategoryForError(QNetworkReply::NetworkError error);
 
 signals:
     void completed(const MailWebDavProbe::Result &result);
@@ -90,10 +115,11 @@ private:
     friend class MailWebDavController;
     friend class MailWebDavRangeFetcher;
 
-    enum class Operation { List, Range };
+    enum class Operation { Preflight, List, Range };
     bool begin(Operation operation, const QString &path, qint64 knownSize,
                const QByteArray &etag, qint64 offset = 0, qint64 length = 0,
                bool returnRangeBytes = false);
+    bool beginPreflight();
     bool listDirectory(const QString &path);
     bool readRange(const Entry &entry, qint64 offset, qint64 length);
     bool setSessionCredentials(QString userEmail, QString appPassword);
@@ -105,6 +131,8 @@ private:
     void clearCredentials();
     void initialize();
     bool isCurrent(QNetworkReply *candidate) const;
+    void captureTlsCapabilities();
+    void captureNetworkError(QNetworkReply *reply);
 
     QNetworkAccessManager manager;
     QUrl origin;

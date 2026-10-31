@@ -15,6 +15,11 @@
 
 int main(int argc, char *argv[])
 {
+#ifdef Q_OS_ANDROID
+    // Qt's Android TLS backend resolves its custom OpenSSL SONAMEs during
+    // application startup. Set this before QGuiApplication initializes Qt.
+    qputenv("ANDROID_OPENSSL_SUFFIX", "_3");
+#endif
 #ifndef Q_OS_ANDROID
     // Fixed backend for this experiment; no network streaming in 001-B1.
     qputenv("QT_MEDIA_BACKEND", "ffmpeg");

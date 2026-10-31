@@ -125,7 +125,9 @@ protected:
             Response response;
             if (request.method != "GET" && request.method != "PROPFIND" && request.method != "HEAD") {
                 response.status = 405;
-            } else if (request.target != "/AllMusic" && !request.target.startsWith("/AllMusic/")) {
+            } else if ((request.method == "HEAD" && request.target != "/")
+                       || (request.method != "HEAD" && request.target != "/AllMusic"
+                           && !request.target.startsWith("/AllMusic/"))) {
                 response.status = 403;
             } else if (handler) response = handler(request);
             else response.body = listing();

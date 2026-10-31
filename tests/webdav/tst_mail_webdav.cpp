@@ -96,18 +96,58 @@ private slots:
 
     void cleanup()
     {
-        // The real client exposes only PROPFIND and GET; every target stays below /AllMusic.
+        // The preflight HEAD is the only unauthenticated request to the origin root.
         for (const auto &request : server->requests) {
-            QVERIFY(request.method == "PROPFIND" || request.method == "GET");
-            QVERIFY(request.target == "/AllMusic" || request.target.startsWith("/AllMusic/"));
+            QVERIFY(request.method == "PROPFIND" || request.method == "GET"
+                    || request.method == "HEAD");
+            QVERIFY((request.method == "HEAD" && request.target == "/")
+                    || (request.target == "/AllMusic" || request.target.startsWith("/AllMusic/")));
             QVERIFY(!request.target.contains('?'));
             QVERIFY(!request.target.contains('#'));
             QVERIFY(!request.headers.contains("cookie"));
+            if (request.method == "HEAD")
+                QVERIFY(!request.headers.contains("authorization"));
         }
         delete client;
         client = nullptr;
         delete server;
         server = nullptr;
+    }
+
+    void networkErrorsMapToSafeCategories()
+    {
+        using Category = MailWebDavProbe::NetworkCategory;
+        QCOMPARE(MailWebDavProbe::networkCategoryForError(QNetworkReply::HostNotFoundError),
+                 Category::DnsLookup);
+        QCOMPARE(MailWebDavProbe::networkCategoryForError(QNetworkReply::ConnectionRefusedError),
+                 Category::ConnectionRefused);
+        QCOMPARE(MailWebDavProbe::networkCategoryForError(QNetworkReply::RemoteHostClosedError),
+                 Category::RemoteHostClosed);
+        QCOMPARE(MailWebDavProbe::networkCategoryForError(QNetworkReply::ProxyTimeoutError),
+                 Category::Proxy);
+        QCOMPARE(MailWebDavProbe::networkCategoryForError(QNetworkReply::SslHandshakeFailedError),
+                 Category::TlsHandshake);
+        QCOMPARE(MailWebDavProbe::networkCategoryForError(QNetworkReply::TimeoutError),
+                 Category::Timeout);
+    }
+
+    void preflightChecksOnlyOriginWithoutCredentials()
+    {
+        server->handler = [](const MockWebDav::Request &request) {
+            Q_UNUSED(request);
+            return Response{403}; // HTTP still proves TCP/TLS reachability.
+        };
+        QSignalSpy spy(client, &MailWebDavProbe::completed);
+        QVERIFY(client->preflight());
+        QVERIFY(spy.wait(5000));
+        const Result result = qvariant_cast<Result>(spy.takeFirst().at(0));
+        QVERIFY(result.preflight);
+        QCOMPARE(result.error, Error::None);
+        QCOMPARE(result.status, 403);
+        QCOMPARE(server->requests.size(), 1);
+        QCOMPARE(server->requests.first().method, QByteArray("HEAD"));
+        QCOMPARE(server->requests.first().target, QByteArray("/"));
+        QVERIFY(!server->requests.first().headers.contains("authorization"));
     }
 
     void propfindListsOnlyImmediateEntriesAndAuthenticatesLocally()

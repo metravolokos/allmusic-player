@@ -453,6 +453,15 @@ Android Python tests (13), CI classifier tests (19), repository documentation
 check (94 файла), `py_compile` и `git diff --check`. C++/Qt тесты, Android APK,
 Desktop/Linux/Windows CI ещё не запускались: в текущей среде нет CMake, Ninja,
 Android SDK/NDK и Gradle; они запускаются GitHub Actions после создания draft PR.
-Сам draft PR ещё не создан. Реальный Cloud Mail на Huawei **НЕ ПРОВЕРЕН**; для
-владельца подготовлена инструкция
-[002-D-ANDROID-CLOUD.md](docs/002-D-ANDROID-CLOUD.md).
+Из ручной проверки владельца в PR #29 поступил сигнал: приложение сообщает
+«Сетевая ошибка при проверке Cloud Mail» после ввода реквизитов. Причина по этой
+строке пока неизвестна. Аудит предыдущего APK подтвердил, что qopensslbackend
+включён, а `libssl`/`libcrypto` отсутствуют. В продолжении PR #29 добавляются
+no-auth TLS preflight и фиксированные сетевые категории; APK будет собираться с
+OpenSSL 3.5.9 из SHA-256-закреплённого официального исходного архива.
+Пройденные локальные проверки для этого продолжения пока только Android Python
+tests (14), CI classifier tests (19), `py_compile` и `git diff --check`; C++/Qt,
+Android package audit реального APK и Desktop/Android GitHub CI ожидают запуска.
+Повторная проверка Cloud Mail на Huawei и точная причина исходного сбоя —
+**НЕ ПРОВЕРЕНО**. Изменения остаются в существующем draft PR #29.
+[Инструкция](docs/002-D-ANDROID-CLOUD.md).

@@ -96,7 +96,7 @@ jobs:
       - name: Подготовить каталоги Android и Python
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1 libegl1 libxkbcommon0 libxcb-cursor0
+          sudo apt-get install -y libgl1 libegl1 libxkbcommon0 libxcb-cursor0 patchelf
           mkdir -p build/android-evidence "$RUNNER_TEMP/Qt/6.12.0"
           mkdir -p build/aqt-wheelhouse
       - name: Кэшировать wheel закреплённого aqtinstall
@@ -139,6 +139,13 @@ jobs:
           echo "Qt cache hit: ${{ steps.qt_cache.outputs.cache-hit }}"
       - name: Установить CMake 3.30.5
         run: python -m pip install cmake==3.30.5
+      - name: Собрать закреплённый OpenSSL 3 для Android arm64
+        run: |
+          python scripts/build-android-openssl.py \
+            --ndk "$ANDROID_HOME/ndk/27.2.12479018" \
+            --work build/openssl-source \
+            --output build/android-openssl \
+            --jobs 2
       - name: Восстановить кэш Ninja 1.12.1
         id: ninja_cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -169,6 +176,7 @@ jobs:
         env:
           QT_ANDROID_ROOT: ${{ runner.temp }}/Qt/6.12.0/android_arm64_v8a
           QT_HOST_PATH: ${{ runner.temp }}/Qt/6.12.0/gcc_64
+          ALLMUSIC_ANDROID_OPENSSL_DIR: ${{ github.workspace }}/build/android-openssl
         run: |
           mkdir -p build/android-evidence
           short_sha=$(git rev-parse --short=12 HEAD)
@@ -176,7 +184,7 @@ jobs:
           echo "BUILD_LABEL=$label" >> "$GITHUB_ENV"
           echo "ARTIFACT_NAME=AllMusicPlayer-002D-M3-Android-arm64-v8a-debug-${short_sha}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
           { java -version; cmake --version; ninja --version; "$QT_ANDROID_ROOT/bin/qmake" -query QT_VERSION; cat "$ANDROID_HOME/ndk/27.2.12479018/source.properties"; } > build/android-evidence/toolchain.txt 2>&1
-          cmake --preset android-debug -DALLMUSIC_BUILD_LABEL="$label" -DALLMUSIC_ANDROID_VERSION_CODE="$GITHUB_RUN_NUMBER"
+          cmake --preset android-debug -DALLMUSIC_BUILD_LABEL="$label" -DALLMUSIC_ANDROID_VERSION_CODE="$GITHUB_RUN_NUMBER" -DALLMUSIC_ANDROID_OPENSSL_DIR="$ALLMUSIC_ANDROID_OPENSSL_DIR"
           cat build/android-debug/src/app/android-allmusic-player-deployment-settings.json > build/android-evidence/deployment-settings.json
           cmake --build --preset android-debug --parallel 2
       - name: Проверить зависимости Gradle runtime

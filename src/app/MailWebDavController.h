@@ -58,10 +58,13 @@ private:
     static bool isAudio(const QString &path);
     static bool isStreamable(const QString &path);
     static QString displayName(const QString &path, bool directory);
-    static QString errorText(MailWebDavProbe::Error error, int status);
+    static QString errorText(const MailWebDavProbe::Result &result);
+    static QString networkDiagnosticText(const MailWebDavProbe::Result &result);
 
     MailWebDavProbe *m_probe = nullptr;
     QVector<MailWebDavProbe::Entry> m_entries;
+    QString m_pendingEmail;
+    QString m_pendingAppPassword;
     QString m_currentDirectory = QStringLiteral("/AllMusic/");
     QString m_status = QStringLiteral("Проверка Cloud Mail ещё не запускалась.");
     bool m_busy = false;

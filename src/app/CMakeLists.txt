@@ -2,6 +2,16 @@
 # scans it recursively, in addition to the declared platform QML roots.
 qt_add_executable(allmusic-player main.cpp)
 if(ANDROID)
+    set(ALLMUSIC_ANDROID_OPENSSL_DIR "" CACHE PATH
+        "Directory containing the audited Android OpenSSL 3 shared libraries")
+    if(NOT ALLMUSIC_ANDROID_OPENSSL_DIR)
+        message(FATAL_ERROR "ALLMUSIC_ANDROID_OPENSSL_DIR is required for Android TLS")
+    endif()
+    foreach(openssl_library IN ITEMS libcrypto_3.so libssl_3.so)
+        if(NOT EXISTS "${ALLMUSIC_ANDROID_OPENSSL_DIR}/${openssl_library}")
+            message(FATAL_ERROR "Missing packaged OpenSSL runtime: ${ALLMUSIC_ANDROID_OPENSSL_DIR}/${openssl_library}")
+        endif()
+    endforeach()
     target_sources(allmusic-player PRIVATE
         AndroidMedia3Controller.cpp
         AndroidMedia3Controller.h
@@ -56,7 +66,9 @@ if(ANDROID)
         QT_ANDROID_MIN_SDK_VERSION 28
         QT_ANDROID_TARGET_SDK_VERSION 36
         QT_ANDROID_COMPILE_SDK_VERSION 36
-        QT_ANDROID_SDK_BUILD_TOOLS_REVISION "36.0.0")
+        QT_ANDROID_SDK_BUILD_TOOLS_REVISION "36.0.0"
+        QT_ANDROID_EXTRA_LIBS
+            "${ALLMUSIC_ANDROID_OPENSSL_DIR}/libcrypto_3.so;${ALLMUSIC_ANDROID_OPENSSL_DIR}/libssl_3.so")
     # Keep the Android Cloud Mail target isolated from Desktop playback,
     # loopback tools, and native Desktop CTest targets.
     return()
