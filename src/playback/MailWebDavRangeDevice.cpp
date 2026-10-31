@@ -248,6 +248,7 @@ bool MailWebDavRangeDevice::seek(qint64 position)
     // QIODevice's private cursor and buffer are not thread-safe. Publish the
     // target here; the read consumer applies the base-class seek after the
     // outstanding Range request is cancelled.
+    m_interruptRequested.store(false);
     m_pendingSeek.store(position);
     m_visiblePosition.store(position);
     ++m_generation;
@@ -307,6 +308,16 @@ void MailWebDavRangeDevice::setBuffering(bool value)
 
 void MailWebDavRangeDevice::cancel()
 {
+    cancelSource(true);
+}
+
+void MailWebDavRangeDevice::cancelAsync()
+{
+    cancelSource(false);
+}
+
+void MailWebDavRangeDevice::cancelSource(bool waitForFetcher)
+{
     if (m_cancelled.exchange(true))
         return;
     ++m_generation;
@@ -320,10 +331,38 @@ void MailWebDavRangeDevice::cancel()
         m_lru.clear();
     }
     if (m_fetcher && m_workerThread.isRunning()) {
-        QMetaObject::invokeMethod(m_fetcher, [fetcher = m_fetcher] {
-            fetcher->cancelAndClear();
-        }, Qt::BlockingQueuedConnection);
+        const auto cancelFetcher = [fetcher = m_fetcher] { fetcher->cancelAndClear(); };
+        if (QThread::currentThread() == &m_workerThread)
+            cancelFetcher();
+        else
+            QMetaObject::invokeMethod(m_fetcher, cancelFetcher,
+                waitForFetcher ? Qt::BlockingQueuedConnection : Qt::QueuedConnection);
     }
+}
+
+void MailWebDavRangeDevice::interruptPendingRead()
+{
+    if (m_cancelled.load())
+        return;
+    m_interruptRequested.store(true);
+    ++m_generation;
+    if (!m_fetcher || !m_workerThread.isRunning())
+        return;
+    const auto interrupt = [fetcher = m_fetcher] { fetcher->cancelCurrentRequest(); };
+    if (QThread::currentThread() == &m_workerThread)
+        interrupt();
+    else
+        QMetaObject::invokeMethod(m_fetcher, interrupt, Qt::QueuedConnection);
+}
+
+void MailWebDavRangeDevice::retire()
+{
+    if (m_retiring.exchange(true))
+        return;
+    cancelAsync();
+    connect(&m_workerThread, &QThread::finished, this, &QObject::deleteLater,
+            Qt::UniqueConnection);
+    m_workerThread.quit();
 }
 
 void MailWebDavRangeDevice::setFailure(const QString &message)
@@ -427,6 +466,8 @@ qint64 MailWebDavRangeDevice::readData(char *data, qint64 maxSize)
     }
     if (m_cancelled.load())
         return -1;
+    if (m_interruptRequested.load())
+        return -1;
 
     qint64 offset = QIODevice::pos();
     quint64 generation = m_generation.load();
@@ -462,6 +503,8 @@ qint64 MailWebDavRangeDevice::readData(char *data, qint64 maxSize)
                 return -1;
             if (!applyPendingSeek())
                 return -1;
+            if (m_interruptRequested.load())
+                return finishRead(copied);
             offset = QIODevice::pos();
             if (offset < 0 || offset >= size())
                 return finishRead(copied);
@@ -476,6 +519,8 @@ qint64 MailWebDavRangeDevice::readData(char *data, qint64 maxSize)
         if (!loadPage(pageIndex, generation)) {
             if (generation != m_generation.load())
                 continue;
+            if (m_interruptRequested.load())
+                return -1;
             return finishRead(copied > 0 ? copied : -1);
         }
         QMutexLocker lock(&m_mutex);

@@ -1,7 +1,8 @@
 #include "MailWebDavController.h"
 #include "MailWebDavRangeDevice.h"
 
-MailWebDavController::MailWebDavController(QObject *parent) : QObject(parent)
+MailWebDavController::MailWebDavController(QObject *parent, bool streamableFormatsOnly)
+    : QObject(parent), m_streamableFormatsOnly(streamableFormatsOnly)
 {
 }
 
@@ -207,6 +208,7 @@ void MailWebDavController::disconnectCloud()
     m_connected = false;
     emit entriesChanged();
     setStatus(QStringLiteral("Отключено. Временная сессия и учётные данные удалены."));
+    emit sessionEnded();
 }
 
 void MailWebDavController::dropSession()
@@ -405,7 +407,8 @@ void MailWebDavController::handleCompleted(const MailWebDavProbe::Result &result
         if (result.error == MailWebDavProbe::Error::None) {
             m_entries.clear();
             for (const auto &entry : result.entries) {
-                if (entry.directory || isAudio(entry.path))
+                if (entry.directory || (m_streamableFormatsOnly
+                        ? isStreamable(entry.path) : isAudio(entry.path)))
                     m_entries.push_back(entry);
             }
             m_connected = true;
@@ -426,6 +429,7 @@ void MailWebDavController::handleCompleted(const MailWebDavProbe::Result &result
         m_entries.clear();
         emit entriesChanged();
         setStatus(message);
+        emit sessionEnded();
         return;
     }
 
@@ -436,6 +440,7 @@ void MailWebDavController::handleCompleted(const MailWebDavProbe::Result &result
         m_connected = false;
         m_entries.clear();
         emit entriesChanged();
+        emit sessionEnded();
     }
     setStatus(message);
     emit stateChanged();

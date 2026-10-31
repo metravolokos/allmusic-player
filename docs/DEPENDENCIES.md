@@ -176,12 +176,13 @@ Issue #26 принимает для этого spike только MP3 и FLAC; W
 `scripts/generate_android_media3_fixtures.py` через локальный FFmpeg-инструмент
 при разработке; это не Android runtime dependency.
 
-APK-аудит требует package ID
-`org.metravolokos.allmusicplayer.spike002dmedia3`, только ABI `arm64-v8a`,
-встроенные синтетические файлы и Media3 классы в DEX. Аудит запрещает Qt
-Multimedia/его плагины, FFmpeg-библиотеки/extension, GMS/Firebase, разрешения
-Android и неожиданные service/receiver/provider компоненты. Приложению не нужны
-`INTERNET`, доступ к хранилищу, аудиозапись, Bluetooth или пользовательские медиа.
+Cloud APK-аудит требует package ID
+`org.metravolokos.allmusicplayer.cloud002dmedia3`, только ABI `arm64-v8a`,
+Media3 классы в DEX и синтетические локальные файлы для регрессии. Единственное
+разрешение — `android.permission.INTERNET`, необходимое для HTTPS Cloud Mail;
+`ACCESS_NETWORK_STATE`, Qt Multimedia/его плагины, FFmpeg-библиотеки/extension,
+GMS/Firebase и неожиданные service/receiver/provider компоненты запрещены.
+Доступ к пользовательским медиа, хранилищу, аудиозаписи и Bluetooth не нужен.
 
 POM Media3 1.11.1 объявляет Apache License 2.0; её полный текст из тега Media3
 1.11.1 включается в `licenses/java/Media3-1.11.1-Apache-2.0.txt` комплекта.

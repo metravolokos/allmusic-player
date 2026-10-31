@@ -1145,6 +1145,32 @@ private slots:
         QVERIFY(timer.elapsed() < 1500);
         QCOMPARE(result.load(), -1);
     }
+    void interruptKeepsSourceReusableForSeekOrResume()
+    {
+        mailDelayNextResponseMs = 3000;
+        auto *device = MailWebDavRangeDeviceTests::create(server.serverPort(), mailEntry());
+        QVERIFY(device->open(QIODevice::ReadOnly));
+        std::atomic<qint64> firstRead{0};
+        std::thread reader([&] { char byte = 0; firstRead = device->read(&byte, 1); });
+        QTRY_VERIFY_WITH_TIMEOUT(!server.requests.isEmpty(), 2000);
+
+        QElapsedTimer timer;
+        timer.start();
+        device->interruptPendingRead();
+        reader.join();
+        QVERIFY(timer.elapsed() < 1500);
+        QCOMPARE(firstRead.load(), -1);
+
+        QVERIFY(device->seek(0));
+        std::atomic<qint64> resumedRead{0};
+        char resumedByte = 0;
+        std::thread resumed([&] { resumedRead = device->read(&resumedByte, 1); });
+        resumed.join();
+        QCOMPARE(resumedRead.load(), 1);
+        QCOMPARE(uchar(resumedByte), uchar(audio[0]));
+        QCOMPARE(server.requests.size(), 2);
+        delete device;
+    }
 };
 
 QTEST_GUILESS_MAIN(StreamingTests)

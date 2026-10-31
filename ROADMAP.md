@@ -46,6 +46,19 @@ Huawei; до этого MP3/FLAC, seek, устройство и аудиомар
 **НЕ ПРОВЕРЕНЫ**. Фон/MediaSession/lock screen и Bluetooth L2HC/LDAC или USB DAC
 не включены в Definition of Done этого spike.
 
+## 002-D Cloud Mail — Issue #24
+
+Следующий вертикальный срез расширяет уже проверенный локальный Media3 путь
+read-only подключением к Cloud Mail через общий C++ WebDAV/Range клиент. Android
+использует custom Media3 `DataSource` и непрозрачные JNI handles; не вводит новый
+Java networking stack и не меняет Desktop playback. Принимаются только MP3/FLAC,
+папки остаются в `/AllMusic`, звук начинает загружаться только после явного Play.
+Mock обязан подтвердить HTTP 206, запрет полной загрузки при 200, диапазоны до
+64 КиБ, предел кэша 256 КиБ, seek/reopen, отмену Stop/Disconnect и отсутствие
+секретов в URI/логах. Android/Desktop CI и APK package audit отделяются от
+ручной проверки реального Cloud Mail на Huawei; до неё приёмка остаётся
+**НЕ ПРОВЕРЕНА**.
+
 ## Тестовая матрица и приоритеты — утверждено 29.10.2026
 
 | Приоритет / платформа | Когда и что проверять | Доступность (Москва) | Состояние |

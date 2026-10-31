@@ -17,7 +17,8 @@ class MailWebDavController final : public QObject {
     Q_PROPERTY(int entryCount READ entryCount NOTIFY entriesChanged)
     Q_PROPERTY(QString currentDirectory READ currentDirectory NOTIFY stateChanged)
 public:
-    explicit MailWebDavController(QObject *parent = nullptr);
+    explicit MailWebDavController(QObject *parent = nullptr,
+                                  bool streamableFormatsOnly = false);
     ~MailWebDavController() override;
 
     QString status() const { return m_status; }
@@ -47,6 +48,7 @@ signals:
     void entriesChanged();
     void playbackRequested(int index);
     void disconnectPlayback();
+    void sessionEnded();
 
 private:
     void handleCompleted(const MailWebDavProbe::Result &result);
@@ -65,4 +67,5 @@ private:
     bool m_busy = false;
     bool m_connected = false;
     bool m_playbackActive = false;
+    bool m_streamableFormatsOnly = false;
 };

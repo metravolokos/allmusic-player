@@ -5,7 +5,12 @@ if(ANDROID)
     target_sources(allmusic-player PRIVATE
         AndroidMedia3Controller.cpp
         AndroidMedia3Controller.h
-        AndroidMedia3State.h)
+        AndroidMedia3State.h
+        AndroidMailRangeRegistry.cpp
+        AndroidMailRangeRegistry.h
+        MailWebDavController.cpp
+        MailWebDavController.h)
+    target_link_libraries(allmusic-player PRIVATE mail-webdav-range)
     set(app_qml ${PROJECT_SOURCE_DIR}/ui/android/Main.qml)
 else()
     target_sources(allmusic-player PRIVATE
@@ -31,7 +36,7 @@ else()
 endif()
 
 if(ANDROID)
-    set(ALLMUSIC_BUILD_LABEL "002-D-M3-local" CACHE STRING "Non-secret test build identity")
+    set(ALLMUSIC_BUILD_LABEL "002-D-cloud" CACHE STRING "Non-secret test build identity")
     set(ALLMUSIC_ANDROID_VERSION_CODE "1" CACHE STRING "Android test version code")
     if(NOT ALLMUSIC_BUILD_LABEL MATCHES "^[a-zA-Z0-9._-]+$")
         message(FATAL_ERROR "Invalid test build label")
@@ -44,15 +49,15 @@ if(ANDROID)
     set_target_properties(allmusic-player PROPERTIES
         QT_QML_ROOT_PATH "${PROJECT_SOURCE_DIR}/ui/android"
         QT_ANDROID_PACKAGE_SOURCE_DIR "${PROJECT_SOURCE_DIR}/android"
-        QT_ANDROID_PACKAGE_NAME "org.metravolokos.allmusicplayer.spike002dmedia3"
-        QT_ANDROID_APP_NAME "AllMusic Player — Media3 002-D-M3"
+        QT_ANDROID_PACKAGE_NAME "org.metravolokos.allmusicplayer.cloud002dmedia3"
+        QT_ANDROID_APP_NAME "AllMusic Player — Cloud Mail Media3"
         QT_ANDROID_VERSION_NAME "0.0.1-${ALLMUSIC_BUILD_LABEL}"
         QT_ANDROID_VERSION_CODE "${ALLMUSIC_ANDROID_VERSION_CODE}"
         QT_ANDROID_MIN_SDK_VERSION 28
         QT_ANDROID_TARGET_SDK_VERSION 36
         QT_ANDROID_COMPILE_SDK_VERSION 36
         QT_ANDROID_SDK_BUILD_TOOLS_REVISION "36.0.0")
-    # Keep the Android local-audio experiment isolated from the Desktop engine,
+    # Keep the Android Cloud Mail target isolated from Desktop playback,
     # loopback tools, and native Desktop CTest targets.
     return()
 endif()

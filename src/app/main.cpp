@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
 
 #ifndef Q_OS_ANDROID
     LocalPlayback playback;
-    MailWebDavController mailWebDav;
+    MailWebDavController mailWebDav(nullptr, true);
     QObject::connect(&mailWebDav, &MailWebDavController::playbackRequested,
                      &playback, [&mailWebDav, &playback](int index) {
         QString label;
@@ -52,7 +52,8 @@ int main(int argc, char *argv[])
     QObject::connect(&app, &QCoreApplication::aboutToQuit,
                      &mailWebDav, &MailWebDavController::disconnectCloud);
 #else
-    AndroidMedia3Controller media3;
+    MailWebDavController mailWebDav;
+    AndroidMedia3Controller media3(&mailWebDav);
 #endif
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed,

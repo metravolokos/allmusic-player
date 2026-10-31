@@ -96,14 +96,15 @@ Android SDK/NDK не устанавливаются в задаче 000. Ран�
 
 ## Android Media3 002-D-M3
 
-Локальный Android spike использует AndroidX Media3 / ExoPlayer через Java/JNI
-адаптер и существующий Qt Quick экран. Qt Multimedia и Qt FFmpeg в Android цель
-не подключаются. Основной путь — workflow `.github/workflows/android.yml`:
+Android использует AndroidX Media3 / ExoPlayer через Java/JNI адаптер. Для Cloud
+Mail подключён существующий C++ WebDAV/Range код; Qt Multimedia и Qt FFmpeg в
+Android target не подключаются. Основной путь — workflow `.github/workflows/android.yml`:
 `pull_request`, `workflow_dispatch`, push в main и опубликованный release;
 классификатор выбирает нужные проверки по diff. PR собирает и проверяет APK без
-его сохранения. Для проверочного APK вручную запустите **Android Media3 002-D-M3**
-с `source_ref=codex/002-d-media3-spike`, `android_apk=true`, `full_tests=true`.
-Артефакт хранится 14 дней. Фильтр не меняет required checks или защиту main.
+его сохранения. Для Huawei APK и полного Android CI укажите
+`source_ref=codex/002-d-android-cloud-media3`, `android_apk=true`,
+`full_tests=true`. PR этой ветки также сохраняет APK артефакт, поскольку он
+явно запрошен в Issue #24. Артефакт хранится 14 дней.
 
 На подготовленной Linux-машине с Android SDK, JDK 21, NDK 27.2.12479018,
 SDK platform 36 / build-tools 36.0.0, Qt 6.12.0 Android arm64 и host gcc_64:
@@ -112,7 +113,7 @@ SDK platform 36 / build-tools 36.0.0, Qt 6.12.0 Android arm64 и host gcc_64:
 export ANDROID_HOME=/path/to/Android/Sdk
 export QT_ANDROID_ROOT=/path/to/Qt/6.12.0/android_arm64_v8a
 export QT_HOST_PATH=/path/to/Qt/6.12.0/gcc_64
-cmake --preset android-debug -DALLMUSIC_BUILD_LABEL=002-D-M3-local
+cmake --preset android-debug -DALLMUSIC_BUILD_LABEL=002-D-cloud
 cmake --build --preset android-debug --parallel 2
 ```
 
@@ -122,7 +123,7 @@ Qt Multimedia для Android не требуется. Gradle используе�
 MP3/FLAC/WAV хранятся в `android/assets/audio/`; при необходимости их можно
 пересоздать командой `python3 scripts/generate_android_media3_fixtures.py` с
 FFmpeg, который служит только локальным генератором. Для Huawei используйте
-пошаговую инструкцию `docs/ANDROID-MEDIA3-SPIKE-TEST.md`.
+пошаговую инструкцию `docs/002-D-ANDROID-CLOUD.md`.
 
 Для маркировки CI использует SHA проверяемого merge commit, run ID и attempt;
 versionCode — номер запуска workflow. Пакет самодостаточный, debug, подпись

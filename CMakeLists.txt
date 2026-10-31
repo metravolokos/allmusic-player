@@ -6,18 +6,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Deliberately require the approved version; never silently use another Qt.
-find_package(Qt6 6.12.0 EXACT REQUIRED COMPONENTS Quick)
+find_package(Qt6 6.12.0 EXACT REQUIRED COMPONENTS Quick Network)
 qt_standard_project_setup(REQUIRES 6.12)
 
 if(NOT ANDROID)
-    find_package(Qt6 6.12.0 EXACT REQUIRED COMPONENTS Network Multimedia QuickControls2)
-endif()
-if(ANDROID)
-    add_subdirectory(src/app)
-    return()
+    find_package(Qt6 6.12.0 EXACT REQUIRED COMPONENTS Multimedia QuickControls2)
 endif()
 
-include(CTest)
 add_library(webdav-spike STATIC src/cloud/WebDavProbe.cpp src/cloud/WebDavProbe.h)
 target_link_libraries(webdav-spike PUBLIC Qt6::Network)
 target_include_directories(webdav-spike PUBLIC src/cloud)
@@ -26,6 +21,20 @@ add_library(mail-webdav-diagnostic STATIC
     src/cloud/MailWebDavProbe.h)
 target_link_libraries(mail-webdav-diagnostic PUBLIC webdav-spike Qt6::Network)
 target_include_directories(mail-webdav-diagnostic PUBLIC src/cloud)
+
+if(ANDROID)
+    # The Android target reuses the audited Mail client and bounded Range
+    # device without pulling Qt Multimedia into the APK or Desktop playback.
+    add_library(mail-webdav-range STATIC
+        src/playback/MailWebDavRangeDevice.cpp
+        src/playback/MailWebDavRangeDevice.h)
+    target_link_libraries(mail-webdav-range PUBLIC mail-webdav-diagnostic Qt6::Network)
+    target_include_directories(mail-webdav-range PUBLIC src/playback src/cloud)
+    add_subdirectory(src/app)
+    return()
+endif()
+
+include(CTest)
 add_subdirectory(src/app)
 target_link_libraries(local-playback PUBLIC webdav-spike)
 target_include_directories(local-playback PRIVATE src/cloud)

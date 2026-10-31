@@ -3,7 +3,7 @@ Total output lines: 434
 
 # Текущий статус проекта — AllMusic Player
 
-**Дата:** 31.10.2026. **Текущий статус:** 002-A принята владельцем в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19); 002-B объединена в `main`; 002-C объединена в `main` коммитом `aa7e18b05c034eb42b53b51ebbc5ecfe76a1f53d`. Начат отдельный Android Media3 spike 002-D-M3 по Issue #26 от этой базы. Реализация и локальные проверки подготовлены в ветке `codex/002-d-media3-spike`; Android/Desktop CI, draft PR и Huawei ручная проверка ещё ожидаются. Cloud Mail не используется.
+**Дата:** 31.10.2026. **Текущий статус:** 002-A принята владельцем в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19); 002-B и Desktop 002-C приняты в `main`. Локальный Android Media3 срез Issue #26 прошёл Android/Desktop CI и был проверен на Huawei. Начата интеграция Android Cloud Mail по Issue #24 в `codex/002-d-android-cloud-media3`; её CI, тестовый APK и ручная проверка Cloud Mail на Huawei ещё ожидаются. CI использует только mock; пароль и медиатека владельца не используются.
 
 ## Утверждено и подготовлено
 
@@ -428,3 +428,31 @@ Draft [PR #27](https://github.com/metravolokos/allmusic-player/pull/27) оста
 открытым. Ручное испытание слышимого звука и контролов на Huawei ещё
 **НЕ ПРОВЕРЕНО**. Не объединять PR до его успешного завершения и подтверждения
 владельцем.
+
+## 002-D Cloud Mail — Issue #24 (31.10.2026)
+
+Реализация начата в `codex/002-d-android-cloud-media3` от обязательного SHA
+`a24a1834845b592ec27d98f1706a53d5727aecb3`. Android target подключает общий C++
+Mail WebDAV Range клиент и использует Media3 `ProgressiveMediaSource` с
+непрозрачным JNI handle. Java получает только handle и диапазонные байты; QML
+получает отображаемые подписи, но не URL или внутренние пути WebDAV. Заголовки и
+реквизиты не передаются Java/QML. Android APK получает только `INTERNET`; Desktop
+playback оставлен прежним.
+
+Добавлены мобильный вход и список MP3/FLAC внутри `/AllMusic`, явный запуск
+выбранного файла, custom `DataSource` для Media3 и отмена запроса при Stop/close /
+Disconnect. Текущие сетевые ограничения остаются у C++ Range-клиента: GET не
+больше 64 КиБ, кэш до 256 КиБ, обязательный HTTP 206, строгий TLS, без редиректов
+и без полной загрузки при HTTP 200. Для Disconnect добавлены асинхронное
+отзывание opaque handle и отложенное уничтожение Range-устройства после
+завершения активного read.
+
+Mock-тест отмены и повторного чтения добавлен; Android package audit обновлён под
+единственное INTERNET-разрешение и отдельный package ID. Локально пройдены
+Android Python tests (13), CI classifier tests (19), repository documentation
+check (94 файла), `py_compile` и `git diff --check`. C++/Qt тесты, Android APK,
+Desktop/Linux/Windows CI ещё не запускались: в текущей среде нет CMake, Ninja,
+Android SDK/NDK и Gradle; они запускаются GitHub Actions после создания draft PR.
+Сам draft PR ещё не создан. Реальный Cloud Mail на Huawei **НЕ ПРОВЕРЕН**; для
+владельца подготовлена инструкция
+[002-D-ANDROID-CLOUD.md](docs/002-D-ANDROID-CLOUD.md).

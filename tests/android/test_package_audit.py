@@ -7,8 +7,9 @@ import zipfile
 
 AUDIT = runpy.run_path(str(Path(__file__).resolve().parents[2] / 'scripts/package-android.py'))
 MANIFEST = '''<manifest xmlns:android="http://schemas.android.com/apk/res/android"
- package="org.metravolokos.allmusicplayer.spike002dmedia3">
+ package="org.metravolokos.allmusicplayer.cloud002dmedia3">
  <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="36"/>
+ <uses-permission android:name="android.permission.INTERNET"/>
  <application android:allowBackup="false" android:usesCleartextTraffic="false">
  <activity android:name="org.qtproject.qt.android.bindings.QtActivity" android:exported="true">
  <intent-filter><action android:name="android.intent.action.MAIN"/>
@@ -37,9 +38,13 @@ class PublicationBoundary(unittest.TestCase):
     def test_minimal_manifest(self):
         AUDIT['check_manifest'](MANIFEST)
 
+    def test_internet_is_the_only_permission(self):
+        self.assertRaises(AssertionError, AUDIT['check_manifest'],
+                          MANIFEST.replace('android.permission.INTERNET',
+                                           'android.permission.ACCESS_NETWORK_STATE'))
+
     def test_permission_and_component_rejections(self):
-        for element in ('uses-permission android:name="android.permission.INTERNET"',
-                        'uses-permission-sdk-23 android:name="android.permission.READ_MEDIA_AUDIO"',
+        for element in ('uses-permission-sdk-23 android:name="android.permission.READ_MEDIA_AUDIO"',
                         'uses-permission android:name="android.permission.RECORD_AUDIO"',
                         'uses-permission android:name="android.permission.CAMERA"',
                         'uses-permission android:name="android.permission.BLUETOOTH"',
@@ -51,7 +56,7 @@ class PublicationBoundary(unittest.TestCase):
                 AUDIT['check_manifest'](MANIFEST.replace('<application', '<' + element + '/><application'))
 
     def test_identity_platform_and_backup_rejections(self):
-        for before, after in [('spike002dmedia3', 'wrong'), ('minSdkVersion="28"', 'minSdkVersion="27"'),
+        for before, after in [('cloud002dmedia3', 'wrong'), ('minSdkVersion="28"', 'minSdkVersion="27"'),
                               ('targetSdkVersion="36"', 'targetSdkVersion="35"'),
                               ('allowBackup="false"', 'allowBackup="true"'),
                               ('QtActivity', 'WrongActivity')]:

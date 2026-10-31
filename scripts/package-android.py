@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = "org.metravolokos.allmusicplayer.spike002dmedia3"
+PACKAGE = "org.metravolokos.allmusicplayer.cloud002dmedia3"
 ANDROID = "{http://schemas.android.com/apk/res/android}"
 FORBIDDEN = re.compile(
     r"com[./]google[./](?:android[./]gms|firebase)|"
@@ -43,8 +43,12 @@ MAVEN_LICENSE_OVERRIDES = {
 def check_manifest(xml):
     manifest = ET.fromstring(xml)
     assert manifest.get("package") == PACKAGE, "Unexpected package identity"
-    assert not any(n.tag.startswith("uses-permission") or n.tag == "permission"
-                   for n in manifest.iter()), "APK must request/declare zero permissions"
+    requested = {n.get(ANDROID + "name") for n in manifest.iter()
+                 if n.tag.startswith("uses-permission")}
+    assert requested == {"android.permission.INTERNET"}, \
+        "APK must request INTERNET only"
+    assert not any(n.tag == "permission" for n in manifest.iter()), \
+        "APK must not declare custom permissions"
     extra = [(n.tag, n.get(ANDROID + "name")) for n in manifest.iter()
              if n.tag in {"service", "receiver", "provider", "activity-alias"}]
     assert not extra, f"Unexpected Android components: {extra}"
@@ -241,7 +245,7 @@ def main():
                 assert target.resolve().is_relative_to((output / "licenses").resolve())
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(archive.read(name))
-    for name in ("ANDROID-MEDIA3-SPIKE-TEST.md", "DEPENDENCIES.md"):
+    for name in ("002-D-ANDROID-CLOUD.md", "DEPENDENCIES.md"):
         shutil.copyfile(ROOT / "docs" / name, output / name)
     shutil.copytree(evidence, output / "audit", dirs_exist_ok=True)
     dependency_licenses = audit_maven_licenses(
@@ -250,7 +254,8 @@ def main():
     metadata = {"commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
                 "build_label": os.environ["BUILD_LABEL"], "abi": "arm64-v8a",
                 "run": os.environ["GITHUB_RUN_ID"], "attempt": os.environ["GITHUB_RUN_ATTEMPT"],
-                "device_compatibility": "NOT TESTED", "permissions": [],
+                "device_compatibility": "NOT TESTED",
+                "permissions": ["android.permission.INTERNET"],
                 "package": PACKAGE, "media3_version": MEDIA3_VERSION,
                 "apk_bytes": apk.stat().st_size,
                 "java_runtime_licenses": dependency_licenses,
@@ -263,7 +268,7 @@ def main():
             sums.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(output).as_posix()}")
     (output / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n")
     print(f"APK audit passed: {apk.stat().st_size} bytes; signature, alignment, arm64-v8a, "
-          "zero permissions, no Qt Multimedia/FFmpeg, Media3 runtime, and Maven license metadata")
+          "INTERNET-only permission, no Qt Multimedia/FFmpeg, Media3 runtime, and Maven license metadata")
 
 
 if __name__ == "__main__":
