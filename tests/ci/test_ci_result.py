@@ -37,6 +37,9 @@ class RequiredPrGate(unittest.TestCase):
                 content = (repository_root / ".github/workflows" / workflow).read_text(
                     encoding="utf-8")
                 self.assertIn("EVENT_NAME: ${{ github.event_name }}", content)
+                result_job = content.split("  ci-result:", 1)[1]
+                self.assertIn("actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683", result_job)
+                self.assertIn("persist-credentials: false", result_job)
                 self.assertIn(
                     'required_pr_gate_error(os.environ["EVENT_NAME"], os.environ["CI_MODE"])',
                     content,

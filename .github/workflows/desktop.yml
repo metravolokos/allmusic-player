@@ -368,6 +368,10 @@ jobs:
     needs: [classify, documentation, fixtures, linux, windows, warm_cache]
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || github.sha }}
+          persist-credentials: false
       - name: Проверить обязательные статусы
         env:
           CLASSIFY_RESULT: ${{ needs.classify.result }}
