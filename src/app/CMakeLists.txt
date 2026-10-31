@@ -13,6 +13,8 @@ if(ANDROID)
         endif()
     endforeach()
     target_sources(allmusic-player PRIVATE
+        AndroidCloudTrackListModel.cpp
+        AndroidCloudTrackListModel.h
         AndroidMedia3Controller.cpp
         AndroidMedia3Controller.h
         AndroidMedia3State.h

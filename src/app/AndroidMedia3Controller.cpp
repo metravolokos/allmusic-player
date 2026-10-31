@@ -50,7 +50,8 @@ AndroidMedia3State::Value valueFromJava(jint value)
 
 AndroidMedia3Controller::AndroidMedia3Controller(MailWebDavController *cloud,
                                                  QObject *parent)
-    : QObject(parent), m_cloud(cloud)
+    : QObject(parent), m_cloud(cloud),
+      m_cloudEntriesModel(new AndroidCloudTrackListModel(this))
 {
     if (!m_cloud || !AndroidMailRangeRegistry::registerJniMethods()) {
         setError(tr("Не удалось подключить безопасный мост Cloud Mail."));
@@ -89,8 +90,11 @@ AndroidMedia3Controller::AndroidMedia3Controller(MailWebDavController *cloud,
             this, &AndroidMedia3Controller::playCloud);
     connect(m_cloud, &MailWebDavController::stateChanged,
             this, &AndroidMedia3Controller::changed);
-    connect(m_cloud, &MailWebDavController::entriesChanged,
-            this, &AndroidMedia3Controller::changed);
+    connect(m_cloud, &MailWebDavController::entriesChanged, this, [this] {
+        m_cloudEntriesModel->setEntries(m_cloud->entries());
+        emit cloudEntriesReset();
+        emit changed();
+    });
     connect(m_cloud, &MailWebDavController::sessionEnded,
             this, &AndroidMedia3Controller::cloudSessionEnded);
 
@@ -210,9 +214,9 @@ QString AndroidMedia3Controller::cloudDirectoryLabel() const
     return slash >= 0 ? path.mid(slash + 1) : path;
 }
 
-QVariantList AndroidMedia3Controller::cloudEntries() const
+AndroidCloudTrackListModel *AndroidMedia3Controller::cloudEntriesModel() const
 {
-    return m_cloud ? m_cloud->entries() : QVariantList{};
+    return m_cloudEntriesModel;
 }
 
 void AndroidMedia3Controller::connectCloud(QString email, QString appPassword)
@@ -231,7 +235,7 @@ void AndroidMedia3Controller::disconnectCloud()
 
 void AndroidMedia3Controller::openCloudDirectory(int index)
 {
-    if (m_cloud)
+    if (m_cloud && m_cloudEntriesModel->containsSourceIndex(index))
         m_cloud->openDirectory(index);
 }
 
@@ -248,7 +252,8 @@ void AndroidMedia3Controller::goToCloudParent()
 
 bool AndroidMedia3Controller::canPlayCloud(int index) const
 {
-    return m_cloud && m_cloud->canPlay(index);
+    return m_cloud && m_cloudEntriesModel->containsSourceIndex(index)
+        && m_cloud->canPlay(index);
 }
 
 void AndroidMedia3Controller::selectTrack(int index)
@@ -299,7 +304,8 @@ void AndroidMedia3Controller::stop()
 
 void AndroidMedia3Controller::playCloud(int index)
 {
-    if (m_released || !m_cloud || !m_cloud->canPlay(index))
+    if (m_released || !m_cloud || !m_cloudEntriesModel->containsSourceIndex(index)
+        || !m_cloud->canPlay(index))
         return;
 
     releaseCloudSource();

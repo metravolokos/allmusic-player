@@ -79,6 +79,9 @@ if(BUILD_TESTING)
     set_tests_properties(playback-streaming PROPERTIES TIMEOUT 180
         ENVIRONMENT "QT_MEDIA_BACKEND=ffmpeg;QT_FFMPEG_PROTOCOL_WHITELIST=file;ALLMUSIC_FIXTURES=${CMAKE_SOURCE_DIR}/build/audio-fixtures")
     add_executable(android-media3-state-tests tests/android_media3/tst_android_media3_state.cpp)
+    target_sources(android-media3-state-tests PRIVATE
+        src/app/AndroidCloudTrackListModel.cpp
+        src/app/AndroidCloudTrackListModel.h)
     target_include_directories(android-media3-state-tests PRIVATE src/app)
     target_link_libraries(android-media3-state-tests PRIVATE Qt6::Test)
     add_test(NAME android-media3-state COMMAND android-media3-state-tests)

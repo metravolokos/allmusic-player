@@ -1,9 +1,9 @@
 #pragma once
 
+#include "AndroidCloudTrackListModel.h"
 #include "AndroidMedia3State.h"
 
 #include <QObject>
-#include <QVariantList>
 #include <QTimer>
 
 class MailWebDavController;
@@ -27,7 +27,7 @@ class AndroidMedia3Controller final : public QObject
     Q_PROPERTY(bool cloudBusy READ cloudBusy NOTIFY changed)
     Q_PROPERTY(QString cloudStatus READ cloudStatus NOTIFY changed)
     Q_PROPERTY(QString cloudDirectoryLabel READ cloudDirectoryLabel NOTIFY changed)
-    Q_PROPERTY(QVariantList cloudEntries READ cloudEntries NOTIFY changed)
+    Q_PROPERTY(AndroidCloudTrackListModel *cloudEntriesModel READ cloudEntriesModel CONSTANT)
 
 public:
     explicit AndroidMedia3Controller(MailWebDavController *cloud,
@@ -50,7 +50,7 @@ public:
     bool cloudBusy() const;
     QString cloudStatus() const;
     QString cloudDirectoryLabel() const;
-    QVariantList cloudEntries() const;
+    AndroidCloudTrackListModel *cloudEntriesModel() const;
 
 public slots:
     void selectTrack(int index);
@@ -70,6 +70,7 @@ public slots:
 signals:
     void changed();
     void cloudSessionEnded();
+    void cloudEntriesReset();
 
 private slots:
     void refreshState();
@@ -83,6 +84,7 @@ private:
 
     QTimer m_refreshTimer;
     MailWebDavController *m_cloud = nullptr;
+    AndroidCloudTrackListModel *m_cloudEntriesModel = nullptr;
     qint64 m_cloudHandle = 0;
     int m_cloudTrackIndex = -1;
     bool m_cloudTrackActive = false;
