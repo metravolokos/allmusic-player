@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review, edited]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   workflow_dispatch:
     inputs:
       source_ref:
@@ -38,8 +38,12 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       android: ${{ steps.changes.outputs.android }}
+      android_fast_checks: ${{ steps.changes.outputs.android_fast_checks }}
       android_cache_validation: ${{ steps.changes.outputs.android_cache_validation }}
+      ci_mode: ${{ steps.changes.outputs.ci_mode }}
+      affected_platforms: ${{ steps.changes.outputs.affected_platforms }}
       source_sha: ${{ steps.changes.outputs.source_sha }}
+      tested_sha: ${{ steps.changes.outputs.tested_sha }}
       reason: ${{ steps.changes.outputs.reason }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -55,11 +59,30 @@ jobs:
           CI_BEFORE: ${{ github.event.before }}
           CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CI_DRAFT: ${{ github.event.pull_request.draft }}
           CI_SOURCE_REF: ${{ inputs.source_ref }}
           CI_FULL_TESTS: ${{ inputs.full_tests }}
           CI_ANDROID_APK: ${{ inputs.android_apk }}
           CI_RELEASE: ${{ github.event_name == 'release' }}
         run: python3 scripts/classify-ci-changes.py
+
+  android-fast-checks:
+    needs: classify
+    if: needs.classify.outputs.ci_mode == 'draft-fast' && needs.classify.outputs.android_fast_checks == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Проверить Android assets и аудит упаковки без SDK
+        run: |
+          python3 -m unittest discover -s tests/android -v
+          python3 -m py_compile scripts/ci_result.py scripts/package-android.py scripts/build-android-openssl.py
+      - name: Записать объём Draft-проверки
+        run: |
+          echo "Draft fast mode: tests/android и статическая проверка Python; Android SDK, Qt, NDK и APK не запускались." >> "$GITHUB_STEP_SUMMARY"
 
   android:
     needs: classify
@@ -214,7 +237,7 @@ jobs:
           echo "Цель: Media3 1.11.1, Android arm64-v8a; компиляция и package/license audit, не проверка на устройстве." >> "$GITHUB_STEP_SUMMARY"
           echo "Qt cache hit: ${{ steps.qt_cache.outputs.cache-hit }}" >> "$GITHUB_STEP_SUMMARY"
       - name: Сохранить APK только по запросу или для релиза
-        if: (github.event_name == 'release') || (github.event_name == 'workflow_dispatch' && inputs.android_apk) || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/002-d-android-cloud-media3')
+        if: (github.event_name == 'release') || (github.event_name == 'workflow_dispatch' && inputs.android_apk)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ env.ARTIFACT_NAME }}
@@ -291,26 +314,48 @@ jobs:
   ci-result:
     name: Android CI result
     if: always()
-    needs: [classify, android, warm_cache]
+    needs: [classify, android-fast-checks, android, warm_cache]
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || github.sha }}
+          persist-credentials: false
       - name: Проверить итоговый Android-статус
         env:
           CLASSIFY_RESULT: ${{ needs.classify.result }}
+          FAST_RESULT: ${{ needs.android-fast-checks.result }}
           ANDROID_RESULT: ${{ needs.android.result }}
           CACHE_RESULT: ${{ needs.warm_cache.result }}
           EXPECT_ANDROID: ${{ needs.classify.outputs.android }}
+          EXPECT_FAST: ${{ needs.classify.outputs.android_fast_checks == 'true' && needs.classify.outputs.ci_mode == 'draft-fast' }}
           EXPECT_CACHE: ${{ needs.classify.outputs.android_cache_validation }}
+          CI_MODE: ${{ needs.classify.outputs.ci_mode }}
+          AFFECTED_PLATFORMS: ${{ needs.classify.outputs.affected_platforms }}
           CHANGE_REASON: ${{ needs.classify.outputs.reason }}
           SOURCE_SHA: ${{ needs.classify.outputs.source_sha }}
+          TESTED_SHA: ${{ needs.classify.outputs.tested_sha }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           python3 - <<'PY'
           import os
           import sys
+          from scripts.ci_result import required_pr_gate_error
 
           failures = []
+          gate_error = required_pr_gate_error(os.environ["EVENT_NAME"], os.environ["CI_MODE"])
+          if gate_error:
+              failures.append(f"MERGE GATE: {gate_error}")
           if os.environ["CLASSIFY_RESULT"] != "success":
               failures.append(f"CLASSIFY: {os.environ['CLASSIFY_RESULT']}")
+          if not os.environ["CI_MODE"]:
+              failures.append("CLASSIFY: ci_mode was not reported")
+          fast_result = os.environ["FAST_RESULT"]
+          fast_expected = os.environ["EXPECT_FAST"] == "true"
+          if fast_expected and fast_result != "success":
+              failures.append(f"ANDROID_FAST: expected success, got {fast_result}")
+          if not fast_expected and fast_result not in {"success", "skipped"}:
+              failures.append(f"ANDROID_FAST: unexpected {fast_result}")
           result = os.environ["ANDROID_RESULT"]
           expected = os.environ["EXPECT_ANDROID"] == "true"
           if expected and result != "success":
@@ -325,7 +370,17 @@ jobs:
           if (not cache_expected or not android_succeeded) and cache_result not in {"success", "skipped"}:
               failures.append(f"CACHE: unexpected {cache_result}")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-              summary.write(f"Изменения: {os.environ['CHANGE_REASON']}\n\nИсходный commit: `{os.environ['SOURCE_SHA']}`\n")
+              summary.write(
+                  f"Режим CI: `{os.environ['CI_MODE']}`\n\n"
+                  f"Затронутые платформы: {os.environ['AFFECTED_PLATFORMS']}\n\n"
+                  f"Причина: {os.environ['CHANGE_REASON']}\n\n"
+                  f"Исходный commit: `{os.environ['SOURCE_SHA']}`\n\n"
+                  f"Проверяемый commit: `{os.environ['TESTED_SHA']}`\n\n"
+                  f"Фактически: лёгкие Android-проверки — {os.environ['FAST_RESULT']} "
+                  f"(нужны: {os.environ['EXPECT_FAST']}); Android build/audit — "
+                  f"{os.environ['ANDROID_RESULT']}; warm-cache — {os.environ['CACHE_RESULT']}.\n"
+                  f"Required PR merge gate: {'blocked' if gate_error else 'passed for this CI mode'}.\n"
+              )
           if failures:
               print("\n".join(failures), file=sys.stderr)
               raise SystemExit(1)

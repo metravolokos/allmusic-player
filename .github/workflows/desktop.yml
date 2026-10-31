@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review, edited]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   workflow_dispatch:
     inputs:
       source_ref:
@@ -48,7 +48,10 @@ jobs:
       windows_zip: ${{ steps.changes.outputs.windows_zip }}
       webdav_test_kit: ${{ steps.changes.outputs.webdav_test_kit }}
       desktop_cache_validation: ${{ steps.changes.outputs.desktop_cache_validation }}
+      ci_mode: ${{ steps.changes.outputs.ci_mode }}
+      affected_platforms: ${{ steps.changes.outputs.affected_platforms }}
       source_sha: ${{ steps.changes.outputs.source_sha }}
+      tested_sha: ${{ steps.changes.outputs.tested_sha }}
       reason: ${{ steps.changes.outputs.reason }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -64,6 +67,7 @@ jobs:
           CI_BEFORE: ${{ github.event.before }}
           CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CI_DRAFT: ${{ github.event.pull_request.draft }}
           CI_SOURCE_REF: ${{ inputs.source_ref }}
           CI_FULL_TESTS: ${{ inputs.full_tests }}
           CI_WINDOWS_ZIP: ${{ inputs.windows_zip }}
@@ -82,6 +86,7 @@ jobs:
         run: |
           python3 scripts/check_repository.py
           python3 -m unittest discover -s tests/ci -v
+          python3 -m py_compile scripts/check_repository.py scripts/classify-ci-changes.py scripts/ci_result.py
 
   fixtures:
     needs: classify
@@ -328,7 +333,7 @@ jobs:
           echo "Исходный commit: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
           echo "Ветка/событие: $GITHUB_REF_NAME / $GITHUB_EVENT_NAME" >> "$GITHUB_STEP_SUMMARY"
       - name: Сохранить Windows ZIP для ручной проверки или релиза
-        if: (github.event_name == 'release') || (github.event_name == 'workflow_dispatch' && inputs.windows_zip) || (github.event_name == 'pull_request' && needs.classify.outputs.windows_zip == 'true')
+        if: (github.event_name == 'release') || (github.event_name == 'workflow_dispatch' && inputs.windows_zip)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: AllMusicPlayer-Windows-x64-${{ github.run_id }}
@@ -363,6 +368,10 @@ jobs:
     needs: [classify, documentation, fixtures, linux, windows, warm_cache]
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || github.sha }}
+          persist-credentials: false
       - name: Проверить обязательные статусы
         env:
           CLASSIFY_RESULT: ${{ needs.classify.result }}
@@ -377,15 +386,25 @@ jobs:
           EXPECT_CACHE: ${{ needs.classify.outputs.desktop_cache_validation }}
           CHANGE_REASON: ${{ needs.classify.outputs.reason }}
           SOURCE_SHA: ${{ needs.classify.outputs.source_sha }}
+          TESTED_SHA: ${{ needs.classify.outputs.tested_sha }}
+          CI_MODE: ${{ needs.classify.outputs.ci_mode }}
+          EVENT_NAME: ${{ github.event_name }}
+          AFFECTED_PLATFORMS: ${{ needs.classify.outputs.affected_platforms }}
         run: |
           python3 - <<'PY'
           import os
           import sys
+          from scripts.ci_result import required_pr_gate_error
 
           failures = []
+          gate_error = required_pr_gate_error(os.environ["EVENT_NAME"], os.environ["CI_MODE"])
+          if gate_error:
+              failures.append(f"MERGE GATE: {gate_error}")
           for name in ("CLASSIFY", "DOCUMENTATION"):
               if os.environ[f"{name}_RESULT"] != "success":
                   failures.append(f"{name}: {os.environ[f'{name}_RESULT']}")
+          if not os.environ["CI_MODE"]:
+              failures.append("CLASSIFY: ci_mode was not reported")
           for job, expected in (("FIXTURES", "EXPECT_FIXTURES"), ("LINUX", "EXPECT_LINUX"), ("WINDOWS", "EXPECT_WINDOWS")):
               result = os.environ[f"{job}_RESULT"]
               should_run = os.environ[expected] == "true"
@@ -406,7 +425,17 @@ jobs:
           if (not cache_expected or not platforms_succeeded) and cache_result not in {"success", "skipped"}:
               failures.append(f"CACHE: unexpected {cache_result}")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-              summary.write(f"Изменения: {os.environ['CHANGE_REASON']}\n\nИсходный commit: `{os.environ['SOURCE_SHA']}`\n")
+              summary.write(
+                  f"Режим CI: `{os.environ['CI_MODE']}`\n\n"
+                  f"Затронутые платформы: {os.environ['AFFECTED_PLATFORMS']}\n\n"
+                  f"Причина: {os.environ['CHANGE_REASON']}\n\n"
+                  f"Исходный commit: `{os.environ['SOURCE_SHA']}`\n\n"
+                  f"Проверяемый commit: `{os.environ['TESTED_SHA']}`\n\n"
+                  f"Фактически: документы + tests/ci — {os.environ['DOCUMENTATION_RESULT']}; "
+                  f"fixtures — {os.environ['FIXTURES_RESULT']}; Linux — {os.environ['LINUX_RESULT']}; "
+                  f"Windows — {os.environ['WINDOWS_RESULT']}; warm-cache — {os.environ['CACHE_RESULT']}.\n"
+                  f"Required PR merge gate: {'blocked' if gate_error else 'passed for this CI mode'}.\n"
+              )
           if failures:
               print("\n".join(failures), file=sys.stderr)
               raise SystemExit(1)
