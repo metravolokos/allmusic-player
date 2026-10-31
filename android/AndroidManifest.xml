@@ -12,6 +12,11 @@
         tools:node="remove" />
     <uses-permission android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
         tools:node="remove" />
+    <!-- This local asset test uses neither network-state callbacks nor wake locks. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.WAKE_LOCK"
+        tools:node="remove" />
     <uses-feature android:glEsVersion="0x00020000" android:required="true" />
     <supports-screens android:anyDensity="true" android:largeScreens="true"
         android:normalScreens="true" android:smallScreens="true" />
