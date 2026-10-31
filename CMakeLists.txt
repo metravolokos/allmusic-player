@@ -83,7 +83,8 @@ if(BUILD_TESTING)
         src/app/AndroidCloudTrackListModel.cpp
         src/app/AndroidCloudTrackListModel.h)
     target_include_directories(android-media3-state-tests PRIVATE src/app)
-    target_link_libraries(android-media3-state-tests PRIVATE Qt6::Test)
+    # Headless execution of real QML -> QObject calls/properties on Desktop CI.
+    target_link_libraries(android-media3-state-tests PRIVATE Qt6::Test Qt6::Qml)
     add_test(NAME android-media3-state COMMAND android-media3-state-tests)
     add_test(NAME webdav-safety COMMAND webdav-tests)
     set_tests_properties(webdav-safety PROPERTIES TIMEOUT 90)
