@@ -7,13 +7,30 @@ import zipfile
 
 AUDIT = runpy.run_path(str(Path(__file__).resolve().parents[2] / 'scripts/package-android.py'))
 MANIFEST = '''<manifest xmlns:android="http://schemas.android.com/apk/res/android"
- package="org.metravolokos.allmusicplayer.spike002a">
+ package="org.metravolokos.allmusicplayer.spike002dmedia3">
  <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="36"/>
  <application android:allowBackup="false" android:usesCleartextTraffic="false">
  <activity android:name="org.qtproject.qt.android.bindings.QtActivity" android:exported="true">
  <intent-filter><action android:name="android.intent.action.MAIN"/>
  <category android:name="android.intent.category.LAUNCHER"/></intent-filter>
  </activity></application></manifest>'''
+DEPENDENCIES = ('debugRuntimeClasspath\n'
+                '+--- androidx.media3:media3-exoplayer:1.11.1\n'
+                '\\--- androidx.core:core:1.17.0')
+DEX = b'Landroidx/media3/exoplayer/ExoPlayerImpl;\nMedia3PlaybackAdapter'
+ASSETS = ('assets/audio/synthetic-440hz.mp3',
+          'assets/audio/synthetic-660hz.flac',
+          'assets/audio/synthetic-880hz.wav')
+NATIVE = ('liballmusic-player', 'libQt6Core', 'libQt6Gui', 'libQt6Quick')
+
+
+def write_test_apk(path, abi='arm64-v8a', extra_native=(), dex=DEX, assets=ASSETS):
+    with zipfile.ZipFile(path, 'w') as archive:
+        for name in NATIVE + tuple(extra_native):
+            archive.writestr(f'lib/{abi}/{name}_{abi}.so', b'fixture, not ELF')
+        archive.writestr('classes.dex', dex)
+        for name in assets:
+            archive.writestr(name, b'synthetic test asset')
 
 
 class PublicationBoundary(unittest.TestCase):
@@ -34,7 +51,7 @@ class PublicationBoundary(unittest.TestCase):
                 AUDIT['check_manifest'](MANIFEST.replace('<application', '<' + element + '/><application'))
 
     def test_identity_platform_and_backup_rejections(self):
-        for before, after in [('spike002a', 'wrong'), ('minSdkVersion="28"', 'minSdkVersion="27"'),
+        for before, after in [('spike002dmedia3', 'wrong'), ('minSdkVersion="28"', 'minSdkVersion="27"'),
                               ('targetSdkVersion="36"', 'targetSdkVersion="35"'),
                               ('allowBackup="false"', 'allowBackup="true"'),
                               ('QtActivity', 'WrongActivity')]:
@@ -44,44 +61,77 @@ class PublicationBoundary(unittest.TestCase):
     def test_runtime_and_abi_boundary(self):
         with tempfile.TemporaryDirectory() as directory:
             apk = Path(directory) / 'fixture.apk'
-            for abi, dex, dependency, accepted in [
-                ('arm64-v8a', b'normal', 'androidx.core:core:1.17.0', True),
-                ('x86_64', b'normal', '', False),
-                ('arm64-v8a', b'Lcom/google/android/gms/common/X;', '', False),
-                ('arm64-v8a', b'normal', 'com.google.firebase:firebase-common', False),
-                ('arm64-v8a', b'normal', 'androidx.core:core:1.17.0 FAILED', False),
-            ]:
-                with self.subTest(abi=abi, dex=dex, dependency=dependency):
-                    with zipfile.ZipFile(apk, 'w') as archive:
-                        for name in ('liballmusic-player', 'libQt6Quick', 'libQt6Multimedia',
-                                     'libQt6Concurrent', 'libplugins_multimedia_androidmediaplugin'):
-                            archive.writestr(f'lib/{abi}/{name}_{abi}.so', b'fixture, not ELF')
-                        archive.writestr('classes.dex', dex)
-                    if accepted:
-                        AUDIT['check_runtime'](apk, 'debugRuntimeClasspath\n' + dependency)
-                    else:
-                        with self.assertRaises(AssertionError):
-                            AUDIT['check_runtime'](apk, 'debugRuntimeClasspath\n' + dependency)
+            write_test_apk(apk)
+            self.assertEqual(len(AUDIT['check_runtime'](apk, DEPENDENCIES)), len(NATIVE))
 
-    def test_ffmpeg_backend_and_native_libraries_are_rejected(self):
+            write_test_apk(apk, abi='x86_64')
+            with self.assertRaises(AssertionError):
+                AUDIT['check_runtime'](apk, DEPENDENCIES)
+
+            write_test_apk(apk, dex=b'Lcom/google/android/gms/common/X;')
+            with self.assertRaises(AssertionError):
+                AUDIT['check_runtime'](apk, DEPENDENCIES)
+
+            write_test_apk(apk, assets=ASSETS[:-1])
+            with self.assertRaises(AssertionError):
+                AUDIT['check_runtime'](apk, DEPENDENCIES)
+
+    def test_media3_dependency_is_required(self):
         with tempfile.TemporaryDirectory() as directory:
             apk = Path(directory) / 'fixture.apk'
-            with zipfile.ZipFile(apk, 'w') as archive:
-                for name in ('liballmusic-player', 'libQt6Quick', 'libQt6Multimedia',
-                             'libQt6Concurrent', 'libplugins_multimedia_androidmediaplugin',
-                             'libplugins_multimedia_ffmpegmediaplugin', 'libavcodec'):
-                    archive.writestr(f'lib/arm64-v8a/{name}_arm64-v8a.so', b'fixture')
-            with self.assertRaises(AssertionError):
-                AUDIT['check_runtime'](apk, 'debugRuntimeClasspath\nandroidx.core:core:1.17.0')
+            write_test_apk(apk)
+            for dependencies in ('debugRuntimeClasspath\nandroidx.media3:media3-exoplayer:1.11.2',
+                                 'debugRuntimeClasspath\nandroidx.core:core:1.17.0'):
+                with self.subTest(dependencies=dependencies), self.assertRaises(AssertionError):
+                    AUDIT['check_runtime'](apk, dependencies)
 
-    def test_multimedia_module_is_required(self):
+    def test_qt_multimedia_ffmpeg_and_media3_ffmpeg_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             apk = Path(directory) / 'fixture.apk'
-            with zipfile.ZipFile(apk, 'w') as archive:
-                archive.writestr('lib/arm64-v8a/liballmusic-player_arm64-v8a.so', b'fixture')
-                archive.writestr('lib/arm64-v8a/libQt6Quick_arm64-v8a.so', b'fixture')
+            write_test_apk(apk, extra_native=('libQt6Multimedia',
+                                              'libplugins_multimedia_androidmediaplugin'))
             with self.assertRaises(AssertionError):
-                AUDIT['check_runtime'](apk, 'debugRuntimeClasspath\nandroidx.core:core:1.17.0')
+                AUDIT['check_runtime'](apk, DEPENDENCIES)
+
+            write_test_apk(apk, extra_native=('libavcodec',))
+            with self.assertRaises(AssertionError):
+                AUDIT['check_runtime'](apk, DEPENDENCIES)
+
+            write_test_apk(apk)
+            with self.assertRaises(AssertionError):
+                AUDIT['check_runtime'](apk, DEPENDENCIES + '\nandroidx.media3:media3-exoplayer-ffmpeg:1.11.1')
+
+    def test_missing_media3_classes_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            apk = Path(directory) / 'fixture.apk'
+            write_test_apk(apk, dex=b'ordinary application classes')
+            with self.assertRaises(AssertionError):
+                AUDIT['check_runtime'](apk, DEPENDENCIES)
+
+    def test_maven_license_audit_requires_and_records_declared_license(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pom_dir = root / 'gradle/caches/modules-2/files-2.1/androidx.media3/media3-exoplayer/1.11.1/hash'
+            pom_dir.mkdir(parents=True)
+            pom = pom_dir / 'media3-exoplayer-1.11.1.pom'
+            pom.write_text('''<project xmlns="http://maven.apache.org/POM/4.0.0">
+              <licenses><license><name>Apache License, Version 2.0</name>
+              <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url></license></licenses>
+            </project>''', encoding='utf-8')
+            output = root / 'out'
+            records = AUDIT['audit_maven_licenses'](
+                'debugRuntimeClasspath\\n+--- androidx.media3:media3-exoplayer:1.11.1',
+                root / 'gradle', output)
+            self.assertIn('Apache License, Version 2.0', records[0])
+            self.assertTrue((output / 'licenses/java/DEPENDENCY-LICENSES.txt').is_file())
+
+            pom.write_text('''<project xmlns="http://maven.apache.org/POM/4.0.0">
+              <licenses><license><name>Unknown terms</name></license></licenses>
+            </project>''', encoding='utf-8')
+            with self.assertRaises(AssertionError):
+                AUDIT['audit_maven_licenses'](
+                    'debugRuntimeClasspath\\n+--- androidx.media3:media3-exoplayer:1.11.1',
+                    root / 'gradle', output)
 
 
 if __name__ == '__main__':

@@ -94,16 +94,16 @@ git diff --check
 Android SDK/NDK не устанавливаются в задаче 000. Ранняя проверка APK на Huawei
 запланирована отдельно и требует разрешения владельца на следующую задачу.
 
-## Android 002-A
+## Android Media3 002-D-M3
 
-Локальный аудио-прототип использует отдельный Android экран и Qt Multimedia.
-Основной путь — workflow
-`.github/workflows/android.yml`: `pull_request`, `workflow_dispatch`, push в main
-и опубликованный release; классификатор выбирает нужные проверки по diff. Для
-явно заказанной Issue #18 ветки `codex/002-a-android-audio` успешный PR-run
-сохраняет APK на 14 дней. Остальные PR собирают и проверяют APK без его сохранения.
-Фильтр не заменяет required checks в настройках GitHub: защита main этой задачей
-не меняется.
+Локальный Android spike использует AndroidX Media3 / ExoPlayer через Java/JNI
+адаптер и существующий Qt Quick экран. Qt Multimedia и Qt FFmpeg в Android цель
+не подключаются. Основной путь — workflow `.github/workflows/android.yml`:
+`pull_request`, `workflow_dispatch`, push в main и опубликованный release;
+классификатор выбирает нужные проверки по diff. PR собирает и проверяет APK без
+его сохранения. Для проверочного APK вручную запустите **Android Media3 002-D-M3**
+с `source_ref=codex/002-d-media3-spike`, `android_apk=true`, `full_tests=true`.
+Артефакт хранится 14 дней. Фильтр не меняет required checks или защиту main.
 
 На подготовленной Linux-машине с Android SDK, JDK 21, NDK 27.2.12479018,
 SDK platform 36 / build-tools 36.0.0, Qt 6.12.0 Android arm64 и host gcc_64:
@@ -112,23 +112,26 @@ SDK platform 36 / build-tools 36.0.0, Qt 6.12.0 Android arm64 и host gcc_64:
 export ANDROID_HOME=/path/to/Android/Sdk
 export QT_ANDROID_ROOT=/path/to/Qt/6.12.0/android_arm64_v8a
 export QT_HOST_PATH=/path/to/Qt/6.12.0/gcc_64
-cmake --preset android-debug -DALLMUSIC_BUILD_LABEL=002-A-local
+cmake --preset android-debug -DALLMUSIC_BUILD_LABEL=002-D-M3-local
 cmake --build --preset android-debug --parallel 2
 ```
 
-Для Android-конфигурации также установите Qt Multimedia 6.12.0 и Qt Shader Tools.
-Синтетический WAV создаётся скриптом во временном каталоге сборки и включается в
-Qt resource; аудиофайл в Git не добавляется. Для ручной установки используйте
-`docs/ANDROID-TEST.md`; только сборка этой заказанной PR-ветки сохраняет APK
-как artifact.
+Для Android-конфигурации нужны Qt Base/Declarative 6.12.0 и Qt Shader Tools;
+Qt Multimedia для Android не требуется. Gradle использует закреплённый
+`androidx.media3:media3-exoplayer:1.11.1`. Три короткие искусственные записи
+MP3/FLAC/WAV хранятся в `android/assets/audio/`; при необходимости их можно
+пересоздать командой `python3 scripts/generate_android_media3_fixtures.py` с
+FFmpeg, который служит только локальным генератором. Для Huawei используйте
+пошаговую инструкцию `docs/ANDROID-MEDIA3-SPIKE-TEST.md`.
 
 Для маркировки CI использует SHA проверяемого merge commit, run ID и attempt;
 versionCode — номер запуска workflow. Пакет самодостаточный, debug, подпись
 временная; keystore не сохраняется. Устройство не подключается к runner.
 Скрипт `scripts/package-android.py` рассчитан на workflow с подготовленными
-runtime-отчётом, лицензиями и переменными сборки. Он публикует только пакет,
-инструкции и аудит, а не build tree или Gradle cache.
-[Пошаговая проверка на Huawei](ANDROID-TEST.md); [отчёт](002-A-ANDROID-AUDIO.md).
+runtime-отчётом, лицензиями и переменными сборки. Он публикует только APK,
+инструкции и аудит, а не build tree или Gradle cache. Успешный CI не подтверждает
+слышимый звук на Huawei; до ручной проверки совместимость устройства остаётся
+**НЕ ПРОВЕРЕНА**.
 
 
 ## Дополнение 001-B1: Desktop audio

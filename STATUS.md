@@ -3,7 +3,7 @@ Total output lines: 434
 
 # Текущий статус проекта — AllMusic Player
 
-**Дата:** 30.10.2026. **Текущий статус:** 002-A принята владельцем в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19). 002-B принята и объединена в `main` коммитом `f236e7591e969709e4c0cd40fb5196e97c57f27b`; поздние промежуточные заметки ниже сохранены как история. Выполняется 002-C по Issue #22: read-only MP3/FLAC поток Cloud Mail в Desktop; реализация и тесты подготовлены в рабочей копии, CI и ручная проверка Windows 11 ещё ожидают PR. Codex/CI к личному Cloud Mail не подключаются. 002-C не принята до Windows 11 ручного испытания владельцем.
+**Дата:** 31.10.2026. **Текущий статус:** 002-A принята владельцем в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19); 002-B объединена в `main`; 002-C объединена в `main` коммитом `aa7e18b05c034eb42b53b51ebbc5ecfe76a1f53d`. Начат отдельный Android Media3 spike 002-D-M3 по Issue #26 от этой базы. Реализация и локальные проверки подготовлены в ветке `codex/002-d-media3-spike`; Android/Desktop CI, draft PR и Huawei ручная проверка ещё ожидаются. Cloud Mail не используется.
 
 ## Утверждено и подготовлено
 
@@ -393,3 +393,26 @@ encoding и фактическую длину, но гарантии неизм�
 Пользовательская приёмка на Windows 11, включая звук MP3/FLAC, Pause/Seek/Stop,
 повторный Play и Disconnect во время загрузки, остаётся обязательной.
 Подробности: [docs/002-C-CLOUD-PLAYBACK.md](docs/002-C-CLOUD-PLAYBACK.md).
+
+## 002-D-M3 — Android Media3 (Issue #26, 31.10.2026)
+
+Рабочая ветка `codex/002-d-media3-spike` основана на актуальном `main`
+`aa7e18b05c034eb42b53b51ebbc5ecfe76a1f53d`. Android экран Qt Quick управляет
+Media3 ExoPlayer 1.11.1 через Java/JNI адаптер; вывод — Android AudioTrack и
+системные MediaCodec декодеры. В APK подготовлены только синтетические MP3/FLAC,
+WAV для регрессии и преднамеренно отсутствующий файл для ошибки. Android-путь
+больше не подключает Qt Multimedia/FFmpeg. Desktop playback и Windows/Linux
+источники не менялись.
+
+Локально пройдены Python проверки фикстур и package audit, тесты классификатора
+CI, проверка документов, `py_compile`, `ffprobe` для формата/длительности трёх
+образцов и `git diff --check`. В среде отсутствуют CMake, Ninja, Android SDK/NDK,
+Gradle и ADB; Android сборка, Desktop C++ тесты, аудит фактического APK и его
+размер будут указаны после GitHub Actions. Huawei пока **НЕ ПРОВЕРЕН**.
+
+Обязательная ручная проверка владельца: MP3 и FLAC по отдельности — слышимый звук,
+Pause/Resume, seek, Stop/Play и переключение трека; WAV — регрессионный сценарий,
+пропавший файл — видимая ошибка; сворачивание — остановка. Инструкция:
+[docs/ANDROID-MEDIA3-SPIKE-TEST.md](docs/ANDROID-MEDIA3-SPIKE-TEST.md).
+Draft PR и проверочный APK ещё не опубликованы; объединять PR до Huawei испытания
+нельзя.
