@@ -27,6 +27,13 @@ Total output lines: 434
 Полные Android/Desktop сборки не запускались по плану ревью. Реальная проверка
 удобства и QML-компиляция на Android остаются **НЕ ПРОВЕРЕНЫ**.
 
+Уточнение владельца от 31.10.2026: Android-приложение поддерживает только
+вертикальную ориентацию. Для QtActivity в `android/AndroidManifest.xml`
+установлен `screenOrientation="portrait"`, а Android contract test проверяет
+это значение из XML. Отдельная landscape-компоновка не требуется. Проверка
+поиска с открытой экранной клавиатурой на физическом устройстве остаётся
+**НЕ ПРОВЕРЕНА** до сборки целевого APK и теста Huawei.
+
 Новая ветка `issue-32-android-cloud-library` и [Draft PR #33](https://github.com/metravolokos/allmusic-player/pull/33)
 созданы от `main` SHA `6f91d6a2ed202e9b7c9ab28050536d00cfdf8cdd`. Android-каталог переведён на
 виртуализированный `ListView`. Локальная `QSortFilterProxyModel` фильтрует

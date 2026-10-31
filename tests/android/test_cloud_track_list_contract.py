@@ -1,5 +1,6 @@
 from pathlib import Path
 import unittest
+import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -91,6 +92,15 @@ class CloudTrackListContractTest(unittest.TestCase):
         self.assertIn("media3.cloudEntriesModel.resultCount", qml)
         self.assertIn('text: "Совпадений нет"', qml)
         self.assertIn('android:windowSoftInputMode="adjustResize"', manifest)
+
+    def test_android_manifest_locks_the_activity_to_portrait(self):
+        manifest_path = ROOT / "android/AndroidManifest.xml"
+        manifest = ET.parse(manifest_path).getroot()
+        android_namespace = "{http://schemas.android.com/apk/res/android}"
+        activity = manifest.find(".//activity")
+
+        self.assertIsNotNone(activity)
+        self.assertEqual(activity.get(android_namespace + "screenOrientation"), "portrait")
 
 
 if __name__ == "__main__":
