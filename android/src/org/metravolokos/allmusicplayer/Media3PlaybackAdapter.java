@@ -76,8 +76,7 @@ public final class Media3PlaybackAdapter {
                     public void onPlayerError(PlaybackException exception) {
                         stoppedByUser = false;
                         state = ERROR;
-                        String code = exception.errorCodeName == null
-                                ? "неизвестная ошибка" : exception.errorCodeName;
+                        String code = PlaybackException.getErrorCodeName(exception.errorCode);
                         errorText = code.contains("IO_FILE_NOT_FOUND")
                                 ? "Не найден встроенный тестовый файл. Код Media3: " + code
                                 : "Системный Android декодер не смог открыть трек. Код Media3: " + code;
