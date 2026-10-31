@@ -4,7 +4,7 @@
 #include <QGuiApplication>
 #include <QJniEnvironment>
 #include <QJniObject>
-#include <QNativeInterface>
+#include <QtCore/qcoreapplication_platform.h>
 #include <QStringList>
 
 #include <algorithm>
