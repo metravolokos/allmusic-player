@@ -12,11 +12,11 @@ Total output lines: 434
 актуальной `main` `c511cf252f5c8dd4d5a481b3b91e5e18379accc5`. Реализованы
 Draft fast mode, fail-closed merge gate, полная классификация cumulative diff
 для Ready PR, общие Desktop/Android зависимости Cloud WebDAV и отчёты workflow.
-PR #31 остаётся Draft. В режиме `draft-fast` быстрые jobs проходят, а оба
-обязательных статуса завершаются ошибкой до Ready/full CI. Локально прошли
+PR #31 остаётся Draft. На commit 01336ef8b6937b211267afe9ace698003452c2c4
+Draft checks прошли, платформы пропустились, оба обязательных статуса
+завершились ожидаемой ошибкой (runs 41227798342/41227798470). Локально прошли
 31 тест CI, 16 Android offline tests и `scripts/check_repository.py`.
-GitHub проверка нового gate ещё ожидается. Прежний полный run и замер Draft
-описаны в docs/CI.md; настройки защиты `main` не менялись.
+Политика и измерения описаны в docs/CI.md; настройки защиты `main` не менялись.
 
 **Дата:** 31.10.2026. **Текущий статус:** 002-A принята владельцем в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19); 002-B и Desktop 002-C приняты в `main`. Android Media3 по Issue #26 прошёл Android/Desktop CI и ручную проверку на Huawei. Android Cloud Mail по Issue #24 принят владельцем и объединён в `main` через [PR #29](https://github.com/metravolokos/allmusic-player/pull/29), commit `c511cf252f5c8dd4d5a481b3b91e5e18379accc5`; CI и согласованные Huawei сценарии пройдены. Навигация по вложенным папкам для медиатеки владельца неприменима; неудобство длинного списка отложено в отдельный UX backlog. CI использует только mock; пароль и медиатека владельца не используются.
 
