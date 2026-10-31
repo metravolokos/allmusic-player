@@ -142,7 +142,9 @@ upstream source + coin/provisioning Qt (commit ef25002ed292b132d1ed3246bfcee1d24
 
 ## Android 002-A — локальный тест звука
 
-Для локального Android-прототипа подключается Qt Multimedia 6.12.0; дополнительно
+## Android 002-A — локальный WAV через системный media backend
+
+В прежнем локальном Android-прототипе 002-A подключается Qt Multimedia 6.12.0; дополнительно
 устанавливается Qt Shader Tools как зависимость сборки этого модуля. Android
 плагин и библиотека Qt Multimedia упаковываются в тестовый APK. В сборке ожидается
 плагин `androidmediaplugin`, который использует платформенный аудиовывод Android.
@@ -163,3 +165,37 @@ Android media plugin, arm64-v8a и отсутствие GMS/Firebase. Факти
 при конфигурации CMake и добавляемый в Android resource. Исходный WAV не хранится
 в Git. Qt Multimedia получает локальную копию из ресурса во внутреннем кэше
 приложения; внешнее хранилище и Android media permissions не нужны.
+
+
+## Android 002-D — изолированный Qt FFmpeg feasibility spike
+
+Issue #24 ограничен локальным аудио-испытанием и не добавляет Cloud Mail или
+полноценный Android UI плеера. Отдельный Android package `spike002d` включает
+`QFFmpegMediaPlugin` и его динамические FFmpeg библиотеки, а
+`QAndroidMediaPlugin` исключён. Приложение задаёт `QT_MEDIA_BACKEND=ffmpeg` и
+ограничивает FFmpeg protocol whitelist значением `file`;
+на экране проверяется runtime-сообщение Qt с категорией `qt.multimedia.ffmpeg`
+и версией FFmpeg. Поэтому успешное чтение MP3/FLAC из `QBuffer` при отсутствии
+system plugin нельзя объяснить Android MediaCodec backend.
+
+Qt Multimedia 6.12.0 указывает поставляемый FFmpeg **9.0.1** под LGPL-2.1-or-later
+и перечисленные BSD/ISC/MIT/MPL notices. Запись Qt attribution сообщает, что
+официальные prebuilt binaries не включают optional GPL/LGPLv3 компоненты;
+проверяются `src/3rdparty/ffmpeg/qt_attribution.json` и относящиеся к нему
+лицензионные тексты из закреплённого qtmultimedia commit. Это аудит выбранной
+сборки Qt и её атрибуции, а не юридическое заключение для публичного релиза.
+
+Qt FFmpeg plugin metadata объявляет CAMERA, RECORD_AUDIO, BLUETOOTH и
+MODIFY_AUDIO_SETTINGS. Для локального вывода manifest удаляет эти permissions;
+APK audit проверяет итоговый merged manifest и останавливается при любом
+оставшемся разрешении. Проверка также требует FFmpeg plugin и avcodec, avformat,
+avutil, swresample, swscale библиотек, исключает Android system plugin, проверяет
+arm64-v8a и записывает фактический APK size.
+
+MP3 и FLAC — короткие синтетические CC0 тоны, создаваемые системным FFmpeg только
+во время сборки и добавляемые в APK как Qt resources. В приложении они открываются
+через seekable `QBuffer`/`QIODevice`; исходные аудио-файлы не хранятся в Git.
+FFmpeg/ffprobe на runner нужны только для генерации и проверки тестовых файлов,
+их исполняемые файлы в APK не копируются. Результат этой задачи относится к
+feasibility на arm64 APK; проверка слышимого звука и управления остаётся отдельным
+ручным испытанием на Huawei. См. [проверочную инструкцию](ANDROID-FFMPEG-SPIKE-TEST.md).

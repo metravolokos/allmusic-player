@@ -18,6 +18,11 @@ int main(int argc, char *argv[])
     // Fixed backend for this experiment; no network streaming in 001-B1.
     qputenv("QT_MEDIA_BACKEND", "ffmpeg");
     qputenv("QT_FFMPEG_PROTOCOL_WHITELIST", "file");
+#else
+    // A failed FFmpeg plugin load must fail closed; the system media plugin is not packaged.
+    qputenv("QT_MEDIA_BACKEND", "ffmpeg");
+    qputenv("QT_FFMPEG_PROTOCOL_WHITELIST", "file");
+    qputenv("QT_LOGGING_RULES", "qt.multimedia.ffmpeg.info=true");
 #endif
     QGuiApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("AllMusic Player"));
@@ -52,6 +57,7 @@ int main(int argc, char *argv[])
     QObject::connect(&app, &QCoreApplication::aboutToQuit,
                      &mailWebDav, &MailWebDavController::disconnectCloud);
 #else
+    installAndroidQtFfmpegLogProbe();
     AndroidAudioTestController audioTest;
 #endif
     QQmlApplicationEngine engine;

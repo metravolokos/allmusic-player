@@ -10,11 +10,22 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = "org.metravolokos.allmusicplayer.spike002a"
+PACKAGE = "org.metravolokos.allmusicplayer.spike002d"
 ANDROID = "{http://schemas.android.com/apk/res/android}"
 FORBIDDEN = re.compile(
     r"com[./]google[./](?:android[./]gms|firebase)|"
     r"com\.google\.gms:|play-services|firebase-", re.I)
+EXPECTED_FFMPEG_LIBRARIES = {
+    "libavcodec.so",
+    "libavformat.so",
+    "libavutil.so",
+    "libswresample.so",
+    "libswscale.so",
+}
+EXPECTED_FFMPEG_LICENSES = {
+    "LGPL-2.1-or-later", "BSD-3-Clause", "BSD-2-Clause",
+    "BSD-Source-Code", "ISC", "MIT", "MPL-2.0",
+}
 
 
 def check_manifest(xml):
@@ -50,7 +61,8 @@ def check_runtime(apk, dependencies):
     assert "debugRuntimeClasspath" in dependencies, "Missing Gradle dependency evidence"
     with zipfile.ZipFile(apk) as archive:
         names = archive.namelist()
-        native = sorted(n for n in names if n.startswith("lib/") and n.endswith(".so"))
+        native = sorted(n for n in names if n.startswith("lib/")
+                        and re.search(r"\.so(?:\.[0-9]+)*$", n))
         assert native and {n.split("/")[1] for n in native} == {"arm64-v8a"}
         assert any("liballmusic-player" in n for n in native)
         assert any("libQt6Quick" in n for n in native), "Qt runtime must be bundled"
@@ -60,10 +72,20 @@ def check_runtime(apk, dependencies):
         for name in native:
             match = re.search(r"/libQt6(\w+)_arm64-v8a\.so$", name)
             assert not match or match[1] in allowed_qt, f"Review Qt module license: {name}"
-            assert not re.search(r"webdav|ffmpeg|avcodec|taglib|sqlite", name, re.I)
+            assert not re.search(r"webdav|taglib|sqlite", name, re.I)
         assert any("libQt6Multimedia" in name for name in native), "Qt Multimedia must be bundled"
-        assert any("libplugins_multimedia_androidmediaplugin" in name for name in native), \
-            "Qt Android media output plugin must be bundled"
+        assert any("libplugins_multimedia_ffmpegmediaplugin" in name for name in native), \
+            "Qt FFmpeg media plugin must be bundled"
+        assert not any("libplugins_multimedia_androidmediaplugin" in name for name in native), \
+            "Android system media plugin must be excluded from this backend proof"
+        ffmpeg_libraries = {
+            Path(name).name for name in native
+            if re.match(r"lib(?:av|sw|postproc).*\.so(?:\.[0-9]+)*$", Path(name).name)
+        }
+        assert ffmpeg_libraries == EXPECTED_FFMPEG_LIBRARIES, \
+            "Unexpected Qt FFmpeg runtime libraries: " \
+            f"missing={sorted(EXPECTED_FFMPEG_LIBRARIES - ffmpeg_libraries)}, " \
+            f"extra={sorted(ffmpeg_libraries - EXPECTED_FFMPEG_LIBRARIES)}"
         for name in names:
             assert not FORBIDDEN.search(name), f"Forbidden APK entry: {name}"
             assert not name.lower().endswith((".keystore", ".jks", ".testkey", ".pem"))
@@ -71,6 +93,26 @@ def check_runtime(apk, dependencies):
                 data = archive.read(name)
                 assert not FORBIDDEN.search(data.decode("latin-1")), "GMS/Firebase DEX reference"
     return native
+
+
+def check_ffmpeg_licenses(license_root):
+    license_root = Path(license_root)
+    assert (license_root / "LICENSE.LGPL-2.1-or-later.txt").is_file(), \
+        "Qt FFmpeg LGPL notice missing from the package"
+    attribution_path = license_root / "qt_attribution.json"
+    assert attribution_path.is_file(), \
+        "Qt FFmpeg attribution record missing from the package"
+    attribution = json.loads(attribution_path.read_text(encoding="utf-8"))
+    ffmpeg = next((entry for entry in attribution if entry.get("Id") == "ffmpeg"), None)
+    assert ffmpeg is not None and ffmpeg.get("Version") == "9.0.1", \
+        "Unexpected Qt FFmpeg version attribution"
+    license_ids = set(ffmpeg.get("LicenseId", "").split(" AND "))
+    assert license_ids == EXPECTED_FFMPEG_LICENSES, \
+        f"Unexpected Qt FFmpeg license set: {sorted(license_ids)}"
+    assert not any(identifier.startswith(("GPL-", "LGPL-3")) for identifier in license_ids), \
+        "Qt FFmpeg attribution includes a GPL or LGPLv3 component"
+    assert "do not contain these components" in ffmpeg.get("QtUsage", ""), \
+        "Qt FFmpeg attribution does not confirm exclusion of optional GPL/LGPLv3 components"
 
 
 def capture(command, path):
@@ -147,22 +189,30 @@ def main():
                 assert target.resolve().is_relative_to((output / "licenses").resolve())
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(archive.read(name))
-    for name in ("ANDROID-TEST.md", "DEPENDENCIES.md"):
+    for name in ("ANDROID-TEST.md", "ANDROID-FFMPEG-SPIKE-TEST.md", "DEPENDENCIES.md"):
         shutil.copyfile(ROOT / "docs" / name, output / name)
     shutil.copytree(evidence, output / "audit", dirs_exist_ok=True)
+    license_root = output / "licenses/qtmultimedia/src/3rdparty/ffmpeg"
+    check_ffmpeg_licenses(license_root)
+    apk_size = apk.stat().st_size
+    assert apk_size > 0, "Built APK is empty"
+    (output / "APK-SIZE.txt").write_text(f"APK size: {apk_size} bytes\n", encoding="utf-8")
+    print(f"APK size: {apk_size} bytes ({apk_size / (1024 * 1024):.2f} MiB)")
     metadata = {"commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
                 "build_label": os.environ["BUILD_LABEL"], "abi": "arm64-v8a",
                 "run": os.environ["GITHUB_RUN_ID"], "attempt": os.environ["GITHUB_RUN_ATTEMPT"],
                 "device_compatibility": "NOT TESTED", "permissions": [],
-                "signing": "ephemeral debug certificate; uninstall the previous test copy before replacement",
-                "native_libraries": native}
-    (output / "BUILD-INFO.json").write_text(json.dumps(metadata, indent=2) + "\n")
+                "signing": "ephemeral debug certificate; separate package ID allows coexistence with 002-A",
+                "backend": "Qt FFmpeg; Android system media plugin excluded",
+                "apk_size_bytes": apk_size, "native_libraries": native}
+    (output / "BUILD-INFO.json").write_text(json.dumps(metadata, indent=2) + "\n",
+                                            encoding="utf-8")
     sums = []
     for path in sorted(output.rglob("*")):
         if path.is_file() and path.name != "SHA256SUMS.txt":
             sums.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(output).as_posix()}")
     (output / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n")
-    print("APK audit passed: signature, alignment, ABI, zero permissions and no extra components, no GMS/Firebase references")
+    print("APK audit passed: Qt FFmpeg runtime, FFmpeg notices, signature, alignment, arm64-v8a, zero permissions, no Android system media plugin or GMS/Firebase references")
 
 
 if __name__ == "__main__":

@@ -77,11 +77,10 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || github.sha }}
           persist-credentials: false
-      - name: Подготовить JDK 21 и выполнить Android unit tests
+      - name: Подготовить JDK 21
         run: |
           echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
           echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
-          python3 -m unittest discover -s tests/android -v
       - name: Установить Android SDK и NDK для arm64-v8a
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
         with:
@@ -96,9 +95,13 @@ jobs:
       - name: Подготовить каталоги Android и Python
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1 libegl1 libxkbcommon0 libxcb-cursor0
+          sudo apt-get install -y ffmpeg libgl1 libegl1 libxkbcommon0 libxcb-cursor0
           mkdir -p build/android-evidence "$RUNNER_TEMP/Qt/6.12.0"
           mkdir -p build/aqt-wheelhouse
+      - name: Проверить синтетические Android аудиофикстуры и аудит пакета
+        run: |
+          ffmpeg -version | head -n 1 > build/android-evidence/fixture-generator.txt
+          python3 -m unittest discover -s tests/android -v
       - name: Кэшировать wheel закреплённого aqtinstall
         id: aqt_cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -173,10 +176,10 @@ jobs:
         run: |
           mkdir -p build/android-evidence
           short_sha=$(git rev-parse --short=12 HEAD)
-          label="002-A-${short_sha}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          label="002-D-${short_sha}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "BUILD_LABEL=$label" >> "$GITHUB_ENV"
-          echo "ARTIFACT_NAME=AllMusicPlayer-002A-Android-arm64-v8a-debug-${short_sha}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
-          { java -version; cmake --version; ninja --version; "$QT_ANDROID_ROOT/bin/qmake" -query QT_VERSION; cat "$ANDROID_HOME/ndk/27.2.12479018/source.properties"; } > build/android-evidence/toolchain.txt 2>&1
+          echo "ARTIFACT_NAME=AllMusicPlayer-002D-QtFFmpeg-Android-arm64-v8a-debug-${short_sha}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          { java -version; cmake --version; ninja --version; "$QT_ANDROID_ROOT/bin/qmake" -query QT_VERSION; cat "$ANDROID_HOME/ndk/27.2.12479018/source.properties"; ffmpeg -version | head -n 1; } > build/android-evidence/toolchain.txt 2>&1
           cmake --preset android-debug -DALLMUSIC_BUILD_LABEL="$label" -DALLMUSIC_ANDROID_VERSION_CODE="$GITHUB_RUN_NUMBER"
           cat build/android-debug/src/app/android-allmusic-player-deployment-settings.json > build/android-evidence/deployment-settings.json
           cmake --build --preset android-debug --parallel 2
@@ -207,14 +210,16 @@ jobs:
           persist-credentials: false
       - name: Проверить APK и составить комплект с лицензиями
         run: python scripts/package-android.py
+      - name: Записать размер APK в сводку CI
+        run: cat dist/android/APK-SIZE.txt >> "$GITHUB_STEP_SUMMARY"
       - name: Записать commit, платформу и статус упаковки в отчёт
         if: always()
         run: |
           echo "Исходный commit: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
           echo "Цель: Android arm64-v8a; это компиляция и аудит, не проверка на устройстве." >> "$GITHUB_STEP_SUMMARY"
           echo "Qt cache hit: ${{ steps.qt_cache.outputs.cache-hit }}" >> "$GITHUB_STEP_SUMMARY"
-      - name: Сохранить APK только по запросу или для релиза
-        if: (github.event_name == 'release') || (github.event_name == 'workflow_dispatch' && inputs.android_apk) || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/002-a-android-audio')
+      - name: Сохранить APK только по запросу, для релиза или для FFmpeg spike
+        if: (github.event_name == 'release') || (github.event_name == 'workflow_dispatch' && inputs.android_apk) || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/002-d-android-cloud') || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/002-a-android-audio')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ env.ARTIFACT_NAME }}

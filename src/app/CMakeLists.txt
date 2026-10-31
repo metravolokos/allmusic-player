@@ -31,7 +31,7 @@ else()
 endif()
 
 if(ANDROID)
-    set(ALLMUSIC_BUILD_LABEL "002-A-local" CACHE STRING "Non-secret test build identity")
+    set(ALLMUSIC_BUILD_LABEL "002-D-local" CACHE STRING "Non-secret test build identity")
     set(ALLMUSIC_ANDROID_VERSION_CODE "1" CACHE STRING "Android test version code")
     if(NOT ALLMUSIC_BUILD_LABEL MATCHES "^[a-zA-Z0-9._-]+$")
         message(FATAL_ERROR "Invalid test build label")
@@ -43,6 +43,7 @@ if(ANDROID)
         ALLMUSIC_BUILD_LABEL="${ALLMUSIC_BUILD_LABEL}")
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
     set(android_audio_tone "${CMAKE_CURRENT_BINARY_DIR}/android-test-tone.wav")
+    set(android_fixture_dir "${CMAKE_CURRENT_BINARY_DIR}/android-ffmpeg-fixtures")
     execute_process(
         COMMAND "${Python3_EXECUTABLE}"
                 "${PROJECT_SOURCE_DIR}/scripts/generate_android_tone.py"
@@ -55,15 +56,31 @@ if(ANDROID)
         PREFIX "/audio-test"
         BASE "${CMAKE_CURRENT_BINARY_DIR}"
         FILES "${android_audio_tone}")
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/scripts/generate_android_audio_fixtures.py"
+                "${android_fixture_dir}"
+        RESULT_VARIABLE fixture_generation_result)
+    if(NOT fixture_generation_result EQUAL 0)
+        message(FATAL_ERROR "Could not generate the synthetic Android MP3/FLAC fixtures")
+    endif()
+    qt_add_resources(allmusic-player android_ffmpeg_fixtures
+        PREFIX "/audio-test"
+        BASE "${android_fixture_dir}"
+        FILES
+            "${android_fixture_dir}/android-spike.mp3"
+            "${android_fixture_dir}/android-spike.flac")
     target_link_libraries(allmusic-player PRIVATE Qt6::Multimedia)
-    # Keep this playback-only probe on Android's system media backend.
-    # Qt's bundled FFmpeg backend and its runtime libraries are not needed.
-    qt_import_plugins(allmusic-player EXCLUDE Qt6::QFFmpegMediaPlugin)
+    # Force a clean backend comparison: package FFmpeg and omit Android MediaCodec.
+    # A successful compressed-fixture playback therefore cannot come from the system plugin.
+    qt_import_plugins(allmusic-player
+        INCLUDE Qt6::QFFmpegMediaPlugin
+        EXCLUDE Qt6::QAndroidMediaPlugin)
     set_target_properties(allmusic-player PROPERTIES
         QT_QML_ROOT_PATH "${PROJECT_SOURCE_DIR}/ui/android"
         QT_ANDROID_PACKAGE_SOURCE_DIR "${PROJECT_SOURCE_DIR}/android"
-        QT_ANDROID_PACKAGE_NAME "org.metravolokos.allmusicplayer.spike002a"
-        QT_ANDROID_APP_NAME "AllMusic Player — тест 002-A"
+        QT_ANDROID_PACKAGE_NAME "org.metravolokos.allmusicplayer.spike002d"
+        QT_ANDROID_APP_NAME "AllMusic Player — тест FFmpeg 002-D"
         QT_ANDROID_VERSION_NAME "0.0.1-${ALLMUSIC_BUILD_LABEL}"
         QT_ANDROID_VERSION_CODE "${ALLMUSIC_ANDROID_VERSION_CODE}"
         QT_ANDROID_MIN_SDK_VERSION 28

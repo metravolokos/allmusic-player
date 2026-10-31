@@ -23,6 +23,11 @@ public:
         Error
     };
 
+    static constexpr bool isValidTrackIndex(int index)
+    {
+        return index >= 0 && index < 3;
+    }
+
     static constexpr AndroidAudioTestActions actions(Value state)
     {
         switch (state) {

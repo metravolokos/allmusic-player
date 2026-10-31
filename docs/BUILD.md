@@ -100,8 +100,9 @@ Android SDK/NDK не устанавливаются в задаче 000. Ран�
 Основной путь — workflow
 `.github/workflows/android.yml`: `pull_request`, `workflow_dispatch`, push в main
 и опубликованный release; классификатор выбирает нужные проверки по diff. Для
-явно заказанной Issue #18 ветки `codex/002-a-android-audio` успешный PR-run
-сохраняет APK на 14 дней. Остальные PR собирают и проверяют APK без его сохранения.
+явно заказанных веток Issue #18 `codex/002-a-android-audio` и Issue #24
+`codex/002-d-android-cloud` успешный PR-run сохраняет APK на 14 дней. Остальные
+PR собирают и проверяют APK без его сохранения.
 Фильтр не заменяет required checks в настройках GitHub: защита main этой задачей
 не меняется.
 
@@ -112,15 +113,18 @@ SDK platform 36 / build-tools 36.0.0, Qt 6.12.0 Android arm64 и host gcc_64:
 export ANDROID_HOME=/path/to/Android/Sdk
 export QT_ANDROID_ROOT=/path/to/Qt/6.12.0/android_arm64_v8a
 export QT_HOST_PATH=/path/to/Qt/6.12.0/gcc_64
-cmake --preset android-debug -DALLMUSIC_BUILD_LABEL=002-A-local
+cmake --preset android-debug -DALLMUSIC_BUILD_LABEL=002-D-local
 cmake --build --preset android-debug --parallel 2
 ```
 
 Для Android-конфигурации также установите Qt Multimedia 6.12.0 и Qt Shader Tools.
-Синтетический WAV создаётся скриптом во временном каталоге сборки и включается в
-Qt resource; аудиофайл в Git не добавляется. Для ручной установки используйте
-`docs/ANDROID-TEST.md`; только сборка этой заказанной PR-ветки сохраняет APK
-как artifact.
+Для 002-A синтетический WAV создаётся Python-скриптом. Android FFmpeg spike 002-D
+дополнительно требует host `ffmpeg` и `ffprobe`; скрипт генерирует MP3/FLAC
+сэмплы во временной папке сборки и включает их в Qt resources. Исходные файлы
+не добавляются в Git. Spike включает Qt FFmpeg plugin, исключает Android media
+plugin и проверяет состав библиотек/manifest/лицензий. Для ручной проверки APK
+используйте `docs/ANDROID-FFMPEG-SPIKE-TEST.md`; artifact сохраняется CI только
+для ветки заказанного spike, ручного workflow dispatch или релиза.
 
 Для маркировки CI использует SHA проверяемого merge commit, run ID и attempt;
 versionCode — номер запуска workflow. Пакет самодостаточный, debug, подпись
