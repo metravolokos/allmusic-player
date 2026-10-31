@@ -75,6 +75,16 @@ public:
     bool tls = false;
     QSslConfiguration ssl;
     bool start() { return listen(QHostAddress::LocalHost, 0); }
+    // QTcpServer::close() only stops listening. Accepted sockets belong to the
+    // fixture, and their delayed readyRead callbacks must not cross test cases.
+    void stop()
+    {
+        close();
+        for (auto *socket : findChildren<QTcpSocket *>(QString(), Qt::FindDirectChildrenOnly)) {
+            socket->abort();
+            socket->deleteLater();
+        }
+    }
     static QByteArray listing() {
         return "<x:multistatus xmlns:x=\"DAV:\"><x:response><x:href>/AllMusic/</x:href>"
             "<x:propstat><x:prop><x:resourcetype><x:collection/></x:resourcetype></x:prop>"

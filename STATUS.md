@@ -1,3 +1,9 @@
+# Текущий статус проекта — AllMusic Player
+
+## SEL-002 — изоляция Windows streaming фикстур (Issue #35, 31.10.2026)
+
+Отдельный PR от `main`: RAII-завершение фикстуры и принятых TCP-соединений даже при раннем `QVERIFY`-отказе, с сохранением строгой проверки `Authorization`. Добавлен тест неполного HTTP-запроса. WebDAV/Media3/playback не изменены. См. `docs/SEL-002-MOCK-TEARDOWN.md`. Результаты CI до запуска — **НЕ ПРОВЕРЕНЫ**.
+
 Warning: truncated output (original token count: 13807)
 Total output lines: 473
 
