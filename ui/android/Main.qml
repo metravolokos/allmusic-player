@@ -9,323 +9,358 @@ Window {
     title: "AllMusic Player — Cloud Mail Media3"
     color: "#f5f6f8"
     property int selectedCloudIndex: -1
+    property string selectedCloudLabel: ""
+    property bool showSyntheticTracks: false
 
     function formatTime(milliseconds) {
         var seconds = Math.max(0, Math.floor(milliseconds / 1000))
         return Math.floor(seconds / 60) + ":" + ("0" + (seconds % 60)).slice(-2)
     }
 
-    function selectCloudEntry(sourceIndex, isDirectory) {
+    function clearCloudSelection() {
+        selectedCloudIndex = -1
+        selectedCloudLabel = ""
+    }
+
+    function selectCloudEntry(sourceIndex, label, isDirectory) {
         if (isDirectory) {
+            clearCloudSelection()
             media3.openCloudDirectory(sourceIndex)
-            selectedCloudIndex = -1
         } else {
             selectedCloudIndex = sourceIndex
+            selectedCloudLabel = label
         }
     }
 
     function clearSelectionIfHidden() {
         if (selectedCloudIndex >= 0
                 && !media3.cloudEntriesModel.containsSourceIndex(selectedCloudIndex))
-            selectedCloudIndex = -1
+            clearCloudSelection()
     }
 
-    ListView {
-        id: page
-        anchors.fill: parent
-        clip: true
-        spacing: 10
-        boundsBehavior: Flickable.StopAtBounds
-        model: media3.cloudEntriesModel
+    // Only this ListView scrolls; search and playback controls stay in place.
+    Column {
+        id: topPanel
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: implicitHeight
+        spacing: 6
+        z: 2
 
-        header: Column {
-            width: page.width
-            spacing: 12
+        Text {
+            x: 12
+            width: parent.width - 24
+            height: 26
+            text: "Cloud Mail · MP3 / FLAC"
+            color: "#17212b"
+            font.pixelSize: 20
+            font.bold: true
+            verticalAlignment: Text.AlignVCenter
+        }
 
-            Item { width: parent.width; height: 10 }
-
-            Text {
-                x: 20
-                width: page.width - 40
-                text: "Cloud Mail · MP3 / FLAC"
-                color: "#17212b"
-                font.pixelSize: 24
-                font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-            }
-
-            Text {
-                x: 20
-                width: page.width - 40
-                text: "Потоковое воспроизведение через Media3. Пароль используется только в памяти приложения."
-                color: "#526171"
-                font.pixelSize: 14
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-            }
+        Column {
+            id: connectForm
+            x: 12
+            width: parent.width - 24
+            spacing: 6
+            visible: !media3.cloudConnected
 
             Rectangle {
-                x: 20
-                width: page.width - 40
-                height: 48
+                width: parent.width
+                height: 42
                 radius: 8
                 color: "white"
                 border.color: "#d5dce3"
                 Text {
                     anchors.fill: parent
-                    anchors.margins: 12
+                    anchors.margins: 10
                     verticalAlignment: Text.AlignVCenter
                     text: "Адрес почты Cloud Mail"
                     color: "#7f8e9b"
-                    font.pixelSize: 15
+                    font.pixelSize: 14
                     visible: emailInput.text.length === 0
                 }
                 TextInput {
                     id: emailInput
                     anchors.fill: parent
-                    anchors.margins: 12
+                    anchors.margins: 10
                     verticalAlignment: TextInput.AlignVCenter
-                    font.pixelSize: 15
+                    font.pixelSize: 14
                     color: "#17212b"
                     inputMethodHints: Qt.ImhEmailCharactersOnly
-                    enabled: !media3.cloudConnected && !media3.cloudBusy
+                    enabled: !media3.cloudBusy
                 }
             }
 
             Rectangle {
-                x: 20
-                width: page.width - 40
-                height: 48
+                width: parent.width
+                height: 42
                 radius: 8
                 color: "white"
                 border.color: "#d5dce3"
                 Text {
                     anchors.fill: parent
-                    anchors.margins: 12
+                    anchors.margins: 10
                     verticalAlignment: Text.AlignVCenter
                     text: "Пароль внешнего приложения"
                     color: "#7f8e9b"
-                    font.pixelSize: 15
+                    font.pixelSize: 14
                     visible: passwordInput.text.length === 0
                 }
                 TextInput {
                     id: passwordInput
                     anchors.fill: parent
-                    anchors.margins: 12
+                    anchors.margins: 10
                     verticalAlignment: TextInput.AlignVCenter
-                    font.pixelSize: 15
+                    font.pixelSize: 14
                     color: "#17212b"
                     echoMode: TextInput.Password
                     inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText
-                    enabled: !media3.cloudConnected && !media3.cloudBusy
+                    enabled: !media3.cloudBusy
                 }
             }
 
-            Row {
-                x: 20
-                width: page.width - 40
-                spacing: 8
-
-                Rectangle {
-                    width: (parent.width - parent.spacing) / 2
-                    height: 48
-                    radius: 9
-                    color: (!media3.cloudConnected && !media3.cloudBusy) ? "#1769aa" : "#aab6c2"
-                    Text { anchors.centerIn: parent; text: "Подключить"; color: "white"; font.pixelSize: 15 }
-                    MouseArea {
-                        anchors.fill: parent
-                        enabled: !media3.cloudConnected && !media3.cloudBusy
-                        onClicked: {
+            Rectangle {
+                width: parent.width
+                height: 40
+                radius: 8
+                color: media3.cloudBusy ? "#a43b3b" : "#1769aa"
+                Text {
+                    anchors.centerIn: parent
+                    text: media3.cloudBusy ? "Отменить подключение" : "Подключиться"
+                    color: "white"
+                    font.pixelSize: 14
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        if (media3.cloudBusy) {
+                            media3.disconnectCloud()
+                            root.clearCloudSelection()
+                        } else {
                             media3.connectCloud(emailInput.text, passwordInput.text)
                             passwordInput.clear()
-                            root.selectedCloudIndex = -1
-                        }
-                    }
-                }
-                Rectangle {
-                    width: (parent.width - parent.spacing) / 2
-                    height: 48
-                    radius: 9
-                    color: media3.cloudConnected || media3.cloudBusy ? "#a43b3b" : "#aab6c2"
-                    Text { anchors.centerIn: parent; text: "Отключиться"; color: "white"; font.pixelSize: 15 }
-                    MouseArea {
-                        anchors.fill: parent
-                        enabled: media3.cloudConnected || media3.cloudBusy
-                        onClicked: {
-                            media3.disconnectCloud()
-                            root.selectedCloudIndex = -1
+                            root.clearCloudSelection()
                         }
                     }
                 }
             }
+        }
+
+        Row {
+            id: connectedBar
+            x: 12
+            width: parent.width - 24
+            height: 38
+            spacing: 8
+            visible: media3.cloudConnected
 
             Text {
-                x: 20
-                width: page.width - 40
+                width: parent.width - 94
+                height: parent.height
                 text: media3.cloudStatus
                 color: "#526171"
-                font.pixelSize: 13
-                wrapMode: Text.WordWrap
+                font.pixelSize: 12
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
             }
-
-            Row {
-                x: 20
-                width: page.width - 40
-                visible: media3.cloudConnected
-                spacing: 10
-                Rectangle {
-                    width: 92
-                    height: 40
-                    radius: 8
-                    color: media3.canGoToCloudParent() ? "#dceaf5" : "#e5e9ed"
-                    Text { anchors.centerIn: parent; text: "↑ Назад"; color: "#17212b"; font.pixelSize: 14 }
-                    MouseArea {
-                        anchors.fill: parent
-                        enabled: media3.canGoToCloudParent()
-                        onClicked: {
-                            media3.goToCloudParent()
-                            root.selectedCloudIndex = -1
-                        }
-                    }
-                }
-                Text {
-                    width: parent.width - 102
-                    height: 40
-                    text: media3.cloudDirectoryLabel
-                    color: "#17212b"
-                    font.pixelSize: 14
-                    verticalAlignment: Text.AlignVCenter
-                    elide: Text.ElideMiddle
-                }
-            }
-
-            Row {
-                x: 20
-                width: page.width - 40
-                height: 46
-                spacing: 8
-                visible: media3.cloudConnected
-                Rectangle {
-                    width: parent.width - 82
-                    height: parent.height
-                    radius: 8
-                    color: "white"
-                    border.color: "#d5dce3"
-                    Text {
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        verticalAlignment: Text.AlignVCenter
-                        text: "Поиск по названию файла"
-                        color: "#7f8e9b"
-                        font.pixelSize: 14
-                        visible: cloudSearchInput.text.length === 0
-                    }
-                    TextInput {
-                        id: cloudSearchInput
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        verticalAlignment: TextInput.AlignVCenter
-                        font.pixelSize: 14
-                        color: "#17212b"
-                        inputMethodHints: Qt.ImhNoPredictiveText
-                        enabled: media3.cloudConnected && !media3.cloudBusy
-                        onTextChanged: {
-                            if (media3.cloudEntriesModel.searchText !== text)
-                                media3.cloudEntriesModel.searchText = text
-                        }
-                        onActiveFocusChanged: {
-                            if (activeFocus)
-                                page.positionViewAtBeginning()
-                        }
-                        onAccepted: focus = false
-                    }
-                }
-                Rectangle {
-                    width: 74
-                    height: parent.height
-                    radius: 8
-                    color: cloudSearchInput.text.length > 0 ? "#dceaf5" : "#e5e9ed"
-                    Text { anchors.centerIn: parent; text: "Очистить"; color: "#17212b"; font.pixelSize: 12 }
-                    MouseArea {
-                        anchors.fill: parent
-                        enabled: cloudSearchInput.text.length > 0 && !media3.cloudBusy
-                        onClicked: {
-                            cloudSearchInput.clear()
-                            cloudSearchInput.forceActiveFocus()
-                        }
+            Rectangle {
+                width: 86
+                height: parent.height
+                radius: 8
+                color: "#a43b3b"
+                Text { anchors.centerIn: parent; text: "Отключиться"; color: "white"; font.pixelSize: 11 }
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: media3.cloudConnected || media3.cloudBusy
+                    onClicked: {
+                        media3.disconnectCloud()
+                        root.clearCloudSelection()
                     }
                 }
             }
-
-            Row {
-                x: 20
-                width: page.width - 40
-                spacing: 8
-                visible: media3.cloudConnected
-                Text {
-                    width: parent.width - 154
-                    height: 42
-                    text: "Показано " + media3.cloudEntriesModel.resultCount
-                          + " из " + media3.cloudEntriesModel.totalCount
-                    color: "#526171"
-                    font.pixelSize: 13
-                    verticalAlignment: Text.AlignVCenter
-                }
-                Rectangle {
-                    width: 146
-                    height: 42
-                    radius: 8
-                    color: "#dceaf5"
-                    Text {
-                        anchors.centerIn: parent
-                        text: media3.cloudEntriesModel.sortMode === 0 ? "Сортировка: А → Я"
-                              : media3.cloudEntriesModel.sortMode === 1 ? "Сортировка: Я → А"
-                              : "Сортировка: исходная"
-                        color: "#17212b"
-                        font.pixelSize: 12
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        enabled: !media3.cloudBusy
-                        onClicked: media3.cloudEntriesModel.sortMode = (media3.cloudEntriesModel.sortMode + 1) % 3
-                    }
-                }
-            }
-
-            Text {
-                x: 20
-                width: page.width - 40
-                visible: media3.cloudConnected && media3.cloudEntriesModel.totalCount > 0
-                         && media3.cloudEntriesModel.resultCount === 0
-                text: "Совпадений нет"
-                color: "#526171"
-                font.pixelSize: 14
-                horizontalAlignment: Text.AlignHCenter
-            }
-
-            Text {
-                x: 20
-                width: page.width - 40
-                visible: media3.cloudConnected && !media3.cloudBusy
-                         && media3.cloudEntriesModel.totalCount === 0
-                text: "В этой папке нет поддерживаемых композиций."
-                color: "#526171"
-                font.pixelSize: 14
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-            }
-
-            Item { width: parent.width; height: 2 }
         }
+
+        Text {
+            x: 12
+            width: parent.width - 24
+            visible: !media3.cloudConnected && media3.cloudStatus.length > 0
+            text: media3.cloudStatus
+            color: "#526171"
+            font.pixelSize: 12
+            wrapMode: Text.WordWrap
+        }
+
+        Row {
+            id: directoryBar
+            x: 12
+            width: parent.width - 24
+            height: 34
+            spacing: 8
+            visible: media3.cloudConnected
+
+            Rectangle {
+                width: 76
+                height: parent.height
+                radius: 8
+                color: media3.canGoToCloudParent() ? "#dceaf5" : "#e5e9ed"
+                Text { anchors.centerIn: parent; text: "↑ Назад"; color: "#17212b"; font.pixelSize: 12 }
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: media3.canGoToCloudParent()
+                    onClicked: {
+                        media3.goToCloudParent()
+                        root.clearCloudSelection()
+                    }
+                }
+            }
+            Text {
+                width: parent.width - 84
+                height: parent.height
+                text: media3.cloudDirectoryLabel
+                color: "#17212b"
+                font.pixelSize: 13
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideMiddle
+            }
+        }
+
+        Row {
+            id: searchPanel
+            x: 12
+            width: parent.width - 24
+            height: 42
+            spacing: 8
+
+            Rectangle {
+                width: parent.width - 80
+                height: parent.height
+                radius: 8
+                color: "white"
+                border.color: "#d5dce3"
+                Text {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    verticalAlignment: Text.AlignVCenter
+                    text: "Поиск по названию файла"
+                    color: "#7f8e9b"
+                    font.pixelSize: 13
+                    visible: cloudSearchInput.text.length === 0
+                }
+                TextInput {
+                    id: cloudSearchInput
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    verticalAlignment: TextInput.AlignVCenter
+                    font.pixelSize: 13
+                    color: "#17212b"
+                    inputMethodHints: Qt.ImhNoPredictiveText
+                    enabled: media3.cloudConnected && !media3.cloudBusy
+                    onTextChanged: {
+                        if (media3.cloudEntriesModel.searchText !== text)
+                            media3.cloudEntriesModel.searchText = text
+                    }
+                    onAccepted: focus = false
+                }
+            }
+
+            Rectangle {
+                width: 72
+                height: parent.height
+                radius: 8
+                color: cloudSearchInput.text.length > 0 ? "#dceaf5" : "#e5e9ed"
+                Text { anchors.centerIn: parent; text: "Очистить"; color: "#17212b"; font.pixelSize: 11 }
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: cloudSearchInput.text.length > 0 && !media3.cloudBusy
+                    onClicked: cloudSearchInput.clear()
+                }
+            }
+        }
+
+        Row {
+            id: sortAndCountPanel
+            x: 12
+            width: parent.width - 24
+            height: 34
+            spacing: 8
+
+            Text {
+                width: parent.width - 146
+                height: parent.height
+                text: "Показано " + media3.cloudEntriesModel.resultCount
+                      + " из " + media3.cloudEntriesModel.totalCount
+                color: "#526171"
+                font.pixelSize: 12
+                verticalAlignment: Text.AlignVCenter
+            }
+            Rectangle {
+                width: 138
+                height: parent.height
+                radius: 8
+                color: media3.cloudConnected ? "#dceaf5" : "#e5e9ed"
+                Text {
+                    anchors.centerIn: parent
+                    text: media3.cloudEntriesModel.sortMode === 0 ? "Сортировка: А → Я"
+                          : media3.cloudEntriesModel.sortMode === 1 ? "Сортировка: Я → А"
+                          : "Сортировка: исходная"
+                    color: "#17212b"
+                    font.pixelSize: 11
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: media3.cloudConnected && !media3.cloudBusy
+                    onClicked: media3.cloudEntriesModel.sortMode = (media3.cloudEntriesModel.sortMode + 1) % 3
+                }
+            }
+        }
+
+        Text {
+            x: 12
+            width: parent.width - 24
+            visible: media3.cloudConnected && media3.cloudEntriesModel.totalCount > 0
+                     && media3.cloudEntriesModel.resultCount === 0
+            text: "Совпадений нет"
+            color: "#526171"
+            font.pixelSize: 12
+            horizontalAlignment: Text.AlignHCenter
+        }
+
+        Text {
+            x: 12
+            width: parent.width - 24
+            visible: media3.cloudConnected && !media3.cloudBusy
+                     && media3.cloudEntriesModel.totalCount === 0
+            text: "В этой папке нет поддерживаемых композиций."
+            color: "#526171"
+            font.pixelSize: 12
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+        }
+    }
+
+    ListView {
+        id: cloudList
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: topPanel.bottom
+        anchors.bottom: playerPanel.top
+        anchors.leftMargin: 12
+        anchors.rightMargin: 12
+        anchors.topMargin: 4
+        anchors.bottomMargin: 4
+        clip: true
+        spacing: 6
+        boundsBehavior: Flickable.StopAtBounds
+        model: media3.cloudEntriesModel
 
         delegate: Rectangle {
             required property int sourceIndex
             required property string label
             required property bool isDirectory
-            width: Math.max(1, page.width - 40)
-            x: 20
-            height: 54
+            width: cloudList.width
+            height: 50
             radius: 8
             color: root.selectedCloudIndex === sourceIndex ? "#dceaf5" : "white"
             border.width: root.selectedCloudIndex === sourceIndex ? 2 : 1
@@ -345,28 +380,51 @@ Window {
             MouseArea {
                 anchors.fill: parent
                 enabled: media3.cloudConnected && !media3.cloudBusy
-                onClicked: root.selectCloudEntry(sourceIndex, isDirectory)
+                onClicked: root.selectCloudEntry(sourceIndex, label, isDirectory)
             }
         }
+    }
 
-        footer: Column {
-            width: page.width
-            spacing: 12
+    Rectangle {
+        id: playerPanel
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: playerControls.implicitHeight + 16
+        color: "white"
+        border.color: "#d5dce3"
+        z: 3
 
-            Item { width: parent.width; height: 4 }
+        Column {
+            id: playerControls
+            anchors.fill: parent
+            anchors.margins: 8
+            spacing: 5
+
+            Text {
+                width: parent.width
+                height: 18
+                text: root.selectedCloudIndex >= 0
+                      ? "Выбрано: " + root.selectedCloudLabel
+                      : "Активный трек: " + media3.activeTrackName + " · " + media3.stateText
+                color: "#17212b"
+                font.pixelSize: 12
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideMiddle
+            }
 
             Rectangle {
-                x: 20
-                width: page.width - 40
-                height: 48
-                radius: 9
+                id: playSelectedButton
+                width: parent.width
+                height: 38
+                radius: 8
                 color: (root.selectedCloudIndex >= 0
                         && media3.canPlayCloud(root.selectedCloudIndex)) ? "#1769aa" : "#aab6c2"
                 Text {
                     anchors.centerIn: parent
                     text: "Воспроизвести выбранный MP3 / FLAC"
                     color: "white"
-                    font.pixelSize: 14
+                    font.pixelSize: 13
                 }
                 MouseArea {
                     anchors.fill: parent
@@ -376,70 +434,49 @@ Window {
                 }
             }
 
-            Text {
-                x: 20
-                width: page.width - 40
-                text: "Активный трек: " + media3.activeTrackName + "\nСостояние: " + media3.stateText
-                color: "#17212b"
-                font.pixelSize: 15
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-            }
-
-            Text {
-                x: 20
-                width: page.width - 40
-                text: media3.outputStatusText
-                color: "#526171"
-                font.pixelSize: 13
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-            }
-
             Row {
-                x: 20
-                width: page.width - 40
+                width: parent.width
+                height: 34
                 spacing: 8
                 Rectangle {
                     width: (parent.width - parent.spacing * 2) / 3
-                    height: 46
+                    height: parent.height
                     radius: 8
                     color: media3.playEnabled ? "#1769aa" : "#aab6c2"
-                    Text { anchors.centerIn: parent; text: "Play / Resume"; color: "white"; font.pixelSize: 12 }
+                    Text { anchors.centerIn: parent; text: "Play / Resume"; color: "white"; font.pixelSize: 11 }
                     MouseArea { anchors.fill: parent; enabled: media3.playEnabled; onClicked: media3.play() }
                 }
                 Rectangle {
                     width: (parent.width - parent.spacing * 2) / 3
-                    height: 46
+                    height: parent.height
                     radius: 8
                     color: media3.pauseEnabled ? "#1769aa" : "#aab6c2"
-                    Text { anchors.centerIn: parent; text: "Пауза"; color: "white"; font.pixelSize: 12 }
+                    Text { anchors.centerIn: parent; text: "Пауза"; color: "white"; font.pixelSize: 11 }
                     MouseArea { anchors.fill: parent; enabled: media3.pauseEnabled; onClicked: media3.pause() }
                 }
                 Rectangle {
                     width: (parent.width - parent.spacing * 2) / 3
-                    height: 46
+                    height: parent.height
                     radius: 8
                     color: media3.stopEnabled ? "#a43b3b" : "#aab6c2"
-                    Text { anchors.centerIn: parent; text: "Stop"; color: "white"; font.pixelSize: 12 }
+                    Text { anchors.centerIn: parent; text: "Stop"; color: "white"; font.pixelSize: 11 }
                     MouseArea { anchors.fill: parent; enabled: media3.stopEnabled; onClicked: media3.stop() }
                 }
             }
 
             Row {
-                x: 20
-                width: page.width - 40
-                Text { id: elapsed; text: formatTime(media3.positionMs); color: "#526171"; font.pixelSize: 13 }
+                width: parent.width
+                height: 14
+                Text { id: elapsed; text: formatTime(media3.positionMs); color: "#526171"; font.pixelSize: 11 }
                 Item { width: parent.width - elapsed.width - remaining.width; height: 1 }
-                Text { id: remaining; text: formatTime(media3.durationMs); color: "#526171"; font.pixelSize: 13 }
+                Text { id: remaining; text: formatTime(media3.durationMs); color: "#526171"; font.pixelSize: 11 }
             }
 
             Rectangle {
                 id: seekBar
-                x: 20
-                width: page.width - 40
-                height: 22
-                radius: 11
+                width: parent.width
+                height: 14
+                radius: 7
                 color: "#d5dce3"
                 property real fraction: media3.durationMs > 0
                     ? Math.max(0, Math.min(1, media3.positionMs / media3.durationMs)) : 0
@@ -459,58 +496,83 @@ Window {
             }
 
             Text {
-                x: 20
-                width: page.width - 40
-                visible: media3.errorText.length > 0
-                text: "Ошибка: " + media3.errorText
-                color: "#a32020"
-                font.pixelSize: 14
-                wrapMode: Text.WordWrap
+                width: parent.width
+                height: 14
+                text: media3.outputStatusText
+                color: "#526171"
+                font.pixelSize: 10
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
             }
 
             Text {
-                x: 20
-                width: page.width - 40
-                text: "Локальные MP3 / FLAC / WAV для регрессии"
-                color: "#17212b"
-                font.pixelSize: 14
-                font.bold: true
+                width: parent.width
+                visible: media3.errorText.length > 0
+                text: "Ошибка: " + media3.errorText
+                color: "#a32020"
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
             }
 
-            Repeater {
-                model: media3.trackNames
-                delegate: Rectangle {
-                    required property int index
-                    required property string modelData
-                    x: 20
-                    width: page.width - 40
-                    height: 44
-                    radius: 8
-                    color: media3.trackIndex === index ? "#dceaf5" : "white"
-                    border.color: "#d5dce3"
-                    Text { anchors.centerIn: parent; text: modelData; color: "#17212b"; font.pixelSize: 13 }
-                    MouseArea { anchors.fill: parent; onClicked: media3.selectTrack(index) }
+            Rectangle {
+                width: parent.width
+                height: 24
+                radius: 6
+                color: "#eef1f4"
+                Text {
+                    anchors.centerIn: parent
+                    text: root.showSyntheticTracks
+                          ? "Скрыть локальные тестовые треки ▲"
+                          : "Локальные тестовые треки ▼"
+                    color: "#526171"
+                    font.pixelSize: 10
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: root.showSyntheticTracks = !root.showSyntheticTracks
+                }
+            }
+
+            Column {
+                width: parent.width
+                spacing: 4
+                visible: root.showSyntheticTracks
+                Repeater {
+                    model: media3.trackNames
+                    delegate: Rectangle {
+                        required property int index
+                        required property string modelData
+                        width: playerControls.width
+                        height: 32
+                        radius: 6
+                        color: media3.trackIndex === index ? "#dceaf5" : "#f5f6f8"
+                        border.color: "#d5dce3"
+                        Text {
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 10
+                            text: modelData
+                            color: "#17212b"
+                            font.pixelSize: 11
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideMiddle
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: media3.selectTrack(index)
+                        }
+                    }
                 }
             }
 
             Text {
-                x: 20
-                width: page.width - 40
-                text: "При сворачивании приложения воспроизведение останавливается. Фоновая служба не включена."
-                color: "#526171"
-                font.pixelSize: 12
-                wrapMode: Text.WordWrap
-            }
-            Text {
-                x: 20
-                width: page.width - 40
+                width: parent.width
+                height: 12
                 text: buildLabel
-                color: "#526171"
-                font.pixelSize: 12
-                wrapMode: Text.WrapAnywhere
+                color: "#7f8e9b"
+                font.pixelSize: 9
+                elide: Text.ElideMiddle
             }
-
-            Item { width: parent.width; height: 10 }
         }
     }
 
@@ -519,11 +581,9 @@ Window {
         function onCloudSessionEnded() {
             emailInput.clear()
             passwordInput.clear()
-            root.selectedCloudIndex = -1
+            root.clearCloudSelection()
         }
-        function onCloudEntriesReset() {
-            root.selectedCloudIndex = -1
-        }
+        function onCloudEntriesReset() { root.clearCloudSelection() }
     }
 
     Connections {

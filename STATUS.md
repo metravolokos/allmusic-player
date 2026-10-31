@@ -8,6 +8,25 @@ Total output lines: 434
 
 ## 002-E — Issue #32: Android-медиатека (31.10.2026)
 
+### Ответ на UX-ревью PR #33
+
+В [замечании к PR](https://github.com/metravolokos/allmusic-player/pull/33#issuecomment-6547825802)
+обнаружено, что Play/Pause/Stop/Seek располагались в `ListView.footer`, а поиск —
+в прокручиваемом `ListView.header`. Компоновка разделена: закреплённый верхний
+`topPanel` содержит подключение, каталог, поиск, сортировку и счётчик; между
+панелями прокручивается только `cloudList`; закреплённый снизу `playerPanel`
+содержит выбор/Play, Play/Pause/Stop, позицию и seek. Форма реквизитов скрывается
+после подключения; отключение и отмена подключения доступны сверху. Локальные
+синтетические треки свёрнуты в панели плеера.
+Контрактные Android tests теперь проверяют отсутствие `header`/`footer` у списка,
+закрепление панелей, виртуализированный источник, размещение Play/Seek вне списка
+и сворачивание формы подключения.
+
+Быстрые локальные проверки после правки: Android Python tests (20), CI tests
+(31), repository check (100 файлов), `py_compile` и `git diff --check` — пройдены.
+Полные Android/Desktop сборки не запускались по плану ревью. Реальная проверка
+удобства и QML-компиляция на Android остаются **НЕ ПРОВЕРЕНЫ**.
+
 Новая ветка `issue-32-android-cloud-library` и [Draft PR #33](https://github.com/metravolokos/allmusic-player/pull/33)
 созданы от `main` SHA `6f91d6a2ed202e9b7c9ab28050536d00cfdf8cdd`. Android-каталог переведён на
 виртуализированный `ListView`. Локальная `QSortFilterProxyModel` фильтрует
