@@ -200,8 +200,9 @@ def main():
                     str(ROOT / "build/license-sources"), str(output / "licenses")], check=True)
     media3_license = ROOT / "licenses/Media3-1.11.1-Apache-2.0.txt"
     assert media3_license.is_file(), "Media3 Apache-2.0 license text missing"
-    shutil.copyfile(media3_license,
-                    output / "licenses/java/Media3-1.11.1-Apache-2.0.txt")
+    java_license_dir = output / "licenses/java"
+    java_license_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(media3_license, java_license_dir / "Media3-1.11.1-Apache-2.0.txt")
     for name in ("NOTICE", "NOTICE.toolchain"):
         notice = sdk / "ndk/27.2.12479018" / name
         if notice.is_file():
