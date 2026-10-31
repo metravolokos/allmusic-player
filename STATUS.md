@@ -6,7 +6,16 @@ Total output lines: 434
 
 # Текущий статус проекта — AllMusic Player
 
-**Дата:** 31.10.2026. **Текущий статус:** 002-A принята владельцем в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19); 002-B и Desktop 002-C приняты в `main`. Локальный Android Media3 срез Issue #26 прошёл Android/Desktop CI и был проверен на Huawei. Начата интеграция Android Cloud Mail по Issue #24 в `codex/002-d-android-cloud-media3`; её CI, тестовый APK и ручная проверка Cloud Mail на Huawei ещё ожидаются. CI использует только mock; пароль и медиатека владельца не используются.
+## CI-OPT-002 — Issue #30 (31.10.2026)
+
+Рабочая ветка `issue-30-ci-opt-002` создана отдельно от PR #29 и основана на
+актуальной `main` `c511cf252f5c8dd4d5a481b3b91e5e18379accc5`. Реализованы
+Draft fast mode, полная классификация cumulative diff для Ready PR, общие
+Desktop/Android зависимости Cloud WebDAV и итоговые отчёты workflow. Требуемые
+статусы и защита `main` не менялись. PR и платформенный CI ожидают запуска;
+runner-minutes и экономия будут записаны после измерения Draft и полного CI.
+
+**Дата:** 31.10.2026. **Текущий статус:** 002-A принята владельцем в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19); 002-B и Desktop 002-C приняты в `main`. Android Media3 по Issue #26 прошёл Android/Desktop CI и ручную проверку на Huawei. Android Cloud Mail по Issue #24 принят владельцем и объединён в `main` через [PR #29](https://github.com/metravolokos/allmusic-player/pull/29), commit `c511cf252f5c8dd4d5a481b3b91e5e18379accc5`; CI и согласованные Huawei сценарии пройдены. Навигация по вложенным папкам для медиатеки владельца неприменима; неудобство длинного списка отложено в отдельный UX backlog. CI использует только mock; пароль и медиатека владельца не используются.
 
 ## Утверждено и подготовлено
 
