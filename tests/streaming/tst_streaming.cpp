@@ -316,6 +316,22 @@ private slots:
     }
     void cleanup()
     {
+        // QtTest's QVERIFY/QCOMPARE macros return early on failure. This
+        // stack guard still closes every socket and clears the request log,
+        // preventing one security assertion from cascading into later tests.
+        struct FixtureTeardown final
+        {
+            MockWebDav &server;
+            ~FixtureTeardown()
+            {
+                server.stop();
+                server.requests.clear();
+            }
+        } teardown{server};
+
+        // Drain completed responses before auditing the entire request log.
+        QTRY_COMPARE_WITH_TIMEOUT(server.activeResponses, 0, 6000);
+        QCOMPARE(server.activeRangeResponses, 0);
         for (const auto &request : server.requests) {
             QVERIFY(request.method == "GET" || request.method == "PROPFIND");
             QVERIFY(request.target == "/AllMusic" || request.target.startsWith("/AllMusic/"));
@@ -329,10 +345,30 @@ private slots:
                 QVERIFY(!request.headers.contains("authorization"));
             }
         }
-        QTRY_COMPARE_WITH_TIMEOUT(server.activeResponses, 0, 6000);
-        QCOMPARE(server.activeRangeResponses, 0);
-        server.requests.clear();
-        server.close();
+    }
+    void mockServerStopClosesIncompleteHttpConnection()
+    {
+        // A half-sent request must not survive test teardown and arrive with
+        // stale Authorization headers in a later fixture. Synthetic only.
+        QTcpSocket incomplete;
+        incomplete.connectToHost(QHostAddress::LocalHost, server.serverPort());
+        QVERIFY(incomplete.waitForConnected(2000));
+        const QByteArray request =
+            "GET /AllMusic/fixture.mp3 HTTP/1.1\r\n"
+            "Host: 127.0.0.1\r\n"
+            "Authorization: synthetic-incomplete"; // Deliberately no CRLFCRLF.
+        QCOMPARE(incomplete.write(request), qint64(request.size()));
+        QVERIFY(incomplete.waitForBytesWritten(2000));
+        QTRY_VERIFY_WITH_TIMEOUT([this] {
+            const auto sockets = server.findChildren<QTcpSocket *>();
+            return std::any_of(sockets.cbegin(), sockets.cend(), [](QTcpSocket *socket) {
+                return socket->state() == QAbstractSocket::ConnectedState;
+            });
+        }(), 2000);
+        QCOMPARE(server.requests.size(), 0);
+        server.stop();
+        QTRY_COMPARE_WITH_TIMEOUT(incomplete.state(), QAbstractSocket::UnconnectedState, 2000);
+        QCOMPARE(server.requests.size(), 0);
     }
     void randomReadUsesValidatedRanges()
     {
