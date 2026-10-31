@@ -414,5 +414,8 @@ Gradle и ADB; Android сборка, Desktop C++ тесты, аудит факт
 Pause/Resume, seek, Stop/Play и переключение трека; WAV — регрессионный сценарий,
 пропавший файл — видимая ошибка; сворачивание — остановка. Инструкция:
 [docs/ANDROID-MEDIA3-SPIKE-TEST.md](docs/ANDROID-MEDIA3-SPIKE-TEST.md).
-Draft PR и проверочный APK ещё не опубликованы; объединять PR до Huawei испытания
-нельзя.
+Draft [PR #27](https://github.com/metravolokos/allmusic-player/pull/27) открыт.
+Android run #88 и Desktop run #122 запущены; ручной `workflow_dispatch` вернул
+GitHub 403, поэтому загрузка проверочного APK ограничена только этой явно
+заказанной PR-веткой. Размер APK и итоговые статусы будут дописаны по результатам
+run. Объединять PR до Huawei испытания нельзя.

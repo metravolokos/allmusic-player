@@ -13,9 +13,10 @@ MediaSession, фоновая служба и управление с экран�
 
 ## Установка
 
-1. В GitHub откройте Actions → **Android Media3 002-D-M3** и выберите запуск с
-   `source_ref=codex/002-d-media3-spike`, `android_apk=true`, `full_tests=true`.
-2. Скачайте артефакт `AllMusicPlayer-002D-M3-Android-arm64-v8a-debug-…`.
+1. Откройте draft PR #27 и дождитесь успешного задания **Android Media3 002-D-M3**.
+   Android и Desktop тесты запускаются автоматически при обновлении PR.
+2. В Android run скачайте артефакт
+   `AllMusicPlayer-002D-M3-Android-arm64-v8a-debug-…`.
    Внутри лежат APK, контрольная сумма, `BUILD-INFO.json`, отчёт аудита и лицензии.
 3. Установите APK на Huawei. Его package ID отличается от 002-A и старого
    FFmpeg spike; удалять эти приложения для установки не требуется. При замене
