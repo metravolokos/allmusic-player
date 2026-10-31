@@ -136,7 +136,10 @@ private slots:
         model.setEntries({cloudEntry(QStringLiteral("Новый список.mp3"))});
         QCOMPARE(resetSpy.count(), 1);
         QCOMPARE(model.totalCount(), 1);
+        // The search filter intentionally survives a source snapshot update.
         QVERIFY(!model.containsSourceIndex(1));
+        QVERIFY(!model.containsSourceIndex(0));
+        model.setSearchText(QString());
         QVERIFY(model.containsSourceIndex(0));
     }
 
