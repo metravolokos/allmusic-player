@@ -231,7 +231,7 @@ MediaSession и постоянный кэш не входят. Сборка и p
 на том же устройстве проверяет Android audio path отдельно. Qt 6.12 Android
 реализует QAudioSink через AAudio; исходник также проверяет открытие stream и
   предупреждает, если параметры потока не совпали с запросом. В Qt FFmpeg
-  AudioRenderer отправляет данные в sink и отдаёт декодированные кадры
+  AudioRenderer ([Qt FFmpeg audio renderer](https://github.com/qt/qtmultimedia/blob/6.12/src/plugins/multimedia/ffmpeg/playbackengine/qffmpegaudiorenderer.cpp)) отправляет данные в sink и отдаёт декодированные кадры
   QAudioBufferOutput. Эти места задают проверяемые гипотезы, не доказывают
   неисправность конкретного устройства. Если direct sink слышен при молчащем player,
 следует исследовать декодер/связку QMediaPlayer и output. Если оба теста молчат,

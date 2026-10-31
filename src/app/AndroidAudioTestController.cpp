@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFile>
 #include <QLoggingCategory>
+#include <QMediaMetaData>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QUrl>
@@ -156,9 +157,11 @@ AndroidAudioTestController::AndroidAudioTestController(QObject *parent)
             return;
         }
         m_syntheticOutputTimedOut = true;
-        m_syntheticOutputStatus = tr("Тайм-аут: QAudioSink оставался Active дольше 3 с; "
-                                     "ошибка %1.")
-                                     .arg(static_cast<int>(m_syntheticOutputSink->error()));
+        m_syntheticOutputStatus =
+            tr("Тайм-аут: QAudioSink оставался Active дольше 3 с; ошибка %1; buffer %2/%3 bytes.")
+                .arg(static_cast<int>(m_syntheticOutputSink->error()))
+                .arg(m_syntheticOutputBuffer.pos())
+                .arg(m_syntheticOutputBuffer.size());
         emit changed();
         m_syntheticOutputSink->stop();
     });
@@ -727,31 +730,34 @@ void AndroidAudioTestController::updateSyntheticOutputTestStatus(QAudio::State s
         ? tr("Active")
         : (state == QAudio::IdleState ? tr("Idle")
            : (state == QAudio::SuspendedState ? tr("Suspended") : tr("Stopped")));
+    const QString transfer = tr("buffer %1/%2 bytes; processed %3 мкс; громкость sink 50%")
+        .arg(m_syntheticOutputBuffer.pos())
+        .arg(m_syntheticOutputBuffer.size())
+        .arg(m_syntheticOutputSink->processedUSecs());
+
     if (error != QAudio::NoError) {
         m_syntheticOutputStatus =
-            tr("QAudioSink %1; ошибка %2; processed %3 мкс.")
+            tr("QAudioSink %1; ошибка %2; %3.")
                 .arg(stateName)
                 .arg(static_cast<int>(error))
-                .arg(m_syntheticOutputSink->processedUSecs());
+                .arg(transfer);
     } else if (state == QAudio::ActiveState) {
         m_syntheticOutputStatus =
-            tr("QAudioSink Active; поток передаётся; processed %1 мкс. "
-               "Слышимость подтвердить на устройстве.")
-                .arg(m_syntheticOutputSink->processedUSecs());
+            tr("QAudioSink Active; поток передаётся; %1. Слышимость подтвердить на устройстве.")
+                .arg(transfer);
     } else if (state == QAudio::IdleState) {
         m_syntheticOutputTimeout.stop();
         m_syntheticOutputStatus =
-            tr("QAudioSink Idle; PCM передан до конца; processed %1 мкс. "
-               "Слышимость подтвердить на устройстве.")
-                .arg(m_syntheticOutputSink->processedUSecs());
+            tr("QAudioSink Idle; состояние устройства не подтверждает слышимость; %1.")
+                .arg(transfer);
     } else if (state == QAudio::SuspendedState) {
         m_syntheticOutputStatus =
-            tr("QAudioSink Suspended; processed %1 мкс.")
-                .arg(m_syntheticOutputSink->processedUSecs());
+            tr("QAudioSink Suspended; %1.")
+                .arg(transfer);
     } else {
         m_syntheticOutputStatus =
-            tr("QAudioSink Stopped; processed %1 мкс.")
-                .arg(m_syntheticOutputSink->processedUSecs());
+            tr("QAudioSink Stopped; %1.")
+                .arg(transfer);
     }
     emit changed();
 }
