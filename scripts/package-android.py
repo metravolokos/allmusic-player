@@ -25,6 +25,12 @@ EXPECTED_ASSETS = {
     "assets/audio/synthetic-660hz.flac",
     "assets/audio/synthetic-880hz.wav",
 }
+MAVEN_LICENSE_OVERRIDES = {
+    ("com.google.guava", "failureaccess", "1.0.2"):
+        "Apache License, Version 2.0 (Google Guava v32.1.1 source: "
+        "https://github.com/google/guava/blob/v32.1.1/futures/failureaccess/src/"
+        "com/google/common/util/concurrent/internal/InternalFutureFailureAccess.java)",
+}
 
 
 def check_manifest(xml):
@@ -131,7 +137,12 @@ def audit_maven_licenses(dependencies, gradle_home, output):
             assert any(token in normalized for token in ("apache", "mit", "bsd")), \
                 f"License needs manual review: {group}:{artifact}:{version}: {label} ({url})"
             licenses.append(f"{label} ({url})" if url else label)
-        assert licenses, f"Maven POM has no declared license: {group}:{artifact}:{version}"
+        if not licenses:
+            # failureaccess 1.0.2's POM omits license metadata; its pinned upstream
+            # source file declares Apache-2.0. Keep this exception version-specific.
+            override = MAVEN_LICENSE_OVERRIDES.get((group, artifact, version))
+            assert override, f"Maven POM has no declared license: {group}:{artifact}:{version}"
+            licenses.append(override)
         records.append(f"{group}:{artifact}:{version} — {'; '.join(sorted(set(licenses)))}")
 
     media3_license = next((record for record in records

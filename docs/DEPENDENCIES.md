@@ -88,6 +88,12 @@ Java runtime архивов и NDK NOTICE/NOTICE.toolchain (они охваты�
 Новый модуль Qt за пределами Base/Declarative требует проверки и останавливает
 аудит; Multimedia/FFmpeg/TagLib/SQLite не добавлялись.
 
+Каждый runtime Maven artifact должен иметь распознанную лицензию в POM.
+Исключение узкое и привязано к версии: `com.google.guava:failureaccess:1.0.2`
+не содержит license metadata в POM, поэтому его Apache-2.0 подтверждается
+[исходником Google Guava v32.1.1](https://github.com/google/guava/blob/v32.1.1/futures/failureaccess/src/com/google/common/util/concurrent/internal/InternalFutureFailureAccess.java).
+Другие отсутствующие или неизвестные сведения останавливают audit.
+
 LGPL-обязательства распространяются и на тестовые бинарные пакеты; персональное
 назначение не является освобождением. Сохранены upstream notices и ссылки на
 соответствующие исходники выше. Получатель имеет право изменять Qt и выполнять

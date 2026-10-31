@@ -132,6 +132,19 @@ class PublicationBoundary(unittest.TestCase):
             self.assertIn('Apache License, Version 2.0', records[0])
             self.assertTrue((output / 'licenses/java/DEPENDENCY-LICENSES.txt').is_file())
 
+            failureaccess_dir = root / 'gradle/caches/modules-2/files-2.1/com.google.guava/failureaccess/1.0.2/hash'
+            failureaccess_dir.mkdir(parents=True)
+            (failureaccess_dir / 'failureaccess-1.0.2.pom').write_text(
+                '<project xmlns="http://maven.apache.org/POM/4.0.0"><artifactId>failureaccess</artifactId></project>',
+                encoding='utf-8')
+            records = AUDIT['audit_maven_licenses'](
+                'debugRuntimeClasspath\n+--- androidx.media3:media3-exoplayer:1.11.1'
+                '\n+--- com.google.guava:failureaccess:1.0.2',
+                root / 'gradle', output)
+            failureaccess_record = next(r for r in records if r.startswith('com.google.guava:failureaccess:1.0.2'))
+            self.assertIn('Apache License, Version 2.0', failureaccess_record)
+            self.assertIn('google/guava/blob/v32.1.1', failureaccess_record)
+
             pom.write_text('''<project xmlns="http://maven.apache.org/POM/4.0.0">
               <licenses><license><name>Unknown terms</name></license></licenses>
             </project>''', encoding='utf-8')
