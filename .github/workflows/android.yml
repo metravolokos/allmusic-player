@@ -96,7 +96,7 @@ jobs:
       - name: Подготовить каталоги Android и Python
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1 libegl1 libxkbcommon0 libxcb-cursor0 patchelf
+          sudo apt-get install -y libgl1 libegl1 libxkbcommon0 libxcb-cursor0
           mkdir -p build/android-evidence "$RUNNER_TEMP/Qt/6.12.0"
           mkdir -p build/aqt-wheelhouse
       - name: Кэшировать wheel закреплённого aqtinstall

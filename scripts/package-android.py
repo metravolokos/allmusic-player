@@ -131,6 +131,8 @@ def audit_openssl_runtime(apk, readelf, evidence):
         "libssl_3.so": ("libssl_3.so", {"libcrypto_3.so"}),
     }
     report = []
+    version_info = {}
+    dynamic_info = {}
     with zipfile.ZipFile(apk) as archive:
         for basename, (soname, needed) in expected.items():
             matches = [name for name in archive.namelist()
@@ -141,6 +143,7 @@ def audit_openssl_runtime(apk, readelf, evidence):
             header = subprocess.check_output([str(readelf), "-h", str(library)], text=True)
             assert "AArch64" in header, f"Wrong architecture: {basename}"
             dynamic = subprocess.check_output([str(readelf), "-d", str(library)], text=True)
+            dynamic_info[basename] = dynamic
             sonames = re.findall(r"\(SONAME\).*?\[(.*?)\]", dynamic)
             assert sonames == [soname], f"Unexpected {basename} SONAME: {sonames}"
             actual_needed = set(re.findall(r"\(NEEDED\).*?\[(.*?)\]", dynamic))
@@ -152,8 +155,50 @@ def audit_openssl_runtime(apk, readelf, evidence):
             loads = [line.split() for line in program.splitlines() if line.strip().startswith("LOAD ")]
             assert loads and all(int(line[-1], 16) >= 16384 for line in loads), \
                 f"{basename} does not support 16 KiB page alignment"
+            versions = subprocess.check_output([str(readelf), "-V", str(library)], text=True)
+            version_info[basename] = versions
             report.append(f"{matches[0]}: SONAME={soname}; NEEDED={sorted(actual_needed)}; LOAD alignment >= 16384")
+    audit_gnu_versions(dynamic_info, version_info)
+    report.append("GNU version needs match DT_NEEDED and OpenSSL version definitions")
     return report
+
+
+def audit_gnu_versions(dynamic_info, version_info):
+    """Check GNU VERNEED filenames against DT_NEEDED and internal version providers."""
+    definitions = {}
+    needs_by_library = {}
+    for basename, output in version_info.items():
+        definitions[basename] = set()
+        needed = set(re.findall(r"\(NEEDED\).*?\[(.*?)\]", dynamic_info[basename]))
+        needs = []
+        current_file = None
+        in_needs = False
+        for line in output.splitlines():
+            if "Version needs section" in line:
+                in_needs = True
+                current_file = None
+            elif "Version definition section" in line:
+                in_needs = False
+                current_file = None
+            file_match = re.search(r'\bFile:\s*(\S+)', line)
+            if in_needs and file_match:
+                current_file = file_match.group(1)
+                assert current_file in needed, \
+                    f"GNU version requirement names {current_file}, absent from {basename} DT_NEEDED"
+            name_match = re.search(r'\bName:\s*(\S+)', line)
+            if in_needs and name_match and current_file:
+                needs.append((current_file, name_match.group(1)))
+            elif not in_needs and "Version definition section" in output and name_match:
+                definitions[basename].add(name_match.group(1))
+        needs_by_library[basename] = needs
+
+    providers = {"libcrypto_3.so": definitions.get("libcrypto_3.so", set()),
+                 "libssl_3.so": definitions.get("libssl_3.so", set())}
+    for basename, needs in needs_by_library.items():
+        for filename, version in needs:
+            if filename in providers:
+                assert version in providers[filename], \
+                    f"{basename} needs {version} from {filename}, provider does not define it"
 
 
 def runtime_coordinates(dependencies):
@@ -269,6 +314,7 @@ def main():
                        f"Source: https://github.com/openssl/openssl/releases/download/openssl-{OPENSSL_VERSION}/openssl-{OPENSSL_VERSION}.tar.gz\n"
                        f"SHA-256: {OPENSSL_SHA256}\n")
     assert source_record.startswith(expected_source)
+    assert "Android arm64 suffix: shlib_variant=_3" in source_record
     source_archive = openssl_dir.parent / "openssl-source" / f"openssl-{OPENSSL_VERSION}.tar.gz"
     assert source_archive.is_file()
     assert hashlib.sha256(source_archive.read_bytes()).hexdigest() == OPENSSL_SHA256
