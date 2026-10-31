@@ -1169,11 +1169,10 @@ private slots:
         // Resume at a different offset so this exercises both interruption
         // recovery and applying the deferred QIODevice cursor update.
         QVERIFY(device->seek(1));
-        std::atomic<qint64> resumedRead{0};
+        qint64 resumedRead = 0;
         char resumedByte = 0;
-        std::thread resumed([&] { resumedRead = device->read(&resumedByte, 1); });
-        resumed.join();
-        if (resumedRead.load() != 1) {
+        QVERIFY(readMailWithEventLoop(*device, &resumedByte, 1, &resumedRead));
+        if (resumedRead != 1) {
             qWarning() << "Cloud Mail resume failed; error=" << device->errorString()
                        << "position=" << device->pos()
                        << "open=" << device->isOpen()
@@ -1183,7 +1182,7 @@ private slots:
                 qWarning() << request.method << request.target
                            << request.headers.value("range");
         }
-        QCOMPARE(resumedRead.load(), 1);
+        QCOMPARE(resumedRead, 1);
         QCOMPARE(uchar(resumedByte), uchar(audio[1]));
         QTRY_COMPARE_WITH_TIMEOUT(server.requests.size(), 4, 2000);
         delete device;
