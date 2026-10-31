@@ -10,6 +10,7 @@
 #include "MailWebDavController.h"
 #else
 #include "AndroidMedia3Controller.h"
+#include "MailWebDavController.h"
 #endif
 
 int main(int argc, char *argv[])

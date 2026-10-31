@@ -1161,13 +1161,15 @@ private slots:
         QVERIFY(timer.elapsed() < 1500);
         QCOMPARE(firstRead.load(), -1);
 
-        QVERIFY(device->seek(0));
+        // Resume at a different offset so this exercises both interruption
+        // recovery and applying the deferred QIODevice cursor update.
+        QVERIFY(device->seek(1));
         std::atomic<qint64> resumedRead{0};
         char resumedByte = 0;
         std::thread resumed([&] { resumedRead = device->read(&resumedByte, 1); });
         resumed.join();
         QCOMPARE(resumedRead.load(), 1);
-        QCOMPARE(uchar(resumedByte), uchar(audio[0]));
+        QCOMPARE(uchar(resumedByte), uchar(audio[1]));
         QCOMPARE(server.requests.size(), 2);
         delete device;
     }
