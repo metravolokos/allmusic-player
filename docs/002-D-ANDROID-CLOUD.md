@@ -33,7 +33,9 @@ HTTP 200 останавливает поток: полный файл не за�
 
 ## Проверка на Huawei
 
-1. Установите APK `AllMusic Player — Cloud Mail Media3` (package ID
+1. Если на телефоне стоит более ранняя тестовая сборка с тем же package ID,
+   удалите её: временная debug-подпись может отличаться между CI сборками.
+   Затем установите APK `AllMusic Player — Cloud Mail Media3` (package ID
    `org.metravolokos.allmusicplayer.cloud002dmedia3`). Интернет — обычное
    разрешение приложения; системного запроса на runtime-доступ ожидаться не
    должно. Разрешения на файлы, медиа, Bluetooth, микрофон или камеру не нужны.
