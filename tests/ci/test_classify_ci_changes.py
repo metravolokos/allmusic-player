@@ -40,6 +40,15 @@ class ChangeSelection(unittest.TestCase):
         self.assertFalse(result["desktop_linux"])
         self.assertFalse(result["fixtures"])
 
+    def test_android_audio_state_tests_run_desktop_and_android_without_archives(self):
+        result = CLASSIFIER.classify_paths(["tests/android_audio/tst_android_audio_state.cpp"])
+        self.assertTrue(result["android"])
+        self.assertTrue(result["desktop_linux"])
+        self.assertTrue(result["desktop_windows"])
+        self.assertTrue(result["fixtures"])
+        self.assertFalse(result["windows_zip"])
+        self.assertFalse(result["webdav_test_kit"])
+
     def test_shared_build_configuration_checks_all_affected_targets(self):
         result = CLASSIFIER.classify_paths(["CMakeLists.txt"])
         self.assertTrue(result["desktop_linux"])

@@ -83,6 +83,10 @@ def classify_paths(paths):
         elif path in {"scripts/package-android.py", "scripts/generate_android_audio_fixtures.py"} or path.startswith((
                 "ui/android/", "android/", "tests/android/")):
             result["android"] = True
+        elif path.startswith("tests/android_audio/"):
+            # This QtTest target is run by Desktop CTest; its state header is also used by Android.
+            desktop()
+            result["android"] = True
         elif path.startswith("src/app/"):
             desktop()
             result["android"] = True
