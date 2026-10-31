@@ -34,6 +34,19 @@ class ChangeSelection(unittest.TestCase):
         self.assertFalse(result["desktop_windows"])
         self.assertTrue(result["android"])
 
+    def test_android_java_gradle_and_media3_tests_select_android_ci(self):
+        for path in (
+                "android/src/org/metravolokos/allmusicplayer/Media3PlaybackAdapter.java",
+                "android/src/org/metravolokos/allmusicplayer/Media3PlaybackAdapter.kt",
+                "android/build.gradle",
+                "tests/android_media3/tst_android_media3_state.cpp",
+                "scripts/generate_android_media3_fixtures.py"):
+            with self.subTest(path=path):
+                result = CLASSIFIER.classify_paths([path])
+                self.assertTrue(result["android"])
+                self.assertFalse(result["desktop_linux"])
+                self.assertFalse(result["desktop_windows"])
+
     def test_shared_build_configuration_checks_all_affected_targets(self):
         result = CLASSIFIER.classify_paths(["CMakeLists.txt"])
         self.assertTrue(result["desktop_linux"])

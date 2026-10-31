@@ -9,7 +9,7 @@
 #include "LocalPlayback.h"
 #include "MailWebDavController.h"
 #else
-#include "AndroidAudioTestController.h"
+#include "AndroidMedia3Controller.h"
 #endif
 
 int main(int argc, char *argv[])
@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
     QObject::connect(&app, &QCoreApplication::aboutToQuit,
                      &mailWebDav, &MailWebDavController::disconnectCloud);
 #else
-    AndroidAudioTestController audioTest;
+    AndroidMedia3Controller media3;
 #endif
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed,
@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
 #ifdef Q_OS_ANDROID
     engine.rootContext()->setContextProperty(QStringLiteral("buildLabel"),
                                             QStringLiteral(ALLMUSIC_BUILD_LABEL));
-    engine.rootContext()->setContextProperty(QStringLiteral("audioTest"), &audioTest);
+    engine.rootContext()->setContextProperty(QStringLiteral("media3"), &media3);
 #else
     engine.rootContext()->setContextProperty(QStringLiteral("playback"), &playback);
     engine.rootContext()->setContextProperty(QStringLiteral("mailWebDav"), &mailWebDav);

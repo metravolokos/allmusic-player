@@ -10,11 +10,34 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = "org.metravolokos.allmusicplayer.spike002a"
+PACKAGE = "org.metravolokos.allmusicplayer.spike002dmedia3"
 ANDROID = "{http://schemas.android.com/apk/res/android}"
 FORBIDDEN = re.compile(
     r"com[./]google[./](?:android[./]gms|firebase)|"
+    r"com\.google\.gms:|play-services|firebase-|"
+    r"ffmpeg|avcodec|avformat|avutil|swresample|swscale", re.I)
+GOOGLE_FORBIDDEN = re.compile(
+    r"com[./]google[./](?:android[./]gms|firebase)|"
     r"com\.google\.gms:|play-services|firebase-", re.I)
+MEDIA3_VERSION = "1.11.1"
+EXPECTED_ASSETS = {
+    "assets/audio/synthetic-440hz.mp3",
+    "assets/audio/synthetic-660hz.flac",
+    "assets/audio/synthetic-880hz.wav",
+}
+MAVEN_LICENSE_OVERRIDES = {
+    ("com.google.guava", "guava", "33.3.1-android"):
+        "Apache License, Version 2.0 (Google Guava v33.3.1 upstream POM: "
+        "https://github.com/google/guava/blob/v33.3.1/pom.xml)",
+    ("com.google.guava", "failureaccess", "1.0.2"):
+        "Apache License, Version 2.0 (Google Guava v33.3.1 source: "
+        "https://github.com/google/guava/blob/v33.3.1/futures/failureaccess/src/"
+        "com/google/common/util/concurrent/internal/InternalFutureFailureAccess.java)",
+    ("com.google.guava", "listenablefuture", "9999.0-empty-to-avoid-conflict-with-guava"):
+        "Apache License, Version 2.0 (empty artifact POM inherits Google Guava parent "
+        "26.0-android license: https://repo.maven.apache.org/maven2/com/google/guava/"
+        "guava-parent/26.0-android/guava-parent-26.0-android.pom)",
+}
 
 
 def check_manifest(xml):
@@ -45,32 +68,98 @@ def check_manifest(xml):
 
 
 def check_runtime(apk, dependencies):
-    assert not FORBIDDEN.search(dependencies), "GMS/Firebase runtime dependency"
+    assert not FORBIDDEN.search(dependencies), "Forbidden runtime dependency"
     assert "FAILED" not in dependencies, "Unresolved runtime dependency"
     assert "debugRuntimeClasspath" in dependencies, "Missing Gradle dependency evidence"
+    assert f"androidx.media3:media3-exoplayer:{MEDIA3_VERSION}" in dependencies, \
+        "Pinned Media3 ExoPlayer runtime dependency missing"
+    assert "media3-decoder-ffmpeg" not in dependencies.lower(), \
+        "Media3 FFmpeg extension must not be packaged"
     with zipfile.ZipFile(apk) as archive:
         names = archive.namelist()
+        missing_assets = EXPECTED_ASSETS.difference(names)
+        assert not missing_assets, f"Synthetic Android test assets missing: {sorted(missing_assets)}"
         native = sorted(n for n in names if n.startswith("lib/") and n.endswith(".so"))
         assert native and {n.split("/")[1] for n in native} == {"arm64-v8a"}
         assert any("liballmusic-player" in n for n in native)
         assert any("libQt6Quick" in n for n in native), "Qt runtime must be bundled"
         # Licensing scope is deliberately narrow: a new Qt module needs review.
-        allowed_qt = {"Concurrent", "Core", "Gui", "Multimedia", "Network", "OpenGL",
+        allowed_qt = {"Concurrent", "Core", "Gui", "Network", "OpenGL",
                       "Qml", "QmlMeta", "QmlModels", "QmlWorkerScript", "Quick", "QmlBuiltins"}
         for name in native:
             match = re.search(r"/libQt6(\w+)_arm64-v8a\.so$", name)
             assert not match or match[1] in allowed_qt, f"Review Qt module license: {name}"
-            assert not re.search(r"webdav|ffmpeg|avcodec|taglib|sqlite", name, re.I)
-        assert any("libQt6Multimedia" in name for name in native), "Qt Multimedia must be bundled"
-        assert any("libplugins_multimedia_androidmediaplugin" in name for name in native), \
-            "Qt Android media output plugin must be bundled"
+            assert not re.search(r"webdav|ffmpeg|avcodec|avformat|taglib|sqlite|multimedia", name, re.I)
+        assert not any("libQt6Multimedia" in name for name in native), \
+            "Qt Multimedia must not be bundled on Android"
+        assert not any("plugins_multimedia" in name.lower() for name in native), \
+            "Qt multimedia plugins must not be bundled on Android"
+        dex_data = b""
         for name in names:
             assert not FORBIDDEN.search(name), f"Forbidden APK entry: {name}"
             assert not name.lower().endswith((".keystore", ".jks", ".testkey", ".pem"))
             if re.fullmatch(r"classes\d*\.dex", name):
                 data = archive.read(name)
-                assert not FORBIDDEN.search(data.decode("latin-1")), "GMS/Firebase DEX reference"
+                # DefaultRenderersFactory reflectively probes the optional FFmpeg renderer by
+                # class-name string. Reject the extension's actual DEX class descriptor below.
+                assert not GOOGLE_FORBIDDEN.search(data.decode("latin-1")), \
+                    "Forbidden GMS/Firebase runtime reference in DEX"
+                dex_data += data
+        assert b"androidx/media3/exoplayer" in dex_data, "Media3 ExoPlayer classes missing from APK"
+        assert b"Media3PlaybackAdapter" in dex_data, "Qt JNI adapter missing from APK"
+        assert b"Landroidx/media3/decoder/ffmpeg/" not in dex_data, \
+            "Media3 FFmpeg decoder classes must not be packaged"
     return native
+
+
+def runtime_coordinates(dependencies):
+    pattern = re.compile(
+        r"([A-Za-z0-9_.-]+):([A-Za-z0-9_.-]+):([^\s()]+)(?:\s+->\s+([^\s()]+))?")
+    coordinates = set()
+    for line in dependencies.splitlines():
+        match = pattern.search(line)
+        if match:
+            group, artifact, requested, selected = match.groups()
+            coordinates.add((group, artifact, selected or requested))
+    return sorted(coordinates)
+
+
+def audit_maven_licenses(dependencies, gradle_home, output):
+    """Require recognizable license metadata for every resolved runtime artifact."""
+    namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
+    root = Path(gradle_home) / "caches/modules-2/files-2.1"
+    records = []
+    for group, artifact, version in runtime_coordinates(dependencies):
+        artifact_root = root / group / artifact / version
+        poms = sorted(artifact_root.rglob("*.pom")) if artifact_root.is_dir() else []
+        assert poms, f"Maven POM missing from Gradle cache: {group}:{artifact}:{version}"
+        pom = ET.parse(poms[0]).getroot()
+        licenses = []
+        for license_node in pom.findall("m:licenses/m:license", namespace):
+            name = (license_node.findtext("m:name", default="", namespaces=namespace)).strip()
+            url = (license_node.findtext("m:url", default="", namespaces=namespace)).strip()
+            label = name or url
+            assert label, f"Unnamed Maven license: {group}:{artifact}:{version}"
+            normalized = label.lower()
+            assert any(token in normalized for token in ("apache", "mit", "bsd")), \
+                f"License needs manual review: {group}:{artifact}:{version}: {label} ({url})"
+            licenses.append(f"{label} ({url})" if url else label)
+        if not licenses:
+            # These exact Guava artifacts omit license metadata; pinned upstream
+            # POMs or source declare Apache-2.0. Keep each exception version-specific.
+            override = MAVEN_LICENSE_OVERRIDES.get((group, artifact, version))
+            assert override, f"Maven POM has no declared license: {group}:{artifact}:{version}"
+            licenses.append(override)
+        records.append(f"{group}:{artifact}:{version} — {'; '.join(sorted(set(licenses)))}")
+
+    media3_license = next((record for record in records
+                           if record.startswith(f"androidx.media3:media3-exoplayer:{MEDIA3_VERSION} —")), None)
+    assert media3_license and "apache" in media3_license.lower(), \
+        "Media3 ExoPlayer must declare Apache License 2.0"
+    report = Path(output) / "licenses/java/DEPENDENCY-LICENSES.txt"
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text("\n".join(records) + "\n", encoding="utf-8")
+    return records
 
 
 def capture(command, path):
@@ -127,6 +216,11 @@ def main():
     shutil.copyfile(apk, output / (os.environ["ARTIFACT_NAME"] + ".apk"))
     subprocess.run(["python", str(ROOT / "scripts/collect-licenses.py"),
                     str(ROOT / "build/license-sources"), str(output / "licenses")], check=True)
+    media3_license = ROOT / "licenses/Media3-1.11.1-Apache-2.0.txt"
+    assert media3_license.is_file(), "Media3 Apache-2.0 license text missing"
+    java_license_dir = output / "licenses/java"
+    java_license_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(media3_license, java_license_dir / "Media3-1.11.1-Apache-2.0.txt")
     for name in ("NOTICE", "NOTICE.toolchain"):
         notice = sdk / "ndk/27.2.12479018" / name
         if notice.is_file():
@@ -147,13 +241,19 @@ def main():
                 assert target.resolve().is_relative_to((output / "licenses").resolve())
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(archive.read(name))
-    for name in ("ANDROID-TEST.md", "DEPENDENCIES.md"):
+    for name in ("ANDROID-MEDIA3-SPIKE-TEST.md", "DEPENDENCIES.md"):
         shutil.copyfile(ROOT / "docs" / name, output / name)
     shutil.copytree(evidence, output / "audit", dirs_exist_ok=True)
+    dependency_licenses = audit_maven_licenses(
+        (evidence / "gradle-runtime.txt").read_text(encoding="utf-8"),
+        os.environ["GRADLE_USER_HOME"], output)
     metadata = {"commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
                 "build_label": os.environ["BUILD_LABEL"], "abi": "arm64-v8a",
                 "run": os.environ["GITHUB_RUN_ID"], "attempt": os.environ["GITHUB_RUN_ATTEMPT"],
                 "device_compatibility": "NOT TESTED", "permissions": [],
+                "package": PACKAGE, "media3_version": MEDIA3_VERSION,
+                "apk_bytes": apk.stat().st_size,
+                "java_runtime_licenses": dependency_licenses,
                 "signing": "ephemeral debug certificate; uninstall the previous test copy before replacement",
                 "native_libraries": native}
     (output / "BUILD-INFO.json").write_text(json.dumps(metadata, indent=2) + "\n")
@@ -162,7 +262,8 @@ def main():
         if path.is_file() and path.name != "SHA256SUMS.txt":
             sums.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(output).as_posix()}")
     (output / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n")
-    print("APK audit passed: signature, alignment, ABI, zero permissions and no extra components, no GMS/Firebase references")
+    print(f"APK audit passed: {apk.stat().st_size} bytes; signature, alignment, arm64-v8a, "
+          "zero permissions, no Qt Multimedia/FFmpeg, Media3 runtime, and Maven license metadata")
 
 
 if __name__ == "__main__":

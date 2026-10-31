@@ -1,4 +1,4 @@
-name: Android 002-A
+name: Android Media3 002-D-M3
 
 on:
   push:
@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: android-002a-${{ github.event.pull_request.number || github.ref }}
+  group: android-002d-m3-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -77,7 +77,7 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || github.sha }}
           persist-credentials: false
-      - name: Подготовить JDK 21 и выполнить Android unit tests
+      - name: Подготовить JDK 21 и проверить Android assets и package audit
         run: |
           echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
           echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
@@ -114,20 +114,19 @@ jobs:
           # Qt >=6.7 publishes Android metadata under all_os; keep the existing pinned aqt route.
           python -m aqt list-qt all_os android --arch 6.12.0 > build/android-evidence/available-qt-abis.txt
           python -m aqt list-qt all_os android --modules 6.12.0 android_arm64_v8a > build/android-evidence/available-qt-modules.txt
-          grep -Eq '(^|[[:space:]])qtmultimedia([[:space:]]|$)' build/android-evidence/available-qt-modules.txt
           grep -Eq '(^|[[:space:]])qtshadertools([[:space:]]|$)' build/android-evidence/available-qt-modules.txt
       - name: Кэш Qt 6.12.0 для host tools и Android arm64-v8a
         id: qt_cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/Qt/6.12.0
-          key: qt-6.12.0-android-arm64-linux-gcc64-base-declarative-multimedia-shadertools-icu-aqt-076e1659807d0b362a3ed684d54c2e9c775eb9c7-base-download-qt-io-v1-${{ hashFiles('.github/workflows/android.yml') }}
+          key: qt-6.12.0-android-arm64-linux-gcc64-base-declarative-shadertools-icu-aqt-076e1659807d0b362a3ed684d54c2e9c775eb9c7-base-download-qt-io-v1-${{ hashFiles('.github/workflows/android.yml') }}
       - name: Установить Qt при отсутствии кэша
         if: steps.qt_cache.outputs.cache-hit != 'true'
         run: |
           # Host tools need ICU; ICU is not included in the Android runtime.
           python -m aqt install-qt linux desktop 6.12.0 linux_gcc_64 --archives qtbase qtdeclarative icu --outputdir "$RUNNER_TEMP/Qt" --base https://download.qt.io
-          python -m aqt install-qt linux android 6.12.0 android_arm64_v8a --archives qtbase qtdeclarative --modules qtmultimedia qtshadertools --outputdir "$RUNNER_TEMP/Qt" --base https://download.qt.io
+          python -m aqt install-qt linux android 6.12.0 android_arm64_v8a --archives qtbase qtdeclarative --modules qtshadertools --outputdir "$RUNNER_TEMP/Qt" --base https://download.qt.io
       - name: Проверить восстановленный Qt или результат установки
         env:
           QT_ANDROID_ROOT: ${{ runner.temp }}/Qt/6.12.0/android_arm64_v8a
@@ -173,9 +172,9 @@ jobs:
         run: |
           mkdir -p build/android-evidence
           short_sha=$(git rev-parse --short=12 HEAD)
-          label="002-A-${short_sha}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          label="002-D-M3-${short_sha}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "BUILD_LABEL=$label" >> "$GITHUB_ENV"
-          echo "ARTIFACT_NAME=AllMusicPlayer-002A-Android-arm64-v8a-debug-${short_sha}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          echo "ARTIFACT_NAME=AllMusicPlayer-002D-M3-Android-arm64-v8a-debug-${short_sha}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
           { java -version; cmake --version; ninja --version; "$QT_ANDROID_ROOT/bin/qmake" -query QT_VERSION; cat "$ANDROID_HOME/ndk/27.2.12479018/source.properties"; } > build/android-evidence/toolchain.txt 2>&1
           cmake --preset android-debug -DALLMUSIC_BUILD_LABEL="$label" -DALLMUSIC_ANDROID_VERSION_CODE="$GITHUB_RUN_NUMBER"
           cat build/android-debug/src/app/android-allmusic-player-deployment-settings.json > build/android-evidence/deployment-settings.json
@@ -198,23 +197,16 @@ jobs:
           ref: 4332fbbb4c340463dc8cee36dda0c85d932122d8
           path: build/license-sources/qtdeclarative
           persist-credentials: false
-      - name: Получить исходники Qt Multimedia для проверки лицензий
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          repository: qt/qtmultimedia
-          ref: 6ca885f084a3984749d53bb50a0e08bdc60e86cc
-          path: build/license-sources/qtmultimedia
-          persist-credentials: false
       - name: Проверить APK и составить комплект с лицензиями
         run: python scripts/package-android.py
       - name: Записать commit, платформу и статус упаковки в отчёт
         if: always()
         run: |
           echo "Исходный commit: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
-          echo "Цель: Android arm64-v8a; это компиляция и аудит, не проверка на устройстве." >> "$GITHUB_STEP_SUMMARY"
+          echo "Цель: Media3 1.11.1, Android arm64-v8a; компиляция и package/license audit, не проверка на устройстве." >> "$GITHUB_STEP_SUMMARY"
           echo "Qt cache hit: ${{ steps.qt_cache.outputs.cache-hit }}" >> "$GITHUB_STEP_SUMMARY"
       - name: Сохранить APK только по запросу или для релиза
-        if: (github.event_name == 'release') || (github.event_name == 'workflow_dispatch' && inputs.android_apk) || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/002-a-android-audio')
+        if: (github.event_name == 'release') || (github.event_name == 'workflow_dispatch' && inputs.android_apk) || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/002-d-media3-spike')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ env.ARTIFACT_NAME }}
@@ -225,7 +217,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: Android-002A-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          name: Android-002D-M3-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: build/android-evidence/
           if-no-files-found: ignore
           retention-days: 3
@@ -264,7 +256,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/Qt/6.12.0
-          key: qt-6.12.0-android-arm64-linux-gcc64-base-declarative-multimedia-shadertools-icu-aqt-076e1659807d0b362a3ed684d54c2e9c775eb9c7-base-download-qt-io-v1-${{ hashFiles('.github/workflows/android.yml') }}
+          key: qt-6.12.0-android-arm64-linux-gcc64-base-declarative-shadertools-icu-aqt-076e1659807d0b362a3ed684d54c2e9c775eb9c7-base-download-qt-io-v1-${{ hashFiles('.github/workflows/android.yml') }}
       - name: Проверить Qt после восстановления
         env:
           QT_ANDROID_ROOT: ${{ runner.temp }}/Qt/6.12.0/android_arm64_v8a

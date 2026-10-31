@@ -14,7 +14,15 @@ files = subprocess.check_output(["git", "ls-files", "--cached", "--others",
                                  "--exclude-standard"], cwd=root, text=True).splitlines()
 for name in files:
     path = root / name
-    if path.suffix.lower() in {".mp3", ".flac", ".aac", ".alac", ".m4a", ".mp4"}:
+    permitted_synthetic_android_asset = (
+        name in {
+            "android/assets/audio/synthetic-440hz.mp3",
+            "android/assets/audio/synthetic-660hz.flac",
+            "android/assets/audio/synthetic-880hz.wav",
+        }
+    )
+    if path.suffix.lower() in {".mp3", ".flac", ".wav", ".aac", ".alac", ".m4a", ".mp4"} \
+            and not permitted_synthetic_android_asset:
         errors.append(f"Unexpected media: {name}")
     if path.suffix != ".md":
         continue

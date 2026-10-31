@@ -54,6 +54,9 @@ local.properties
 *.alac
 *.m4a
 *.mp4
+# Only the explicitly named synthetic Android spike fixtures are source assets.
+!android/assets/audio/synthetic-440hz.mp3
+!android/assets/audio/synthetic-660hz.flac
 *.part
 *.sqlite*
 *.db

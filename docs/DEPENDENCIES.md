@@ -88,6 +88,18 @@ Java runtime архивов и NDK NOTICE/NOTICE.toolchain (они охваты�
 Новый модуль Qt за пределами Base/Declarative требует проверки и останавливает
 аудит; Multimedia/FFmpeg/TagLib/SQLite не добавлялись.
 
+Каждый runtime Maven artifact должен иметь распознанную лицензию в POM.
+Исключения узкие и привязаны к точным версиям: `com.google.guava:guava:33.3.1-android`,
+`com.google.guava:failureaccess:1.0.2` и пустой
+`com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava`
+не содержат license metadata непосредственно в Maven POM. Для них Apache-2.0
+подтверждён [upstream POM Google Guava v33.3.1](https://github.com/google/guava/blob/v33.3.1/pom.xml),
+[исходником failureaccess](https://github.com/google/guava/blob/v33.3.1/futures/failureaccess/src/com/google/common/util/concurrent/internal/InternalFutureFailureAccess.java)
+и [точным parent POM пустого listenablefuture artifact 26.0-android](https://repo.maven.apache.org/maven2/com/google/guava/guava-parent/26.0-android/guava-parent-26.0-android.pom).
+Описание upstream POM подтверждает, что последняя версия — пустой placeholder,
+нужный Guava, чтобы избежать конфликта с её классом ListenableFuture.
+Другие отсутствующие или неизвестные сведения останавливают audit.
+
 LGPL-обязательства распространяются и на тестовые бинарные пакеты; персональное
 назначение не является освобождением. Сохранены upstream notices и ссылки на
 соответствующие исходники выше. Получатель имеет право изменять Qt и выполнять
@@ -109,6 +121,8 @@ Qt 6.12.0 Android arm64, пересобрать проект командами 
 Подключены динамические Qt Multimedia и Quick Controls / Dialogs / Layouts
 из Qt Declarative 6.12.0 (используемые библиотеки — LGPLv3, альтернативные
 GPL/commercial). Android остаётся в прежней области Base/Declarative.
+Qt Multimedia остаётся Desktop-компонентом; Android 002-D-M3 использует другой,
+платформенный путь и не подключает этот модуль.
 В Desktop CI дополнительно устанавливается Qt Shader Tools как сборочная
 зависимость; GPL-инструменты с Qt exception не становятся лицензией приложения.
 Новые модули и их third-party notices включаются через исходники qtmultimedia
@@ -140,26 +154,39 @@ upstream source + coin/provisioning Qt (commit ef25002ed292b132d1ed3246bfcee1d24
 001-B1 ограничен локальными тестовыми файлами, без сетевых протоколов.
 
 
-## Android 002-A — локальный тест звука
+## Android 002-D-M3 — Media3 ExoPlayer
 
-Для локального Android-прототипа подключается Qt Multimedia 6.12.0; дополнительно
-устанавливается Qt Shader Tools как зависимость сборки этого модуля. Android
-плагин и библиотека Qt Multimedia упаковываются в тестовый APK. В сборке ожидается
-плагин `androidmediaplugin`, который использует платформенный аудиовывод Android.
-Qt FFmpeg multimedia plugin исключён из APK вместе с его бинарными зависимостями:
-локальный сигнал декодирует Android backend. Это тестовая реализация, не
-производственный выбор аудиодвижка.
+Android arm64-v8a оставляет Qt 6.12 Base/Declarative для Qt Quick UI и JNI.
+Qt Multimedia, `androidmediaplugin` и Qt FFmpeg runtime в Android APK не входят.
+Desktop-код Windows/Linux не изменён и сохраняет Qt Multimedia/FFmpeg.
 
-Проверка лицензий использует исходники Qt Multimedia commit
-`6ca885f084a3984749d53bb50a0e08bdc60e86cc` (ветка Qt 6.12.0); CI собирает из него
-лицензии и `qt_attribution.json` в комплект APK. Новые разрешения Qt Android
-плагина для камеры, записи аудио, Bluetooth и изменения настроек звука явно
-удаляются из manifest: прототип только воспроизводит локальный тестовый сигнал.
-Аудитор APK проверяет нулевой список разрешений, наличие Qt Multimedia и
-Android media plugin, arm64-v8a и отсутствие GMS/Firebase. Фактический состав
-подтверждается только успешным Android CI-аудитом.
+В `android/build.gradle` напрямую закреплён
+`androidx.media3:media3-exoplayer:1.11.1`; остальные Media3 модули и runtime-
+зависимости берутся из разрешённого Gradle-графа. Репозитории Gradle уже
+ограничены `google()` и `mavenCentral()`. Не подключаются Media3 FFmpeg extension,
+MediaSession, GMS/Firebase, HLS/DASH или сторонний декодер. Стандартный
+ExoPlayer использует Android MediaCodec/system decoder renderer и системный
+аудиовывод через AudioTrack. Версия проверена по
+[официальному списку Media3](https://developer.android.com/jetpack/androidx/releases/media3);
+описание поддерживаемых форматов: [ExoPlayer formats](https://developer.android.com/media/media3/exoplayer/supported-formats).
 
-Тон 440 Гц — синтетический PCM WAV, воспроизводимо создаваемый Python-скриптом
-при конфигурации CMake и добавляемый в Android resource. Исходный WAV не хранится
-в Git. Qt Multimedia получает локальную копию из ресурса во внутреннем кэше
-приложения; внешнее хранилище и Android media permissions не нужны.
+Issue #26 принимает для этого spike только MP3 и FLAC; WAV остаётся встроенным
+регрессионным образцом. ALAC здесь не требуется, не проверяется и декодер для
+него не добавляется. Три восьмисекундных сигнала созданы скриптом
+`scripts/generate_android_media3_fixtures.py` через локальный FFmpeg-инструмент
+при разработке; это не Android runtime dependency.
+
+APK-аудит требует package ID
+`org.metravolokos.allmusicplayer.spike002dmedia3`, только ABI `arm64-v8a`,
+встроенные синтетические файлы и Media3 классы в DEX. Аудит запрещает Qt
+Multimedia/его плагины, FFmpeg-библиотеки/extension, GMS/Firebase, разрешения
+Android и неожиданные service/receiver/provider компоненты. Приложению не нужны
+`INTERNET`, доступ к хранилищу, аудиозапись, Bluetooth или пользовательские медиа.
+
+POM Media3 1.11.1 объявляет Apache License 2.0; её полный текст из тега Media3
+1.11.1 включается в `licenses/java/Media3-1.11.1-Apache-2.0.txt` комплекта.
+Package audit сохраняет runtime-граф Gradle, проверяет license metadata каждого
+разрешённого Maven runtime артефакта (неизвестная лицензия останавливает аудит)
+и собирает `LICENSE`/`NOTICE` из AAR/JAR, где они есть. Qt и NDK notices
+собираются отдельным этапом. Это аудит конкретного тестового комплекта, не
+юридическое заключение для публичного релиза.

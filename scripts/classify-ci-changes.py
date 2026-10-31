@@ -80,8 +80,9 @@ def classify_paths(paths):
         elif path == "scripts/check_repository.py":
             # The documentation job executes this script on every event.
             continue
-        elif path == "scripts/package-android.py" or path.startswith((
-                "ui/android/", "android/", "tests/android/")):
+        elif path in {"scripts/package-android.py", "scripts/generate_android_media3_fixtures.py"} or path.startswith((
+                "ui/android/", "android/src/", "android/", "tests/android/",
+                "tests/android_media3/")):
             result["android"] = True
         elif path.startswith("src/app/"):
             desktop()
