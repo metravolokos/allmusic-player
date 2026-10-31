@@ -29,6 +29,8 @@ def main():
     if args.jobs < 1:
         parser.error("--jobs must be positive")
 
+    args.work = args.work.resolve()
+    args.output = args.output.resolve()
     args.work.mkdir(parents=True, exist_ok=True)
     archive = args.work / f"openssl-{VERSION}.tar.gz"
     if not archive.exists():
