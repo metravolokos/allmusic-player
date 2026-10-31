@@ -9,7 +9,14 @@ import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
+import androidx.media3.datasource.DataSource;
+import androidx.media3.datasource.DataSpec;
+import androidx.media3.exoplayer.source.ProgressiveMediaSource;
 import androidx.media3.exoplayer.ExoPlayer;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
 
 
 public final class Media3PlaybackAdapter {
@@ -28,7 +35,118 @@ public final class Media3PlaybackAdapter {
     private static volatile long durationMs;
     private static volatile String errorText = "";
     private static volatile String activeTrack = "";
+    private static volatile long cloudHandle;
     private static boolean stoppedByUser;
+
+    private static native long nativeSize(long handle);
+    private static native boolean nativeSeek(long handle, long position);
+    private static native int nativeRead(long handle, long position, byte[] output,
+                                        int outputOffset, int length);
+    private static native void nativeInterrupt(long handle);
+    private static native void nativeRelease(long handle);
+
+    private static final class CloudDataSourceFactory implements DataSource.Factory {
+        private final long handle;
+
+        CloudDataSourceFactory(long sourceHandle) {
+            handle = sourceHandle;
+        }
+
+        @Override
+        public DataSource createDataSource() {
+            return new CloudDataSource(handle);
+        }
+    }
+
+    private static final class CloudDataSource implements DataSource {
+        private static final int BRIDGE_READ_LIMIT = 64 * 1024;
+        private final long handle;
+        private Uri uri;
+        private long position;
+        private long resourceSize;
+        private long bytesRemaining;
+        private boolean opened;
+
+        CloudDataSource(long sourceHandle) {
+            handle = sourceHandle;
+        }
+
+        @Override
+        public long open(DataSpec spec) throws IOException {
+            close();
+            if (!isOpaqueCloudUri(spec.uri, handle))
+                throw new IOException("Cloud Mail source is invalid.");
+            long size = nativeSize(handle);
+            if (size <= 0 || spec.position < 0 || spec.position > size)
+                throw new IOException("Cloud Mail source is unavailable.");
+            if (!nativeSeek(handle, spec.position))
+                throw new IOException("Cloud Mail source could not seek.");
+
+            uri = spec.uri;
+            position = spec.position;
+            resourceSize = size;
+            long available = size - position;
+            bytesRemaining = spec.length == C.LENGTH_UNSET
+                    ? available : Math.min(spec.length, available);
+            opened = true;
+            return bytesRemaining;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            if (!opened)
+                throw new IOException("Cloud Mail source is closed.");
+            if (length == 0)
+                return 0;
+            if (bytesRemaining == 0 || position >= resourceSize)
+                return C.RESULT_END_OF_INPUT;
+
+            int count = (int) Math.min(Math.min((long) length, bytesRemaining),
+                                       BRIDGE_READ_LIMIT);
+            int read = nativeRead(handle, position, buffer, offset, count);
+            if (read < 0) {
+                if (position >= resourceSize || bytesRemaining == 0)
+                    return C.RESULT_END_OF_INPUT;
+                throw new IOException("Cloud Mail range request failed.");
+            }
+            if (read == 0)
+                throw new IOException("Cloud Mail range request returned no data.");
+            position += read;
+            bytesRemaining -= read;
+            return read;
+        }
+
+        @Override
+        public Uri getUri() {
+            return uri;
+        }
+
+        @Override
+        public Map<String, java.util.List<String>> getResponseHeaders() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public void addTransferListener(
+                androidx.media3.datasource.TransferListener transferListener) {
+            // Transfer callbacks do not expose remote names or credentials.
+        }
+
+        @Override
+        public void close() {
+            if (opened)
+                nativeInterrupt(handle);
+            opened = false;
+            uri = null;
+            bytesRemaining = 0;
+        }
+
+        private static boolean isOpaqueCloudUri(Uri uri, long handle) {
+            return uri != null && "allmusic".equals(uri.getScheme())
+                    && "stream".equals(uri.getAuthority())
+                    && ("/" + Long.toUnsignedString(handle)).equals(uri.getPath());
+        }
+    }
 
     private static final Runnable POSITION_POLL = new Runnable() {
         @Override
@@ -109,6 +227,7 @@ public final class Media3PlaybackAdapter {
             }
 
             boolean resume = current.getPlayWhenReady() || current.isPlaying();
+            cloudHandle = 0;
             activeTrack = title == null ? "" : title;
             errorText = "";
             positionMs = 0;
@@ -124,6 +243,67 @@ public final class Media3PlaybackAdapter {
                 state = ERROR;
                 errorText = "Не удалось выбрать локальный трек Media3.";
             }
+        });
+    }
+
+    public static void selectCloudTrack(long handle) {
+        MAIN.post(() -> {
+            ExoPlayer current = player;
+            if (current == null || handle <= 0) {
+                state = ERROR;
+                errorText = "Cloud Mail source is unavailable.";
+                return;
+            }
+            cloudHandle = handle;
+            activeTrack = "Cloud Mail stream";
+            errorText = "";
+            positionMs = 0;
+            durationMs = 0;
+            stoppedByUser = false;
+            state = PREPARING;
+            try {
+                Uri uri = Uri.parse("allmusic://stream/" + Long.toUnsignedString(handle));
+                MediaItem item = MediaItem.fromUri(uri);
+                ProgressiveMediaSource source = new ProgressiveMediaSource.Factory(
+                        new CloudDataSourceFactory(handle)).createMediaSource(item);
+                current.setMediaSource(source);
+                current.prepare();
+                current.play();
+            } catch (RuntimeException exception) {
+                state = ERROR;
+                errorText = "Не удалось открыть поток Cloud Mail через Media3.";
+            }
+        });
+    }
+
+    public static void clearCloudTrack(long handle) {
+        MAIN.post(() -> {
+            if (handle <= 0 || cloudHandle != handle)
+                return;
+            nativeInterrupt(handle);
+            ExoPlayer current = player;
+            if (current != null) {
+                current.stop();
+                current.clearMediaItems();
+            }
+            cloudHandle = 0;
+            activeTrack = "";
+            positionMs = 0;
+            durationMs = 0;
+            state = STOPPED;
+        });
+    }
+
+    public static void reportNativeError(String message) {
+        MAIN.post(() -> {
+            ExoPlayer current = player;
+            if (cloudHandle > 0)
+                nativeInterrupt(cloudHandle);
+            if (current != null)
+                current.stop();
+            state = ERROR;
+            errorText = message == null || message.isEmpty()
+                    ? "Cloud Mail stream failed." : message;
         });
     }
 
@@ -160,6 +340,8 @@ public final class Media3PlaybackAdapter {
             if (current == null)
                 return;
             stoppedByUser = true;
+            if (cloudHandle > 0)
+                nativeInterrupt(cloudHandle);
             current.stop();
             current.seekToDefaultPosition();
             positionMs = 0;
@@ -184,6 +366,10 @@ public final class Media3PlaybackAdapter {
             MAIN.removeCallbacks(POSITION_POLL);
             ExoPlayer current = player;
             player = null;
+            long handle = cloudHandle;
+            cloudHandle = 0;
+            if (handle > 0)
+                nativeRelease(handle);
             if (current != null)
                 current.release();
             positionMs = 0;

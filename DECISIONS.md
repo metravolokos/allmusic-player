@@ -27,6 +27,8 @@
 | D-027 | Потоковый источник B2: seekable QIODevice поверх Qt Network Range, кэш RAM до 256 КиБ, без полного файла | ПРОВЕРИТЬ | CI подтвердил ранний PCM и seek в ещё не загруженную область на Qt 6.12.0/Linux и Windows Server; 31 мс, 65 536 байт до PCM из 385 604, кэш адаптера 254 532 байта. Это ограниченный прототип, не утверждение окончательного IPlaybackEngine; Windows 11 функциональная ручная приёмка B2 пройдена (5/5, 29.10.2026); решение об окончательном движке и совместимости с реальным WebDAV ещё не принято. См. docs/001-B2-REPORT.md. |
 | D-030 | Desktop Cloud Mail 002-C: потоковый QMediaPlayer источник поверх отдельного ограниченного worker-backed QIODevice; только MP3/FLAC; не менять loopback устройство | ПРОВЕРИТЬ | Issue #22 прямо задаёт этот вертикальный срез и QMediaPlayer как кандидата. Кэш 4 × 64 КиБ; каждый GET проверяет 206/границы/общий размер/тело/framing/encoding; сильный ETag передаётся через If-Range. Это ограниченное решение задачи, не окончательный `IPlaybackEngine`, Android Cloud, постоянный кэш или full-library API. Проверить CI и Windows 11 вручную. |
 | D-031 | Android локальное воспроизведение 002-D-M3: Media3 ExoPlayer + системные MediaCodec декодеры и AudioTrack через узкий Java/JNI адаптер к Qt Quick | ПРИНЯТО | Владелец утвердил Issue #26, 31.10.2026. Только синтетические MP3/FLAC, WAV для регрессии; ALAC/FFmpeg Android исключены. Нет сети, пользовательских файлов, Android permissions, MediaSession/background. Desktop путь Qt Multimedia не меняется. Слышимый звук и управление остаются обязательной Huawei ручной приёмкой. |
+| D-032 | Android Cloud Mail: Media3 ProgressiveMediaSource + собственная DataSource поверх существующего C++ MailWebDavRangeDevice; JNI с opaque handles | ПРИНЯТО | Issue #24 от 31.10.2026. Network/TLS/auth/пути и GET остаются в C++; Media3 loader читает только ограниченные байты через JNI. GET ≤64 КиБ, cache ≤256 КиБ, только HTTP 206, без полного fallback на 200; только INTERNET permission. Отмена и lifetime handle проверяются через synthetic mock; Desktop playback не меняется. |
+| D-033 | Android Qt TLS: пакетировать OpenSSL 3.5.9 arm64-v8a из digest-проверенных исходников с суффиксами `_3` | ПРИНЯТО | Продолжение PR #29. Qt APK содержит qopensslbackend, но прежний APK audit подтвердил отсутствие `libssl`/`libcrypto`; Qt требует отдельно пакетировать OpenSSL runtime. Строгая проверка TLS остаётся включённой. Источник, Apache-2.0 лицензия, SONAME/NEEDED и 16 KiB ELF проверяются package audit. |
 
 При утверждении решения перевести статус в `ПРИНЯТО` с датой и кратким пояснением. Не стирать предыдущие решения бесследно; для серьёзной смены создавать новую запись или отмечать «заменено D-...». Утверждение документации v0.1 не переводит автоматически все предложения в статус «ПРИНЯТО».
 
@@ -197,6 +199,21 @@ Bluetooth или работу в фоне на Android-устройстве. Э�
 Реальные запросы и звук остаются проверкой владельца на Windows 11; CI работает
 только с синтетическими файлами и локальным mock.
 
+
+## 002-D Cloud Mail — решение по Issue #24 (31.10.2026)
+
+Для потокового воспроизведения Cloud Mail Android Media3 использует
+`ProgressiveMediaSource` и `DataSource`, которая читает существующий C++
+`MailWebDavRangeDevice` через JNI. Никакой Java HTTP/WebDAV или Basic Auth клиент
+не создаётся. Java получает только opaque handle, смещение, длину и байты;
+MediaItem URI не содержит путь, имя, URL или реквизиты.
+
+Каждый source handle сериализует чтения Media3 loader и удерживает C++ объект до
+возврата активного read. Stop/close прерывают текущий запрос; Disconnect,
+переключение источника и выход отзывают handle и асинхронно очищают источник.
+Сеть остаётся в Qt worker thread; UI и Android main thread не читают сеть.
+Допускается только `INTERNET`; Range/CMake additions подключаются только в
+Android target, Desktop playback сохраняется без изменения.
 
 ## 002-D-M3 — решение по Issue #26 (31.10.2026)
 

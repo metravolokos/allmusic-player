@@ -1,7 +1,10 @@
 #include "MailWebDavController.h"
 #include "MailWebDavRangeDevice.h"
 
-MailWebDavController::MailWebDavController(QObject *parent) : QObject(parent)
+#include <utility>
+
+MailWebDavController::MailWebDavController(QObject *parent, bool streamableFormatsOnly)
+    : QObject(parent), m_streamableFormatsOnly(streamableFormatsOnly)
 {
 }
 
@@ -25,13 +28,17 @@ bool MailWebDavController::checkConnection(QString email, QString appPassword)
     m_probe = new MailWebDavProbe(this);
     connect(m_probe, &MailWebDavProbe::completed, this,
             &MailWebDavController::handleCompleted);
+    m_pendingEmail = std::move(email);
+    m_pendingAppPassword = std::move(appPassword);
     m_busy = true;
-    setStatus(QStringLiteral("Проверяется только каталог /AllMusic…"));
+    setStatus(QStringLiteral("Проверяются TLS и доступность Cloud Mail без отправки реквизитов…"));
 
-    const bool started = m_probe->listAllMusic(email, appPassword);
-    email.fill(QChar(u'\0'));
-    appPassword.fill(QChar(u'\0'));
+    const bool started = m_probe->preflight();
     if (!started) {
+        m_pendingEmail.fill(QChar(u'\0'));
+        m_pendingEmail.clear();
+        m_pendingAppPassword.fill(QChar(u'\0'));
+        m_pendingAppPassword.clear();
         m_busy = false;
         dropSession();
         setStatus(QStringLiteral("Не удалось начать проверку. Отключитесь и повторите попытку."));
@@ -207,10 +214,15 @@ void MailWebDavController::disconnectCloud()
     m_connected = false;
     emit entriesChanged();
     setStatus(QStringLiteral("Отключено. Временная сессия и учётные данные удалены."));
+    emit sessionEnded();
 }
 
 void MailWebDavController::dropSession()
 {
+    m_pendingEmail.fill(QChar(u'\0'));
+    m_pendingEmail.clear();
+    m_pendingAppPassword.fill(QChar(u'\0'));
+    m_pendingAppPassword.clear();
     emit disconnectPlayback();
     m_playbackActive = false;
     if (!m_probe)
@@ -229,10 +241,46 @@ void MailWebDavController::setStatus(const QString &status)
     emit stateChanged();
 }
 
-QString MailWebDavController::errorText(MailWebDavProbe::Error error, int status)
+QString MailWebDavController::networkDiagnosticText(const MailWebDavProbe::Result &result)
+{
+    using Category = MailWebDavProbe::NetworkCategory;
+    QString category;
+    switch (result.networkCategory) {
+    case Category::DnsLookup: category = QStringLiteral("DNS/имя узла не найдено"); break;
+    case Category::ConnectionRefused: category = QStringLiteral("соединение отклонено"); break;
+    case Category::RemoteHostClosed: category = QStringLiteral("удалённый узел закрыл соединение"); break;
+    case Category::TemporaryFailure: category = QStringLiteral("временный отказ сети"); break;
+    case Category::Proxy: category = QStringLiteral("ошибка proxy"); break;
+    case Category::TlsBackendUnavailable: category = QStringLiteral("TLS backend недоступен"); break;
+    case Category::TlsHandshake: category = QStringLiteral("TLS handshake/certificate validation"); break;
+    case Category::Timeout: category = QStringLiteral("тайм-аут"); break;
+    case Category::Cancelled: category = QStringLiteral("отменено"); break;
+    case Category::Unknown: category = QStringLiteral("неизвестная сетевая ошибка"); break;
+    case Category::None: category = QStringLiteral("HTTP-ответ без сетевой ошибки"); break;
+    }
+
+    QString detail = QStringLiteral("категория: %1; код Qt: %2; TLS backend: %3")
+        .arg(category)
+        .arg(result.networkErrorCode >= 0
+                 ? QString::number(result.networkErrorCode) : QStringLiteral("нет"))
+        .arg(result.sslBackendAvailable ? QStringLiteral("доступен")
+                                       : QStringLiteral("недоступен"));
+    if (!result.availableSslBackends.isEmpty())
+        detail += QStringLiteral("; доступные backends: %1")
+            .arg(result.availableSslBackends.join(QStringLiteral(", ")));
+    if (!result.activeSslBackend.isEmpty())
+        detail += QStringLiteral(" (%1)").arg(result.activeSslBackend);
+    if (!result.sslRuntimeVersion.isEmpty())
+        detail += QStringLiteral("; runtime: %1").arg(result.sslRuntimeVersion);
+    if (result.status > 0)
+        detail += QStringLiteral("; HTTP %1").arg(result.status);
+    return QStringLiteral("Ошибка проверки Cloud Mail: %1.").arg(detail);
+}
+
+QString MailWebDavController::errorText(const MailWebDavProbe::Result &result)
 {
     using Error = MailWebDavProbe::Error;
-    switch (error) {
+    switch (result.error) {
     case Error::InvalidCredentials:
         return QStringLiteral("Введите адрес почты и пароль внешнего приложения Mail. Основной пароль почты не подходит.");
     case Error::UnsafePath:
@@ -246,21 +294,23 @@ QString MailWebDavController::errorText(MailWebDavProbe::Error error, int status
     case Error::Redirect:
         return QStringLiteral("Сервер прислал перенаправление. Оно не выполнялось; проверьте адрес WebDAV.");
     case Error::RangeUnsupported:
-        return status == 200
+        return result.status == 200
             ? QStringLiteral("HTTP 200 вместо Range 206. Сервер не подтвердил диапазоны; полный файл не скачивался.")
-            : QStringLiteral("Сервер не принял диапазон (HTTP %1). Полный файл не скачивался.").arg(status);
+            : QStringLiteral("Сервер не принял диапазон (HTTP %1). Полный файл не скачивался.").arg(result.status);
     case Error::VersionChanged:
-        return status == 200
+        return result.status == 200
             ? QStringLiteral("HTTP 200 при Range/If-Range: сервер не подтвердил диапазон или версия файла изменилась. Полный файл не скачивался.")
             : QStringLiteral("Размер или версия файла не совпали с ответом PROPFIND. Полный файл не скачивался.");
     case Error::RateLimited:
         return QStringLiteral("Сервер ограничил запросы (HTTP 429). Автоматических повторов нет.");
     case Error::Server:
-        return QStringLiteral("Ошибка сервера Mail (HTTP %1). Попробуйте позже.").arg(status);
+        return QStringLiteral("Ошибка сервера Mail (HTTP %1). Попробуйте позже.").arg(result.status);
     case Error::Network:
-        return QStringLiteral("Сетевая ошибка при проверке Cloud Mail.");
+        return networkDiagnosticText(result);
     case Error::Timeout:
-        return QStringLiteral("Время ожидания ответа истекло. Проверку можно повторить вручную.");
+        return result.networkCategory == MailWebDavProbe::NetworkCategory::Timeout
+            ? networkDiagnosticText(result)
+            : QStringLiteral("Время ожидания ответа истекло. Проверку можно повторить вручную.");
     case Error::Cancelled:
         return QStringLiteral("Проверка отменена.");
     case Error::TooLarge:
@@ -268,9 +318,13 @@ QString MailWebDavController::errorText(MailWebDavProbe::Error error, int status
     case Error::Protocol:
         return QStringLiteral("Ответ WebDAV не прошёл проверку формата или диапазона.");
     case Error::Tls:
-        return QStringLiteral("Ошибка проверки TLS-сертификата. Сертификаты не игнорировались; пароль не отправлен.");
+        if (result.networkCategory == MailWebDavProbe::NetworkCategory::TlsBackendUnavailable)
+            return QStringLiteral("TLS backend недоступен; реквизиты Cloud Mail не отправлялись. %1")
+                .arg(networkDiagnosticText(result));
+        return QStringLiteral("Ошибка TLS handshake или проверки сертификата. Проверка сертификатов не отключалась. %1")
+            .arg(networkDiagnosticText(result));
     case Error::Http:
-        return QStringLiteral("Неожиданный HTTP-ответ (%1).").arg(status);
+        return QStringLiteral("Неожиданный HTTP-ответ (%1).").arg(result.status);
     case Error::Busy:
         return QStringLiteral("Другая проверка уже выполняется.");
     case Error::None:
@@ -286,7 +340,7 @@ QString MailWebDavController::rangeDiagnosticText(const MailWebDavProbe::Result 
     switch (result.rangeIssue) {
     case Issue::None:
         issue = result.error == MailWebDavProbe::Error::None
-            ? QStringLiteral("диапазон подтверждён") : errorText(result.error, result.status);
+            ? QStringLiteral("диапазон подтверждён") : errorText(result);
         break;
     case Issue::RangeIgnored:
         issue = QStringLiteral("сервер вернул 200 вместо 206; Range не подтверждён");
@@ -401,11 +455,43 @@ QString MailWebDavController::rangeDiagnosticText(const MailWebDavProbe::Result 
 void MailWebDavController::handleCompleted(const MailWebDavProbe::Result &result)
 {
     m_busy = false;
+    if (result.preflight) {
+        if (result.error != MailWebDavProbe::Error::None) {
+            const QString message = errorText(result);
+            dropSession();
+            m_connected = false;
+            m_entries.clear();
+            emit entriesChanged();
+            setStatus(message);
+            emit sessionEnded();
+            return;
+        }
+
+        QString email = std::move(m_pendingEmail);
+        QString password = std::move(m_pendingAppPassword);
+        m_pendingEmail.clear();
+        m_pendingAppPassword.clear();
+        setStatus(QStringLiteral("TLS и сетевое соединение проверены без реквизитов; проверяется /AllMusic…"));
+        m_busy = true;
+        const bool started = m_probe && m_probe->listAllMusic(email, password);
+        email.fill(QChar(u'\0'));
+        password.fill(QChar(u'\0'));
+        if (!started) {
+            m_busy = false;
+            dropSession();
+            setStatus(QStringLiteral("Не удалось начать проверку /AllMusic. Отключитесь и повторите попытку."));
+            emit sessionEnded();
+        }
+        emit stateChanged();
+        return;
+    }
+
     if (result.listing) {
         if (result.error == MailWebDavProbe::Error::None) {
             m_entries.clear();
             for (const auto &entry : result.entries) {
-                if (entry.directory || isAudio(entry.path))
+                if (entry.directory || (m_streamableFormatsOnly
+                        ? isStreamable(entry.path) : isAudio(entry.path)))
                     m_entries.push_back(entry);
             }
             m_connected = true;
@@ -420,22 +506,24 @@ void MailWebDavController::handleCompleted(const MailWebDavProbe::Result &result
             emit stateChanged();
             return;
         }
-        const QString message = errorText(result.error, result.status);
+        const QString message = errorText(result);
         dropSession();
         m_connected = false;
         m_entries.clear();
         emit entriesChanged();
         setStatus(message);
+        emit sessionEnded();
         return;
     }
 
     const QString message = result.rangeCheck
-        ? rangeDiagnosticText(result) : errorText(result.error, result.status);
+        ? rangeDiagnosticText(result) : errorText(result);
     if (result.error == MailWebDavProbe::Error::Auth || result.error == MailWebDavProbe::Error::Tls) {
         dropSession();
         m_connected = false;
         m_entries.clear();
         emit entriesChanged();
+        emit sessionEnded();
     }
     setStatus(message);
     emit stateChanged();

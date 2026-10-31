@@ -1,4 +1,7 @@
 #include "AndroidMedia3Controller.h"
+#include "AndroidMailRangeRegistry.h"
+#include "MailWebDavController.h"
+#include "../playback/MailWebDavRangeDevice.h"
 
 #include <QCoreApplication>
 #include <QGuiApplication>
@@ -9,6 +12,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <utility>
 
 namespace {
 constexpr auto kAdapterClass = "org/metravolokos/allmusicplayer/Media3PlaybackAdapter";
@@ -44,9 +48,14 @@ AndroidMedia3State::Value valueFromJava(jint value)
 }
 }
 
-AndroidMedia3Controller::AndroidMedia3Controller(QObject *parent)
-    : QObject(parent)
+AndroidMedia3Controller::AndroidMedia3Controller(MailWebDavController *cloud,
+                                                 QObject *parent)
+    : QObject(parent), m_cloud(cloud)
 {
+    if (!m_cloud || !AndroidMailRangeRegistry::registerJniMethods()) {
+        setError(tr("Не удалось подключить безопасный мост Cloud Mail."));
+        return;
+    }
     auto context = QNativeInterface::QAndroidApplication::context();
     if (context.isValid()) {
         QJniObject::callStaticMethod<void>(kAdapterClass, "initialize",
@@ -74,6 +83,17 @@ AndroidMedia3Controller::AndroidMedia3Controller(QObject *parent)
                 this, &AndroidMedia3Controller::release);
     }
 
+    connect(m_cloud, &MailWebDavController::disconnectPlayback,
+            this, &AndroidMedia3Controller::stopForDisconnect);
+    connect(m_cloud, &MailWebDavController::playbackRequested,
+            this, &AndroidMedia3Controller::playCloud);
+    connect(m_cloud, &MailWebDavController::stateChanged,
+            this, &AndroidMedia3Controller::changed);
+    connect(m_cloud, &MailWebDavController::entriesChanged,
+            this, &AndroidMedia3Controller::changed);
+    connect(m_cloud, &MailWebDavController::sessionEnded,
+            this, &AndroidMedia3Controller::cloudSessionEnded);
+
     selectTrack(0);
 }
 
@@ -97,6 +117,8 @@ int AndroidMedia3Controller::trackIndex() const
 
 QString AndroidMedia3Controller::activeTrackName() const
 {
+    if (m_cloudTrackActive)
+        return m_cloudTrackName;
     if (m_trackIndex < 0 || m_trackIndex >= static_cast<int>(std::size(kTracks)))
         return tr("Трек не выбран");
     return QString::fromUtf8(kTracks[m_trackIndex].title);
@@ -156,10 +178,84 @@ bool AndroidMedia3Controller::seekEnabled() const
     return AndroidMedia3State::seekEnabled(m_state, m_durationMs > 0);
 }
 
+bool AndroidMedia3Controller::cloudConnected() const
+{
+    return m_cloud && m_cloud->connected();
+}
+
+bool AndroidMedia3Controller::cloudBusy() const
+{
+    return m_cloud && m_cloud->busy();
+}
+
+QString AndroidMedia3Controller::cloudStatus() const
+{
+    if (!m_cloud)
+        return tr("Cloud Mail недоступен.");
+    if (m_cloud->busy())
+        return tr("Выполняется защищённый запрос Cloud Mail…");
+    if (m_cloud->connected())
+        return tr("Подключено. Каталог Cloud Mail готов.");
+    return m_cloud->status();
+}
+
+QString AndroidMedia3Controller::cloudDirectoryLabel() const
+{
+    if (!m_cloud)
+        return {};
+    QString path = m_cloud->currentDirectory();
+    while (path.endsWith(u'/'))
+        path.chop(1);
+    const int slash = path.lastIndexOf(u'/');
+    return slash >= 0 ? path.mid(slash + 1) : path;
+}
+
+QVariantList AndroidMedia3Controller::cloudEntries() const
+{
+    return m_cloud ? m_cloud->entries() : QVariantList{};
+}
+
+void AndroidMedia3Controller::connectCloud(QString email, QString appPassword)
+{
+    if (m_released || !m_cloud)
+        return;
+    m_cloud->checkConnection(std::move(email), std::move(appPassword));
+    emit changed();
+}
+
+void AndroidMedia3Controller::disconnectCloud()
+{
+    if (m_cloud)
+        m_cloud->disconnectCloud();
+}
+
+void AndroidMedia3Controller::openCloudDirectory(int index)
+{
+    if (m_cloud)
+        m_cloud->openDirectory(index);
+}
+
+bool AndroidMedia3Controller::canGoToCloudParent() const
+{
+    return m_cloud && m_cloud->canGoToParent();
+}
+
+void AndroidMedia3Controller::goToCloudParent()
+{
+    if (m_cloud)
+        m_cloud->goToParent();
+}
+
+bool AndroidMedia3Controller::canPlayCloud(int index) const
+{
+    return m_cloud && m_cloud->canPlay(index);
+}
+
 void AndroidMedia3Controller::selectTrack(int index)
 {
     if (m_released || index < 0 || index >= static_cast<int>(std::size(kTracks)))
         return;
+    releaseCloudSource();
     m_trackIndex = index;
     m_error.clear();
     m_positionMs = 0;
@@ -194,8 +290,71 @@ void AndroidMedia3Controller::stop()
     if (m_released || !stopEnabled())
         return;
     invokeCommand("stop");
+    if (m_cloudTrackActive && m_cloud)
+        m_cloud->setPlaybackActive(false);
     m_state = AndroidMedia3State::Value::Stopped;
     m_positionMs = 0;
+    emit changed();
+}
+
+void AndroidMedia3Controller::playCloud(int index)
+{
+    if (m_released || !m_cloud || !m_cloud->canPlay(index))
+        return;
+
+    releaseCloudSource();
+    QString label;
+    auto *device = m_cloud->takePlaybackDevice(index, &label, nullptr);
+    if (!device || !device->open(QIODevice::ReadOnly)) {
+        if (device)
+            delete device;
+        setError(tr("Не удалось открыть поток Cloud Mail."));
+        return;
+    }
+
+    const qint64 handle = AndroidMailRangeRegistry::add(device);
+    if (handle <= 0) {
+        device->retire();
+        setError(tr("Не удалось создать поток Media3."));
+        return;
+    }
+
+    connect(device, &MailWebDavRangeDevice::requestFailed, this,
+            [this](const QString &message) {
+        if (!m_released) {
+            m_error = message;
+            m_state = AndroidMedia3State::Value::Error;
+            const QJniObject error = QJniObject::fromString(message);
+            QJniObject::callStaticMethod<void>(kAdapterClass, "reportNativeError",
+                "(Ljava/lang/String;)V", error.object<jstring>());
+            QJniEnvironment environment;
+            hasJniException(environment);
+            if (m_cloud)
+                m_cloud->setPlaybackActive(false);
+            emit changed();
+        }
+    });
+    connect(device, &MailWebDavRangeDevice::sessionInvalid,
+            m_cloud, &MailWebDavController::disconnectCloud);
+
+    m_cloudHandle = handle;
+    m_cloudTrackIndex = index;
+    m_cloudTrackActive = true;
+    m_cloudTrackName = label;
+    m_trackIndex = -1;
+    m_error.clear();
+    m_positionMs = 0;
+    m_durationMs = 0;
+    m_state = AndroidMedia3State::Value::Preparing;
+    m_cloud->setPlaybackActive(true);
+    QJniObject::callStaticMethod<void>(kAdapterClass, "selectCloudTrack",
+        "(J)V", static_cast<jlong>(handle));
+    QJniEnvironment environment;
+    if (hasJniException(environment)) {
+        releaseCloudSource();
+        setError(tr("Media3 не смог открыть поток Cloud Mail."));
+        return;
+    }
     emit changed();
 }
 
@@ -220,7 +379,36 @@ void AndroidMedia3Controller::release()
         return;
     m_released = true;
     m_refreshTimer.stop();
+    releaseCloudSource();
+    AndroidMailRangeRegistry::releaseAll();
     invokeCommand("release");
+}
+
+void AndroidMedia3Controller::releaseCloudSource()
+{
+    if (m_cloudHandle <= 0)
+        return;
+    const qint64 handle = m_cloudHandle;
+    m_cloudHandle = 0;
+    AndroidMailRangeRegistry::release(handle);
+    QJniObject::callStaticMethod<void>(kAdapterClass, "clearCloudTrack", "(J)V",
+                                       static_cast<jlong>(handle));
+    QJniEnvironment environment;
+    hasJniException(environment);
+    m_cloudTrackActive = false;
+    m_cloudTrackIndex = -1;
+    m_cloudTrackName.clear();
+    if (m_cloud)
+        m_cloud->setPlaybackActive(false);
+}
+
+void AndroidMedia3Controller::stopForDisconnect()
+{
+    if (m_released)
+        return;
+    if (m_cloudTrackActive)
+        invokeCommand("stop");
+    releaseCloudSource();
 }
 
 void AndroidMedia3Controller::refreshState()

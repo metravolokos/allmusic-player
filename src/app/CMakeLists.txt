@@ -2,10 +2,25 @@
 # scans it recursively, in addition to the declared platform QML roots.
 qt_add_executable(allmusic-player main.cpp)
 if(ANDROID)
+    set(ALLMUSIC_ANDROID_OPENSSL_DIR "" CACHE PATH
+        "Directory containing the audited Android OpenSSL 3 shared libraries")
+    if(NOT ALLMUSIC_ANDROID_OPENSSL_DIR)
+        message(FATAL_ERROR "ALLMUSIC_ANDROID_OPENSSL_DIR is required for Android TLS")
+    endif()
+    foreach(openssl_library IN ITEMS libcrypto_3.so libssl_3.so)
+        if(NOT EXISTS "${ALLMUSIC_ANDROID_OPENSSL_DIR}/${openssl_library}")
+            message(FATAL_ERROR "Missing packaged OpenSSL runtime: ${ALLMUSIC_ANDROID_OPENSSL_DIR}/${openssl_library}")
+        endif()
+    endforeach()
     target_sources(allmusic-player PRIVATE
         AndroidMedia3Controller.cpp
         AndroidMedia3Controller.h
-        AndroidMedia3State.h)
+        AndroidMedia3State.h
+        AndroidMailRangeRegistry.cpp
+        AndroidMailRangeRegistry.h
+        MailWebDavController.cpp
+        MailWebDavController.h)
+    target_link_libraries(allmusic-player PRIVATE mail-webdav-range)
     set(app_qml ${PROJECT_SOURCE_DIR}/ui/android/Main.qml)
 else()
     target_sources(allmusic-player PRIVATE
@@ -31,7 +46,7 @@ else()
 endif()
 
 if(ANDROID)
-    set(ALLMUSIC_BUILD_LABEL "002-D-M3-local" CACHE STRING "Non-secret test build identity")
+    set(ALLMUSIC_BUILD_LABEL "002-D-cloud" CACHE STRING "Non-secret test build identity")
     set(ALLMUSIC_ANDROID_VERSION_CODE "1" CACHE STRING "Android test version code")
     if(NOT ALLMUSIC_BUILD_LABEL MATCHES "^[a-zA-Z0-9._-]+$")
         message(FATAL_ERROR "Invalid test build label")
@@ -44,15 +59,17 @@ if(ANDROID)
     set_target_properties(allmusic-player PROPERTIES
         QT_QML_ROOT_PATH "${PROJECT_SOURCE_DIR}/ui/android"
         QT_ANDROID_PACKAGE_SOURCE_DIR "${PROJECT_SOURCE_DIR}/android"
-        QT_ANDROID_PACKAGE_NAME "org.metravolokos.allmusicplayer.spike002dmedia3"
-        QT_ANDROID_APP_NAME "AllMusic Player — Media3 002-D-M3"
+        QT_ANDROID_PACKAGE_NAME "org.metravolokos.allmusicplayer.cloud002dmedia3"
+        QT_ANDROID_APP_NAME "AllMusic Player — Cloud Mail Media3"
         QT_ANDROID_VERSION_NAME "0.0.1-${ALLMUSIC_BUILD_LABEL}"
         QT_ANDROID_VERSION_CODE "${ALLMUSIC_ANDROID_VERSION_CODE}"
         QT_ANDROID_MIN_SDK_VERSION 28
         QT_ANDROID_TARGET_SDK_VERSION 36
         QT_ANDROID_COMPILE_SDK_VERSION 36
-        QT_ANDROID_SDK_BUILD_TOOLS_REVISION "36.0.0")
-    # Keep the Android local-audio experiment isolated from the Desktop engine,
+        QT_ANDROID_SDK_BUILD_TOOLS_REVISION "36.0.0"
+        QT_ANDROID_EXTRA_LIBS
+            "${ALLMUSIC_ANDROID_OPENSSL_DIR}/libcrypto_3.so;${ALLMUSIC_ANDROID_OPENSSL_DIR}/libssl_3.so")
+    # Keep the Android Cloud Mail target isolated from Desktop playback,
     # loopback tools, and native Desktop CTest targets.
     return()
 endif()

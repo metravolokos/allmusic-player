@@ -176,12 +176,13 @@ Issue #26 принимает для этого spike только MP3 и FLAC; W
 `scripts/generate_android_media3_fixtures.py` через локальный FFmpeg-инструмент
 при разработке; это не Android runtime dependency.
 
-APK-аудит требует package ID
-`org.metravolokos.allmusicplayer.spike002dmedia3`, только ABI `arm64-v8a`,
-встроенные синтетические файлы и Media3 классы в DEX. Аудит запрещает Qt
-Multimedia/его плагины, FFmpeg-библиотеки/extension, GMS/Firebase, разрешения
-Android и неожиданные service/receiver/provider компоненты. Приложению не нужны
-`INTERNET`, доступ к хранилищу, аудиозапись, Bluetooth или пользовательские медиа.
+Cloud APK-аудит требует package ID
+`org.metravolokos.allmusicplayer.cloud002dmedia3`, только ABI `arm64-v8a`,
+Media3 классы в DEX и синтетические локальные файлы для регрессии. Единственное
+разрешение — `android.permission.INTERNET`, необходимое для HTTPS Cloud Mail;
+`ACCESS_NETWORK_STATE`, Qt Multimedia/его плагины, FFmpeg-библиотеки/extension,
+GMS/Firebase и неожиданные service/receiver/provider компоненты запрещены.
+Доступ к пользовательским медиа, хранилищу, аудиозаписи и Bluetooth не нужен.
 
 POM Media3 1.11.1 объявляет Apache License 2.0; её полный текст из тега Media3
 1.11.1 включается в `licenses/java/Media3-1.11.1-Apache-2.0.txt` комплекта.
@@ -190,3 +191,14 @@ Package audit сохраняет runtime-граф Gradle, проверяет lic
 и собирает `LICENSE`/`NOTICE` из AAR/JAR, где они есть. Qt и NDK notices
 собираются отдельным этапом. Это аудит конкретного тестового комплекта, не
 юридическое заключение для публичного релиза.
+
+Для Qt Android TLS дополнительно собирается OpenSSL 3.5.9 из официального
+релизного архива `openssl-3.5.9.tar.gz`, SHA-256
+`603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a`.
+`scripts/build-android-openssl.py` проверяет digest до распаковки и собирает
+shared arm64-v8a runtime NDK r27c / API 28. Результат получает SONAME
+`libcrypto_3.so`/`libssl_3.so`, соответствующий Qt суффиксу `_3`. APK audit
+проверяет архитектуру AArch64, SONAME, NEEDED, 16 KiB LOAD alignment и хэш
+исходного архива. OpenSSL Apache-2.0 LICENSE и источник с digest включаются в
+скачиваемый комплект; это проверка конкретной тестовой поставки, не юридическое
+заключение для публичного релиза.

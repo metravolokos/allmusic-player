@@ -138,6 +138,32 @@ AudioTrack; собственные декодеры и Qt Multimedia/FFmpeg в A
 MP3/FLAC/seek или конкретные Bluetooth/USB маршруты: это остаётся ручной проверкой
 владельца на Huawei.
 
+Issue #24 подключает к этой границе `ProgressiveMediaSource` с собственной
+Media3 `DataSource`. JNI получает только непрозрачный числовой handle, смещение,
+длину и байты. URI MediaItem содержит только этот handle; Cloud Mail URL,
+внутренний путь и HTTP заголовки остаются в C++. Java получает только handle;
+QML получает только отображаемые подписи элементов, не внутренние пути или URL.
+Реквизиты остаются в C++ и не передаются Java/QML. Android
+CMake подключает `mail-webdav-diagnostic` и отдельную библиотеку Range без
+`Qt6::Multimedia`; Desktop target `local-playback` сохраняет прежний playback
+путь.
+
+Каждый handle удерживает Range-устройство до завершения текущего JNI read.
+Чтения сериализованы одним mutex на источник и идут только с Media3 loader;
+`MailWebDavRangeDevice` отправляет сетевые операции своему Qt worker потоку.
+Media3 close/stop отправляет атомарное прерывание текущего GET, а Disconnect,
+смена источника и выход помечают handle отозванным, отменяют worker-запрос и
+удаляют устройство после завершения чтения и остановки worker. Qt UI не ждёт
+чтения байтов. `DataSpec.position`, известная длина и `LENGTH_UNSET` передаются
+через seek/size; Java мост ограничивает один read 64 КиБ. Range-ядро сохраняет
+лимит каждого GET, кэш 4 × 64 КиБ, HTTP 206/Content-Range/framing/ETag-проверки,
+строгий TLS, запрет редиректов и отсутствие fallback на HTTP 200.
+
+Для Android APK требуется только `android.permission.INTERNET`; доступ к
+состоянию сети, медиа, файлам, Bluetooth или фоновому сервису не добавляется.
+Изменение реализуется в Issue #24 и требует mock/CI проверки, включая отложенный
+Range GET во время Stop/Disconnect и повторное открытие после seek.
+
 ## 10. Сборка, CI, лицензии
 
 - CMake; воспроизводимые версии зависимостей и фиксированная минорная ветка Qt (точную версию выбрать в этапе 0, не гнаться за последней ради обновления).

@@ -1,9 +1,12 @@
+Warning: truncated output (original token count: 13807)
+Total output lines: 473
+
 Warning: truncated output (original token count: 12928)
 Total output lines: 434
 
 # Текущий статус проекта — AllMusic Player
 
-**Дата:** 31.10.2026. **Текущий статус:** 002-A принята владельцем в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19); 002-B объединена в `main`; 002-C объединена в `main` коммитом `aa7e18b05c034eb42b53b51ebbc5ecfe76a1f53d`. Начат отдельный Android Media3 spike 002-D-M3 по Issue #26 от этой базы. Реализация и локальные проверки подготовлены в ветке `codex/002-d-media3-spike`; Android/Desktop CI, draft PR и Huawei ручная проверка ещё ожидаются. Cloud Mail не используется.
+**Дата:** 31.10.2026. **Текущий статус:** 002-A принята владельцем в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19); 002-B и Desktop 002-C приняты в `main`. Локальный Android Media3 срез Issue #26 прошёл Android/Desktop CI и был проверен на Huawei. Начата интеграция Android Cloud Mail по Issue #24 в `codex/002-d-android-cloud-media3`; её CI, тестовый APK и ручная проверка Cloud Mail на Huawei ещё ожидаются. CI использует только mock; пароль и медиатека владельца не используются.
 
 ## Утверждено и подготовлено
 
@@ -118,194 +121,7 @@ ABI `arm64-v8a` разрешён без предположений о телеф
 [Скачать APK kit](https://github.com/metravolokos/allmusic-player/actions/runs/40899932754/artifacts/12908837814),
 около 17 МБ, до 12.11.2026; метка `001-C-b2f012e16ac6-40899932754-1`.
 Пройдены компиляция/упаковка, 4 теста аудитора, подпись, ZIP/ELF 16 KiB alignment,
-arm64-v8a, min API 28/target 36, нулевой набор разрешений, единственная QtActivity
-без служб/receiver/provider, отсутствие GMS/Firebase в manifest/runtime/DEX.
-Windows/Linux [CI 40898773590](https://github.com/metravolokos/allmusic-player/actions/runs/40898773590)
-успешен: 2/2 CTest на каждой платформе, Linux QtTest 86 passed, 0 failed,
-Windows упаковка приложения и WebDAV kit. Подробности/команды — в отчёте.
-
-[PR #6](https://github.com/metravolokos/allmusic-player/pull/6) открыт; не объединять
-без решения владельца. Android-устройство остаётся **НЕ ПРОВЕРЕНО**. Документационный
-коммит после указанной сборки не меняет прикладной код APK. GitHub paths
-оценивает полный diff PR, поэтому такой коммит в Android PR может повторить CI;
-новый запуск получает отдельный артефакт, старый сохраняет исходную маркировку.
-
-
-## 001-B1 — локальное воспроизведение (основная ручная приёмка Windows 11 пройдена)
-
-Владелец сообщил о завершении 001-A/001-C и разрешил 001-B1 29.10.2026.
-PR #6 объединён; актуальный main `6bc62c12460b80b917e4f1aed9fc545b2c9db1ec`.
-Исторические запреты 001-B выше заменены этим точечным разрешением; B2/D,
-Android audio и реальное облако не разрешены.
-
-Реализован Desktop-кандидат QMediaPlayer/FFmpeg: локальный выбор,
-play/pause/stop/seek/volume/время/ошибки; синтетические фикстуры пяти
-кодеков/контейнеров; Qt PCM-тесты; расширенная Windows-упаковка.
-[Задача](tasks/001-B1-local-audio.md), [отчёт](docs/001-B1-REPORT.md),
-[ручные испытания](docs/AUDIO-TEST.md).
-
-Локально: генерация и ffprobe/SHA256 — ПРОЙДЕНО; 4 теста Android-аудитора —
-ПРОЙДЕНО; документы и whitespace — ПРОЙДЕНО. Qt SDK/CMake здесь отсутствуют.
-Проверки CI и ссылки на ZIP — в отчёте 001-B1 ниже. Слышимый звук и управление
-**на физической Windows 11 подтверждены владельцем (8/8 сценариев)**. Windows 10
-и пользовательский Linux отдельно не проверялись. Окончательный движок не выбран.
-До объединения PR и запуска 001-B2 необходимо отдельное решение владельца.
-
-### Уточнение принятой 001-C
-
-В [Issue #7](https://github.com/metravolokos/allmusic-player/issues/7) владелец
-зафиксировал проверку прежнего APK на Android-устройстве: установка, повороты, сворачивание,
-блокировка и повторный запуск без сети. Исторические пометки НЕ ПРОВЕРЕНО выше
-описывали состояние до этой ручной проверки. Это не проверка Android-звука и
-не ручное испытание нового регрессионного APK из PR #8.
-
-### Подтверждённые результаты 001-B1 (PR #8)
-
-[PR #8](https://github.com/metravolokos/allmusic-player/pull/8), head df1846a,
-проверенный merge 4c59f2b4b561:
-
-- [Desktop CI 40928437106](https://github.com/metravolokos/allmusic-player/actions/runs/40928437106):
-  Ubuntu/GCC 13.3.0 и Windows Server/MSVC 19.44.35229.0 — сборка и 3/3 CTest
-  на каждой ОС. Linux Playback 9 passed / 0 failed; WebDAV 86 passed / 0 failed.
-  На Windows тот же playback-decode завершён с exit 0. Qt 6.12.0 / FFmpeg 9.0.1.
-- Windows: полный ZIP, повтор PCM-теста из отдельной папки с очищенными путями
-  и снимок упакованного окна — ПРОЙДЕНО. WebDAV kit также упакован/проверен.
-  [Windows x64 архив](https://github.com/metravolokos/allmusic-player/actions/runs/40928437106/artifacts/12922830320),
-  около 79 МБ, до 27.01.2027. Инструкция AUDIO-TEST.md включена в архив.
-- [Android CI 40928437092](https://github.com/metravolokos/allmusic-player/actions/runs/40928437092):
-  APK и строгий аудит — ПРОЙДЕНО. Сохранены нулевые разрешения, arm64-v8a,
-  min API 28/target 36, подпись, 16 KiB alignment и прежний набор модулей;
-  без GMS/Firebase/служб и Desktop-аудио.
-- Локальные ffprobe/SHA256, 4 теста Android-аудитора, документы/whitespace
-  пройдены; синтетические фикстуры в Git не включены, доступны в артефактах.
-- Слышимый звук и базовое UI-управление на **Windows 11** — ПРОЙДЕНО,
-  по сообщению владельца (8/8 ручных проверок). На **Windows 10** и
-  пользовательском Linux B1 отдельно не тестировалась; другие аудиоустройства,
-  VBR/HE-AAC/прочие профили — НЕ ПРОВЕРЕНО.
-  Новый регрессионный APK на Android-устройство в этой задаче не устанавливался.
-
-D-008/D-009 остаются ПРОВЕРИТЬ. [Полный отчёт](docs/001-B1-REPORT.md).
-Архив предназначен для ручной приёмки, не для объявления публичного релиза.
-После отчёта работа остановлена; 001-B2/001-D не начинать без разрешения.
-Позднейший коммит обновляет только документацию и не меняет проверенные бинарники.
-
-## Актуальное решение о Windows и результат 001-B1 — 29.10.2026
-
-Владелец утвердил D-026: для текущих и будущих задач категория **Windows Desktop
-(11/10)** принимается по ручным испытаниям на **Windows 11**; Windows 10 больше
-не является приоритетом и не требует обязательного дублирования каждого теста.
-Это не подтверждение фактической совместимости B1 с Windows 10.
-
-Владелец сообщил о **8/8 успешных ручных сценариев** с физическим звуком на
-Windows 11: MP3, FLAC, AAC ADTS, AAC M4A, ALAC M4A, пауза/продолжение/стоп,
-перемотка/громкость, повторный запуск. [Результат в PR #8](https://github.com/metravolokos/allmusic-player/pull/8#issuecomment-6505572332).
-[Финальный Desktop CI 40929848648](https://github.com/metravolokos/allmusic-player/actions/runs/40929848648)
-и [Android CI 40929848919](https://github.com/metravolokos/allmusic-player/actions/runs/40929848919)
-на head `677a8626a35c55b5e88359fb3b5788d7af8aaf9a` — success.
-Проверки повреждённого файла/офлайна на физическом ПК и Linux остаются отдельно
-неподтверждёнными, не блокируют обычную Windows-приёмку B1 по D-026.
-PR #8 готов к рассмотрению; сам фа…928 tokens truncated…оды после 001-A, 001-B1 и 001-B2
-
-Задача выполнена документационно; код прототипов не переписывался. PR #9 объединён в main коммитом 93e8cb8d7314673052f141940d2bd896188b2fac. Post-merge [Desktop CI run 40951045356](https://github.com/metravolokos/allmusic-player/actions/runs/40951045356) завершился success: документация, Ubuntu/Linux и Windows Server jobs успешны. Android audio эта проверка не покрывала.
-
-Подготовлены архитектурные уточнения в ARCHITECTURE.md, предложения D-028/D-029 в DECISIONS.md, обновление этапа 1 и дальнейших приоритетов в ROADMAP.md, постоянное правило языка в AGENTS.md и отдельный отчёт 001-D. Производственные решения остаются предложениями; окончательный движок не выбран.
-
-**Проверенные факты:** локальные MP3, FLAC, AAC-LC ADTS/M4A и ALAC M4A с синтетическими файлами дали PCM в Qt 6.12.0 / FFmpeg 9.0.1; владелец подтвердил звук этих образцов на Windows 11. На loopback mock потоковый FLAC через QMediaPlayer::setSourceDevice() дал PCM на CI; владелец подтвердил слышимый звук, pause/seek и отказ при HTTP 200 вместо 206. Range-клиент валидирует 206, Content-Range, размер и ETag; адаптер держит до четырёх страниц по 64 КиБ (256 КиБ) и останавливается при ошибке.
-
-**Не проверено:** настоящий Cloud.Mail.ru, реальные интернет-задержки и потеря сети, потоковые MP3/AAC/ALAC, пользовательский Linux, Android audio/фон/аудиофокус, gapless и общий размер памяти Qt/FFmpeg/приложения. Число 256 КиБ относится только к кэшу WebDavRangeDevice, не ко всему плееру.
-
-**Рекомендация:** оставить Qt Multimedia / QMediaPlayer Desktop-кандидатом за сменной абстракцией; отложить собственный PCM pipeline до измеренного основания. Между provider и движком закрепить асинхронный контроллер диапазонов. HTTP 200 не превращать молча в полную загрузку; полную загрузку можно предложить отдельным явным действием. Постоянный кэш и медиатеку не реализовывать до проверки источника, сетевой устойчивости и Android audio.
-
-Предлагаемые следующие этапы: локальная матрица streaming-форматов и искусственной сетевой деградации; отдельная разрешённая read-only проверка настоящего Cloud.Mail.ru; Android audio feasibility; затем владелец утверждает контракты и разрешает Desktop вертикальный срез/медиатеку. Реальное облако в 001-D не использовалось; пароли, токены и музыка не запрашивались и не сохранялись.
-
-
-## 001-E — результаты CI и статус PR (30.10.2026)
-
-PR #10 объединён в `main` коммитом `d2c599d16f177e5f232869c0e1ab89d0759a3888`;
-post-merge Desktop CI run 40954984722 успешен. PR #11 для 001-E открыт и ожидает
-приёмки владельца: [потоковые форматы и устойчивость к сбоям сети](https://github.com/metravolokos/allmusic-player/pull/11).
-
-Desktop CI run 40969906289 успешен: Ubuntu 24.04 и Windows Server 2022, CTest 4/4
-на обеих платформах; Linux streaming 24/24, WebDAV regression 86/86, Windows streaming
-24/24 за 25,09 с. Android APK workflow run 40969906265 также успешен.
-
-Несколько промежуточных Windows прогонов выявили тестовую гонку: отложенный Range от
-предыдущего slow ALAC PCM сценария попадал в тест 429 и нарушал предположение о порядке
-запросов. Источник теперь явно отменяется после отсоединения плеера, а проверка требует
-повтор именно диапазона, получившего 429. Последний Windows CTest прошёл полностью.
-Созданы автономный [Windows x64 ZIP](https://github.com/metravolokos/allmusic-player/actions/runs/40969906289/artifacts/12940192439)
-и [WebDAV loopback kit](https://github.com/metravolokos/allmusic-player/actions/runs/40969906289/artifacts/12940880129); [APK](https://github.com/metravolokos/allmusic-player/actions/runs/40969906265/artifacts/12940461473) сохранён.
-
-Синтетические MP3, FLAC, AAC-LC ADTS/M4A и ALAC M4A выдали PCM до полной загрузки,
-прошли seek и завершились; подробные Linux метрики и пределы измерений — в
-[отчёте 001-E](docs/001-E-REPORT.md). Пользовательский Stop теперь проходит через
-контроллер: активный Range отменяется до остановки и отсоединения источника.
-Автотест проверяет, что активный mock-ответ действительно закрыт (Linux 0 мс,
-Windows 2 мс при естественной задержке 2 500 мс), и что выбранный сетевой трек
-можно запустить заново. Локальный Stop сохраняет источник и тоже проверен на
-повторный запуск. Смена трека и уничтожение источника с активной загрузкой
-прошли в CI без наблюдавшихся зависаний или ошибок времени жизни.
-
-На момент первичного отчёта ручное прослушивание на Windows 11 ожидало владельца; затем успешно проведено 30.10.2026 — см. итог ниже. PCM callback
-gaps не доказывают и не опровергают слышимые прерывания. Ни настоящий Cloud.Mail.ru,
-ни учётные данные, ни пользовательские файлы не использовались. D-028/D-029
-остаются предложениями; архитектурный выбор не утверждён. Прототип не готов к
-прямому подключению к реальному WebDAV: текущий клиент работает только с loopback
-mock, автоматическое продолжение того же источника после сетевого обрыва не
-проверяется как готовое пользовательское поведение. Следующая такая проверка
-требует отдельного решения владельца.
-
-
-## 001-E — итоговая ручная приёмка и объединение (30.10.2026)
-
-**Решение владельца: ПРИНЯТО** в границах физической Windows 11 и локального loopback WebDAV mock. На Windows 11 владелец подтвердил воспроизведение всех пяти потоковых форматов: MP3, FLAC, AAC-LC ADTS, AAC-LC M4A, ALAC M4A. Дополнительно проверены локальный MP3 Stop/restart и корректная реакция на отсутствие Range (HTTP 200 вместо 206). **Замечаний нет.**
-
-- [Протокол ручной приёмки владельца в PR #11](https://github.com/metravolokos/allmusic-player/pull/11#issuecomment-6518876866).
-- [PR #11](https://github.com/metravolokos/allmusic-player/pull/11) объединён в `main` коммитом [99274b51469907b515715fcd048f6345acb3972b](https://github.com/metravolokos/allmusic-player/commit/99274b51469907b515715fcd048f6345acb3972b).
-- Проверенный head `b86e8995b97d97951d91ae17352e36d96f4f157d`: [Desktop CI 40981125301](https://github.com/metravolokos/allmusic-player/actions/runs/40981125301) успешен (CTest 4/4 на Linux и Windows, streaming QtTest 25/25, Windows ZIP); [Android APK CI 40981125207](https://github.com/metravolokos/allmusic-player/actions/runs/40981125207) успешен (только проверка сборки APK).
-- [Post-merge Desktop CI 41029396796](https://github.com/metravolokos/allmusic-player/actions/runs/41029396796) завершился **успешно**.
-
-**Не подтверждено:** настоящий Cloud.Mail.ru, интернет-соединение вне mock, пользовательский Linux, Android audio и gapless; окончательные production-контракты и fallback ещё не утверждены. В [Issue #13](https://github.com/metravolokos/allmusic-player/issues/13) отдельно поставлена задача CI-OPT-001 по безопасному кэшированию инструментов; она не выполнялась в рамках PR #11 и позднее завершена отдельно в PR #15. Следующие функциональные этапы не запускаются без разрешения владельца.
-
-
-## 002-A — локальное аудио Android (Issue #18)
-
-[PR #19](https://github.com/metravolokos/allmusic-player/pull/19) открыт от ветки
-`codex/002-a-android-audio`, основанной на актуальном `main`. Проверенный head-код:
-`8a3c075f289b44403bf5238853b1f63fccc052e0` (финальная проверенная кодовая версия перед документированием приёмки). PR не объединён.
-
-- [Desktop CI run 41058685268](https://github.com/metravolokos/allmusic-player/actions/runs/41058685268): **успешно**, Ubuntu 24.04 и Windows Server 2022, 5/5 CTest на каждой платформе; Windows ZIP audit пройден.
-- [Android CI run 41058685269](https://github.com/metravolokos/allmusic-player/actions/runs/41058685269): **успешно**. Собран и проверен APK `arm64-v8a`, min API 28 / target 36; 8 Python unit tests пройдены; APK audit подтвердил подпись, alignment, нулевые разрешения, отсутствие GMS/Firebase и FFmpeg runtime. В Android UI используется только Qt Android media plugin.
-- [APK artifact, 17,936,522 bytes](https://github.com/metravolokos/allmusic-player/actions/runs/41058685269/artifacts/12978740288), имя `AllMusicPlayer-002A-Android-arm64-v8a-debug-558cfaf8a1de-41058685269-1`, истекает 13.11.2026.
-- Локально: 8/8 Python-тестов, Python compile, документационная проверка и whitespace check — пройдены. Локальная Qt/Android сборка отсутствовала; сборку подтвердил CI.
-
-Реализация — отдельный Android экран с синтетическим тоном, play/resume, pause, stop, restart и видимыми ошибками. Desktop проигрыватель не менялся. Доступ к облаку, сети, личным файлам и разрешениям Android отсутствует. Выбор production-аудиодвижка не сделан.
-
-**Ручная приёмка локального Android-аудио — ПРИНЯТО (30.10.2026).** По отчёту владельца, проверены тестовый звук, управление, сворачивание, блокировка экрана и возврат в приложение. [Протокол приёмки в PR #19](https://github.com/metravolokos/allmusic-player/pull/19#issuecomment-6524008425). Отдельное прослушивание через гарнитуру **не подтверждено**. Тон длится около 6 секунд; длительное фоновое воспроизведение, foreground service, media session, медиакнопки, системный аудиофокус и реальный WebDAV не проверялись. [Инструкция](docs/ANDROID-TEST.md), [отчёт](docs/002-A-ANDROID-AUDIO.md).
-
-
-## 002-B — безопасная диагностика Cloud Mail WebDAV (Issue #20)
-
-Реализация и дальнейшая диагностика идут в существующем [PR #21](https://github.com/metravolokos/allmusic-player/pull/21):
-локальная форма учётных данных, один `PROPFIND Depth: 1` для `/AllMusic/` и
-отдельно подтверждаемая Range-проверка одного аудиофайла до 64 КиБ. Старый
-loopback `WebDavProbe`, Android и `LocalPlayback` остались отдельными функциями.
-Автоматические сетевые испытания используют только loopback mock; к аккаунту
-Mail приложение Codex и CI не обращаются.
-
-Учётные данные не сохраняются в файлы или настройки и удаляются из временной
-сессии при отключении. В клиенте закреплён HTTPS host `webdav.cloud.mail.ru:443`,
-путь ограничен `/AllMusic`, перенаправления и ошибки TLS не обходятся.
-
-**Ручное испытание владельца на Windows 11 (30.10.2026):** вход выполнен,
-`PROPFIND /AllMusic` успешен, список непосредственных элементов показан.
-Range одного FLAC завершился общим сообщением об ошибке формата/диапазона;
-никакие реальные заголовки, значения ETag, имена или пути файлов не передавались.
-Причина отказа пока неизвестна. Прежняя реализация требовала `Content-Length`,
-поэтому его отсутствие — проверяемая гипотеза, но не подтверждённый диагноз.
-
-Текущая доработка добавляет безопасную причину отказа, HTTP статус, наличие
-необходимых заголовков, числовые границы и полученный объём без показа значений
+arm64-v8a, min API 28/target 36, нулевой набор р…5807 tokens truncated…овков, числовые границы и полученный объём без показа значений
 заголовков и тела. Для HTTP 206 поддерживается отсутствие `Content-Length`, если
 Qt Network корректно завершил framing ответа, а фактический объём совпал с
 `Content-Range`. Сильный ETag/If-Range, ограничение 64 КиБ и проверка тела
@@ -428,3 +244,46 @@ Draft [PR #27](https://github.com/metravolokos/allmusic-player/pull/27) оста
 открытым. Ручное испытание слышимого звука и контролов на Huawei ещё
 **НЕ ПРОВЕРЕНО**. Не объединять PR до его успешного завершения и подтверждения
 владельцем.
+
+## 002-D Cloud Mail — Issue #24 (31.10.2026)
+
+Реализация начата в `codex/002-d-android-cloud-media3` от обязательного SHA
+`a24a1834845b592ec27d98f1706a53d5727aecb3`. Android target подключает общий C++
+Mail WebDAV Range клиент и использует Media3 `ProgressiveMediaSource` с
+непрозрачным JNI handle. Java получает только handle и диапазонные байты; QML
+получает отображаемые подписи, но не URL или внутренние пути WebDAV. Заголовки и
+реквизиты не передаются Java/QML. Android APK получает только `INTERNET`; Desktop
+playback оставлен прежним.
+
+Добавлены мобильный вход и список MP3/FLAC внутри `/AllMusic`, явный запуск
+выбранного файла, custom `DataSource` для Media3 и отмена запроса при Stop/close /
+Disconnect. Текущие сетевые ограничения остаются у C++ Range-клиента: GET не
+больше 64 КиБ, кэш до 256 КиБ, обязательный HTTP 206, строгий TLS, без редиректов
+и без полной загрузки при HTTP 200. Для Disconnect добавлены асинхронное
+отзывание opaque handle и отложенное уничтожение Range-устройства после
+завершения активного read.
+
+Mock-тест отмены и повторного чтения добавлен; Android package audit обновлён под
+единственное INTERNET-разрешение и отдельный package ID. Локально пройдены
+Android Python tests (13), CI classifier tests (19), repository documentation
+check (94 файла), `py_compile` и `git diff --check`. C++/Qt тесты, Android APK,
+Desktop/Linux/Windows CI ещё не запускались: в текущей среде нет CMake, Ninja,
+Android SDK/NDK и Gradle; они запускаются GitHub Actions после создания draft PR.
+Из ручной проверки владельца в PR #29 поступил сигнал: приложение сообщает
+«Сетевая ошибка при проверке Cloud Mail» после ввода реквизитов. Причина по этой
+строке пока неизвестна. Аудит предыдущего APK подтвердил, что qopensslbackend
+включён, а `libssl`/`libcrypto` отсутствуют. В продолжении PR #29 добавляются
+no-auth TLS preflight и фиксированные сетевые категории; APK будет собираться с
+OpenSSL 3.5.9 из SHA-256-закреплённого официального исходного архива.
+Локально пройдены Android Python tests (14), CI classifier tests (19),
+repository documentation check (95 файлов), `py_compile` и `git diff --check`.
+GitHub Android run #117 успешно собрал APK и прошёл package/license audit: в APK
+есть `libcrypto_3.so` и `libssl_3.so`, arm64 SONAME/NEEDED, 16 KiB alignment,
+INTERNET-only permissions и Media3 runtime; OpenSSL source digest и Apache-2.0
+лицензия включены в скачиваемый комплект. GitHub Desktop run #151 прошёл Linux и
+Windows сборки и CTest. APK/artifact подготовлен, но Android TLS backend на
+устройстве и реальный Cloud Mail на Huawei остаются **НЕ ПРОВЕРЕНЫ**. По прежнему
+APK доказано отсутствие OpenSSL runtime, однако исходная ошибка Huawei без новой
+safe diagnostic строки точно не классифицирована. Изменения остаются в draft PR
+#29; объединять только после ручной приёмки владельца.
+[Инструкция](docs/002-D-ANDROID-CLOUD.md).

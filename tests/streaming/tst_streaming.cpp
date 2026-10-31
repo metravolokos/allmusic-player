@@ -1145,6 +1145,48 @@ private slots:
         QVERIFY(timer.elapsed() < 1500);
         QCOMPARE(result.load(), -1);
     }
+    void interruptKeepsSourceReusableForSeekOrResume()
+    {
+        installMailHandler();
+        mailDelayNextResponseMs = 3000;
+        auto *device = MailWebDavRangeDeviceTests::create(server.serverPort(), mailEntry());
+        QVERIFY(device->open(QIODevice::ReadOnly));
+        std::atomic<qint64> firstRead{0};
+        std::thread reader([&] { char byte = 0; firstRead = device->read(&byte, 1); });
+        // The fixture's first request is a Basic challenge. Wait until the
+        // credentialed, deliberately delayed Range GET is actually in flight.
+        QTRY_VERIFY_WITH_TIMEOUT(server.requests.size() >= 2
+                                     && server.requests[1].headers.contains("authorization"),
+                                 2000);
+
+        QElapsedTimer timer;
+        timer.start();
+        device->interruptPendingRead();
+        reader.join();
+        QVERIFY(timer.elapsed() < 1500);
+        QCOMPARE(firstRead.load(), -1);
+
+        // Resume at a different offset so this exercises both interruption
+        // recovery and applying the deferred QIODevice cursor update.
+        QVERIFY(device->seek(1));
+        qint64 resumedRead = 0;
+        char resumedByte = 0;
+        QVERIFY(readMailWithEventLoop(*device, &resumedByte, 1, &resumedRead));
+        if (resumedRead != 1) {
+            qWarning() << "Cloud Mail resume failed; error=" << device->errorString()
+                       << "position=" << device->pos()
+                       << "open=" << device->isOpen()
+                       << "requests=" << server.requests.size()
+                       << "active responses=" << server.activeResponses;
+            for (const auto &request : server.requests)
+                qWarning() << request.method << request.target
+                           << request.headers.value("range");
+        }
+        QCOMPARE(resumedRead, 1);
+        QCOMPARE(uchar(resumedByte), uchar(audio[1]));
+        QTRY_COMPARE_WITH_TIMEOUT(server.requests.size(), 4, 2000);
+        delete device;
+    }
 };
 
 QTEST_GUILESS_MAIN(StreamingTests)

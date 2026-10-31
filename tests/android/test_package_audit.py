@@ -6,9 +6,12 @@ import unittest
 import zipfile
 
 AUDIT = runpy.run_path(str(Path(__file__).resolve().parents[2] / 'scripts/package-android.py'))
+OPENSSL_BUILD = runpy.run_path(
+    str(Path(__file__).resolve().parents[2] / 'scripts/build-android-openssl.py'))
 MANIFEST = '''<manifest xmlns:android="http://schemas.android.com/apk/res/android"
- package="org.metravolokos.allmusicplayer.spike002dmedia3">
+ package="org.metravolokos.allmusicplayer.cloud002dmedia3">
  <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="36"/>
+ <uses-permission android:name="android.permission.INTERNET"/>
  <application android:allowBackup="false" android:usesCleartextTraffic="false">
  <activity android:name="org.qtproject.qt.android.bindings.QtActivity" android:exported="true">
  <intent-filter><action android:name="android.intent.action.MAIN"/>
@@ -21,25 +24,78 @@ DEX = b'Landroidx/media3/exoplayer/ExoPlayerImpl;\nMedia3PlaybackAdapter'
 ASSETS = ('assets/audio/synthetic-440hz.mp3',
           'assets/audio/synthetic-660hz.flac',
           'assets/audio/synthetic-880hz.wav')
-NATIVE = ('liballmusic-player', 'libQt6Core', 'libQt6Gui', 'libQt6Quick')
+NATIVE = ('liballmusic-player', 'libQt6Core', 'libQt6Gui', 'libQt6Quick',
+          'libcrypto_3', 'libssl_3', 'libplugins_tls_qopensslbackend_arm64-v8a')
 
 
-def write_test_apk(path, abi='arm64-v8a', extra_native=(), dex=DEX, assets=ASSETS):
+def write_test_apk(path, abi='arm64-v8a', extra_native=(), dex=DEX, assets=ASSETS,
+                   native=NATIVE):
     with zipfile.ZipFile(path, 'w') as archive:
-        for name in NATIVE + tuple(extra_native):
-            archive.writestr(f'lib/{abi}/{name}_{abi}.so', b'fixture, not ELF')
+        for name in tuple(native) + tuple(extra_native):
+            suffix = ('.so' if name.endswith('_arm64-v8a')
+                      or name in {'libcrypto_3', 'libssl_3'} else f'_{abi}.so')
+            archive.writestr(f'lib/{abi}/{name}{suffix}', b'fixture, not ELF')
         archive.writestr('classes.dex', dex)
         for name in assets:
             archive.writestr(name, b'synthetic test asset')
 
 
 class PublicationBoundary(unittest.TestCase):
+    def test_openssl_arm64_suffix_is_configured_before_linking(self):
+        config = '''    "android-arm" => {
+        perlasm_scheme   => "void",
+    },
+    "android-arm64" => {
+        inherit_from     => [ "android" ],
+        asm_arch         => 'aarch64',
+        perlasm_scheme   => "linux64",
+    },
+    "android-mips" => {
+        perlasm_scheme   => "o32",
+    },
+'''
+        patched = OPENSSL_BUILD['configure_android_arm64_variant'](config)
+        self.assertIn('shlib_variant   => "_3",', patched)
+        self.assertEqual(OPENSSL_BUILD['configure_android_arm64_variant'](patched), patched)
+        self.assertNotIn('shlib_variant', patched.split('"android-mips"')[1])
+        with self.assertRaises(ValueError):
+            OPENSSL_BUILD['configure_android_arm64_variant'](config.replace('"android-arm64"', '"android-aarch64"'))
+
+    def test_gnu_version_needs_match_needed_and_provider_definitions(self):
+        dynamic = {
+            'libssl_3.so': ' 0x1 (NEEDED) Shared library: [libcrypto_3.so]',
+            'libcrypto_3.so': '',
+        }
+        versions = {
+            'libssl_3.so': '''Version needs section '.gnu.version_r' contains 1 entry:
+  0x00: Version: 1 File: libcrypto_3.so Cnt: 1
+  0x10: Name: OPENSSL_3.5.0 Flags: none Version: 1
+''',
+            'libcrypto_3.so': '''Version definition section '.gnu.version_d' contains 2 entries:
+  0x00: Rev: 1 Flags: BASE Index: 1 Cnt: 1
+  0x10: Name: libcrypto_3.so
+  0x20: Rev: 1 Flags: none Index: 2 Cnt: 1
+  0x30: Name: OPENSSL_3.5.0
+''',
+        }
+        AUDIT['audit_gnu_versions'](dynamic, versions)
+        with self.assertRaises(AssertionError):
+            AUDIT['audit_gnu_versions'](
+                {'libssl_3.so': '', 'libcrypto_3.so': ''}, versions)
+        with self.assertRaises(AssertionError):
+            AUDIT['audit_gnu_versions'](
+                dynamic, {**versions, 'libcrypto_3.so': versions['libcrypto_3.so'].replace('OPENSSL_3.5.0', 'OPENSSL_3.4.0')})
+
     def test_minimal_manifest(self):
         AUDIT['check_manifest'](MANIFEST)
 
+    def test_internet_is_the_only_permission(self):
+        self.assertRaises(AssertionError, AUDIT['check_manifest'],
+                          MANIFEST.replace('android.permission.INTERNET',
+                                           'android.permission.ACCESS_NETWORK_STATE'))
+
     def test_permission_and_component_rejections(self):
-        for element in ('uses-permission android:name="android.permission.INTERNET"',
-                        'uses-permission-sdk-23 android:name="android.permission.READ_MEDIA_AUDIO"',
+        for element in ('uses-permission-sdk-23 android:name="android.permission.READ_MEDIA_AUDIO"',
                         'uses-permission android:name="android.permission.RECORD_AUDIO"',
                         'uses-permission android:name="android.permission.CAMERA"',
                         'uses-permission android:name="android.permission.BLUETOOTH"',
@@ -51,7 +107,7 @@ class PublicationBoundary(unittest.TestCase):
                 AUDIT['check_manifest'](MANIFEST.replace('<application', '<' + element + '/><application'))
 
     def test_identity_platform_and_backup_rejections(self):
-        for before, after in [('spike002dmedia3', 'wrong'), ('minSdkVersion="28"', 'minSdkVersion="27"'),
+        for before, after in [('cloud002dmedia3', 'wrong'), ('minSdkVersion="28"', 'minSdkVersion="27"'),
                               ('targetSdkVersion="36"', 'targetSdkVersion="35"'),
                               ('allowBackup="false"', 'allowBackup="true"'),
                               ('QtActivity', 'WrongActivity')]:
@@ -90,6 +146,13 @@ class PublicationBoundary(unittest.TestCase):
             apk = Path(directory) / 'fixture.apk'
             write_test_apk(apk, extra_native=('libQt6Multimedia',
                                               'libplugins_multimedia_androidmediaplugin'))
+            with self.assertRaises(AssertionError):
+                AUDIT['check_runtime'](apk, DEPENDENCIES)
+
+    def test_openssl_runtime_is_required(self):
+        with tempfile.TemporaryDirectory() as directory:
+            apk = Path(directory) / 'fixture.apk'
+            write_test_apk(apk, native=NATIVE[:-2])
             with self.assertRaises(AssertionError):
                 AUDIT['check_runtime'](apk, DEPENDENCIES)
 

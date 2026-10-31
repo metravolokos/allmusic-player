@@ -33,6 +33,9 @@ public:
     qint64 cachedBytes() const;
     bool buffering() const;
     void cancel();
+    void cancelAsync();
+    void interruptPendingRead();
+    void retire();
 
 signals:
     void bytesFetched(qint64 count);
@@ -55,6 +58,7 @@ private:
     friend class MailWebDavRangeDeviceTests;
 
     bool loadPage(qint64 pageIndex, quint64 generation);
+    void cancelSource(bool waitForFetcher);
     void setFailure(const QString &message);
     void setBuffering(bool value);
 
@@ -73,6 +77,9 @@ private:
     bool m_buffering = false;
     std::atomic_bool m_cancelled{false};
     std::atomic_bool m_sourceOpen{false};
+    std::atomic_bool m_retiring{false};
+    std::atomic_bool m_interruptRequested{false};
+    std::atomic_bool m_readInProgress{false};
     std::atomic<quint64> m_generation{0};
     std::atomic<qint64> m_pendingSeek{-1};
     std::atomic<qint64> m_visiblePosition{0};

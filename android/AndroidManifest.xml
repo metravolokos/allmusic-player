@@ -3,7 +3,7 @@
      Permission insertion is deliberately absent. Audit the merged APK as well. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="org.metravolokos.allmusicplayer.spike002dmedia3"
+    package="org.metravolokos.allmusicplayer.cloud002dmedia3"
     android:installLocation="internalOnly"
     android:versionCode="-- %%INSERT_VERSION_CODE%% --"
     android:versionName="-- %%INSERT_VERSION_NAME%% --">
@@ -12,7 +12,9 @@
         tools:node="remove" />
     <uses-permission android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
         tools:node="remove" />
-    <!-- This local asset test uses neither network-state callbacks nor wake locks. -->
+    <!-- Cloud Mail HTTPS is the only permission required by the read-only stream. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Neither network-state callbacks nor wake locks are used. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"
         tools:node="remove" />
     <uses-permission android:name="android.permission.WAKE_LOCK"

@@ -10,10 +10,16 @@
 #include "MailWebDavController.h"
 #else
 #include "AndroidMedia3Controller.h"
+#include "MailWebDavController.h"
 #endif
 
 int main(int argc, char *argv[])
 {
+#ifdef Q_OS_ANDROID
+    // Qt's Android TLS backend resolves its custom OpenSSL SONAMEs during
+    // application startup. Set this before QGuiApplication initializes Qt.
+    qputenv("ANDROID_OPENSSL_SUFFIX", "_3");
+#endif
 #ifndef Q_OS_ANDROID
     // Fixed backend for this experiment; no network streaming in 001-B1.
     qputenv("QT_MEDIA_BACKEND", "ffmpeg");
@@ -34,7 +40,7 @@ int main(int argc, char *argv[])
 
 #ifndef Q_OS_ANDROID
     LocalPlayback playback;
-    MailWebDavController mailWebDav;
+    MailWebDavController mailWebDav(nullptr, true);
     QObject::connect(&mailWebDav, &MailWebDavController::playbackRequested,
                      &playback, [&mailWebDav, &playback](int index) {
         QString label;
@@ -52,7 +58,8 @@ int main(int argc, char *argv[])
     QObject::connect(&app, &QCoreApplication::aboutToQuit,
                      &mailWebDav, &MailWebDavController::disconnectCloud);
 #else
-    AndroidMedia3Controller media3;
+    MailWebDavController mailWebDav;
+    AndroidMedia3Controller media3(&mailWebDav);
 #endif
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed,

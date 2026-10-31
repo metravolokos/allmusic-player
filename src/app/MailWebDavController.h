@@ -17,7 +17,8 @@ class MailWebDavController final : public QObject {
     Q_PROPERTY(int entryCount READ entryCount NOTIFY entriesChanged)
     Q_PROPERTY(QString currentDirectory READ currentDirectory NOTIFY stateChanged)
 public:
-    explicit MailWebDavController(QObject *parent = nullptr);
+    explicit MailWebDavController(QObject *parent = nullptr,
+                                  bool streamableFormatsOnly = false);
     ~MailWebDavController() override;
 
     QString status() const { return m_status; }
@@ -47,6 +48,7 @@ signals:
     void entriesChanged();
     void playbackRequested(int index);
     void disconnectPlayback();
+    void sessionEnded();
 
 private:
     void handleCompleted(const MailWebDavProbe::Result &result);
@@ -56,13 +58,17 @@ private:
     static bool isAudio(const QString &path);
     static bool isStreamable(const QString &path);
     static QString displayName(const QString &path, bool directory);
-    static QString errorText(MailWebDavProbe::Error error, int status);
+    static QString errorText(const MailWebDavProbe::Result &result);
+    static QString networkDiagnosticText(const MailWebDavProbe::Result &result);
 
     MailWebDavProbe *m_probe = nullptr;
     QVector<MailWebDavProbe::Entry> m_entries;
+    QString m_pendingEmail;
+    QString m_pendingAppPassword;
     QString m_currentDirectory = QStringLiteral("/AllMusic/");
     QString m_status = QStringLiteral("Проверка Cloud Mail ещё не запускалась.");
     bool m_busy = false;
     bool m_connected = false;
     bool m_playbackActive = false;
+    bool m_streamableFormatsOnly = false;
 };

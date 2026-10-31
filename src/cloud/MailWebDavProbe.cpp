@@ -6,6 +6,7 @@
 #include <QNetworkProxy>
 #include <QRegularExpression>
 #include <QSslError>
+#include <QSslSocket>
 #include <QStringList>
 #include <QXmlStreamReader>
 #include <limits>
@@ -193,13 +194,88 @@ MailWebDavProbe::MailWebDavProbe(const QUrl &testUrl, TestOriginTag, QObject *pa
 void MailWebDavProbe::initialize()
 {
     deadline.setSingleShot(true);
-    connect(&deadline, &QTimer::timeout, this, [this] { finish(Error::Timeout); });
+    connect(&deadline, &QTimer::timeout, this, [this] {
+        result.networkCategory = NetworkCategory::Timeout;
+        result.networkErrorCode = static_cast<int>(QNetworkReply::TimeoutError);
+        finish(Error::Timeout);
+    });
 }
 
 MailWebDavProbe::~MailWebDavProbe()
 {
     cancel();
     clearCredentials();
+}
+
+MailWebDavProbe::TlsCapabilities MailWebDavProbe::tlsCapabilities()
+{
+    TlsCapabilities capabilities;
+    capabilities.available = QSslSocket::supportsSsl();
+    capabilities.activeBackend = QSslSocket::activeBackend();
+    capabilities.availableBackends = QSslSocket::availableBackends();
+    if (capabilities.available)
+        capabilities.runtimeVersion = QSslSocket::sslLibraryVersionString();
+#ifdef Q_OS_ANDROID
+    // Qt's Android qopensslbackend needs the app-packaged OpenSSL runtime.
+    // Other Qt platforms may use their native TLS backend, for example Schannel.
+    capabilities.available = capabilities.available
+        && capabilities.activeBackend.compare(QStringLiteral("openssl"), Qt::CaseInsensitive) == 0
+        && capabilities.availableBackends.contains(QStringLiteral("openssl"), Qt::CaseInsensitive);
+#endif
+    return capabilities;
+}
+
+MailWebDavProbe::NetworkCategory MailWebDavProbe::networkCategoryForError(
+    QNetworkReply::NetworkError error)
+{
+    switch (error) {
+    case QNetworkReply::NoError:
+        return NetworkCategory::None;
+    case QNetworkReply::HostNotFoundError:
+        return NetworkCategory::DnsLookup;
+    case QNetworkReply::ConnectionRefusedError:
+        return NetworkCategory::ConnectionRefused;
+    case QNetworkReply::RemoteHostClosedError:
+        return NetworkCategory::RemoteHostClosed;
+    case QNetworkReply::TemporaryNetworkFailureError:
+    case QNetworkReply::NetworkSessionFailedError:
+    case QNetworkReply::BackgroundRequestNotAllowedError:
+        return NetworkCategory::TemporaryFailure;
+    case QNetworkReply::ProxyConnectionRefusedError:
+    case QNetworkReply::ProxyConnectionClosedError:
+    case QNetworkReply::ProxyNotFoundError:
+    case QNetworkReply::ProxyTimeoutError:
+    case QNetworkReply::ProxyAuthenticationRequiredError:
+        return NetworkCategory::Proxy;
+    case QNetworkReply::SslHandshakeFailedError:
+        return NetworkCategory::TlsHandshake;
+    case QNetworkReply::TimeoutError:
+        return NetworkCategory::Timeout;
+    case QNetworkReply::OperationCanceledError:
+        return NetworkCategory::Cancelled;
+    default:
+        return NetworkCategory::Unknown;
+    }
+}
+
+void MailWebDavProbe::captureTlsCapabilities()
+{
+    const TlsCapabilities capabilities = tlsCapabilities();
+    result.sslBackendAvailable = capabilities.available;
+    result.activeSslBackend = capabilities.activeBackend;
+    result.availableSslBackends = capabilities.availableBackends;
+    result.sslRuntimeVersion = capabilities.runtimeVersion;
+}
+
+void MailWebDavProbe::captureNetworkError(QNetworkReply *source)
+{
+    if (!source)
+        return;
+    const auto error = source->error();
+    result.networkErrorCode = static_cast<int>(error);
+    result.networkCategory = networkCategoryForError(error);
+    if (tlsFailure || error == QNetworkReply::SslHandshakeFailedError)
+        result.networkCategory = NetworkCategory::TlsHandshake;
 }
 
 void MailWebDavProbe::clearCredentials()
@@ -234,6 +310,11 @@ bool MailWebDavProbe::listAllMusic(const QString &userEmail, const QString &appP
     password = appPassword;
     listingPath = MusicRoot;
     return begin(Operation::List, MusicRoot, -1, {});
+}
+
+bool MailWebDavProbe::preflight()
+{
+    return beginPreflight();
 }
 
 bool MailWebDavProbe::setSessionCredentials(QString userEmail, QString appPassword)
@@ -288,6 +369,7 @@ bool MailWebDavProbe::begin(Operation operation, const QString &path, qint64 fil
     result = {};
     result.listing = operation == Operation::List;
     result.rangeCheck = operation == Operation::Range;
+    captureTlsCapabilities();
     rangeOffset = offset;
     returnRangeBytes = returnBytes;
     requestedLength = result.rangeCheck
@@ -298,6 +380,11 @@ bool MailWebDavProbe::begin(Operation operation, const QString &path, qint64 fil
     result.requestedRangeBytes = requestedLength;
     active = true;
     const quint64 ticket = ++operationId;
+    if (!result.sslBackendAvailable) {
+        result.networkCategory = NetworkCategory::TlsBackendUnavailable;
+        finish(Error::Tls);
+        return true;
+    }
     if (result.rangeCheck && (offset < 0 || requestedLength <= 0
         || requestedLength > RangeLimit
         || (fileSize >= 0 && (offset >= fileSize || requestedLength > fileSize - offset)))) {
@@ -345,6 +432,25 @@ bool MailWebDavProbe::begin(Operation operation, const QString &path, qint64 fil
     result.ifRangeSent = operation == Operation::Range && !expectedEtag.isEmpty();
     body.clear();
     tlsFailure = false;
+    deadline.start(timeoutMs);
+    send();
+    return true;
+}
+
+bool MailWebDavProbe::beginPreflight()
+{
+    if (active || !email.isEmpty() || !password.isEmpty())
+        return false;
+    result = {};
+    result.preflight = true;
+    captureTlsCapabilities();
+    active = true;
+    ++operationId;
+    if (!result.sslBackendAvailable) {
+        result.networkCategory = NetworkCategory::TlsBackendUnavailable;
+        finish(Error::Tls);
+        return true;
+    }
     deadline.start(timeoutMs);
     send();
     return true;
@@ -454,7 +560,8 @@ void MailWebDavProbe::send()
         return;
 
     QUrl url = origin;
-    url.setPath(requestPath, QUrl::DecodedMode);
+    url.setPath(result.preflight ? QStringLiteral("/") : requestPath,
+                result.preflight ? QUrl::TolerantMode : QUrl::DecodedMode);
     QNetworkRequest request(url);
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::ManualRedirectPolicy);
@@ -467,7 +574,7 @@ void MailWebDavProbe::send()
     request.setAttribute(QNetworkRequest::AuthenticationReuseAttribute,
                          QNetworkRequest::Manual);
     request.setRawHeader("Accept-Encoding", "identity");
-    if (authorizationSent) {
+    if (!result.preflight && authorizationSent) {
         QByteArray userBytes = email.toUtf8();
         QByteArray passwordBytes = password.toUtf8();
         QByteArray credentials = userBytes;
@@ -488,7 +595,11 @@ void MailWebDavProbe::send()
         authorization.clear();
     }
 
-    if (result.listing) {
+    if (result.preflight) {
+        // A HEAD to the pinned origin checks DNS, connection and strict TLS.
+        // It intentionally carries no Basic credentials or WebDAV path.
+        reply = manager.head(request);
+    } else if (result.listing) {
         request.setRawHeader("Depth", "1");
         request.setRawHeader("Accept", "application/xml");
         request.setHeader(QNetworkRequest::ContentTypeHeader,
@@ -507,12 +618,15 @@ void MailWebDavProbe::send()
     }
 
     QNetworkReply *const sentReply = reply;
-    reply->setReadBufferSize((result.listing ? ListingLimit : requestedLength) + 1);
+    reply->setReadBufferSize(result.preflight ? 1
+                                             : (result.listing ? ListingLimit : requestedLength) + 1);
     connect(sentReply, &QNetworkReply::sslErrors, this,
             [this, sentReply](const QList<QSslError> &) {
         if (!isCurrent(sentReply))
             return;
         tlsFailure = true;
+        result.networkErrorCode = static_cast<int>(QNetworkReply::SslHandshakeFailedError);
+        result.networkCategory = NetworkCategory::TlsHandshake;
         // Deliberately do not call ignoreSslErrors; the secret is never sent on
         // a connection whose certificate did not pass normal Qt validation.
         finish(Error::Tls);
@@ -523,6 +637,17 @@ void MailWebDavProbe::send()
             return;
         captureResponseMetadata(sentReply);
         const int status = result.status;
+
+        if (result.preflight) {
+            if (status >= 300 && status < 400) {
+                finish(Error::Redirect);
+            } else if (status > 0) {
+                // Any non-redirect HTTP response proves that DNS, connection,
+                // and TLS completed. It does not authorize the Cloud request.
+                finish(Error::None);
+            }
+            return;
+        }
 
         if ((status >= 300 && status < 400)) {
             finish(Error::Redirect);
@@ -613,6 +738,21 @@ void MailWebDavProbe::send()
             return;
 
         captureResponseMetadata(sentReply);
+        if (result.preflight) {
+            if (result.status > 0) {
+                finish(result.status >= 300 && result.status < 400
+                           ? Error::Redirect : Error::None);
+                return;
+            }
+            captureNetworkError(sentReply);
+            if (result.networkCategory == NetworkCategory::TlsHandshake)
+                finish(Error::Tls);
+            else if (result.networkCategory == NetworkCategory::Timeout)
+                finish(Error::Timeout);
+            else
+                finish(Error::Network);
+            return;
+        }
         const QByteArray contentRangeValue = sentReply->rawHeader("Content-Range");
         const QByteArray responseEtag = sentReply->rawHeader("ETag");
         const int status = result.status;
@@ -666,6 +806,7 @@ void MailWebDavProbe::send()
             return;
         }
         if (networkError != QNetworkReply::NoError) {
+            captureNetworkError(sentReply);
             if (tlsFailure || networkError == QNetworkReply::SslHandshakeFailedError) {
                 finish(Error::Tls);
             } else if (networkError == QNetworkReply::TimeoutError) {
