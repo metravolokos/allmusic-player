@@ -1147,6 +1147,7 @@ private slots:
     }
     void interruptKeepsSourceReusableForSeekOrResume()
     {
+        installMailHandler();
         mailDelayNextResponseMs = 3000;
         auto *device = MailWebDavRangeDeviceTests::create(server.serverPort(), mailEntry());
         QVERIFY(device->open(QIODevice::ReadOnly));
