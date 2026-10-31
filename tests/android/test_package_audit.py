@@ -159,6 +159,24 @@ class PublicationBoundary(unittest.TestCase):
             self.assertIn('Apache License, Version 2.0', guava_record)
             self.assertIn('google/guava/blob/v33.3.1/pom.xml', guava_record)
 
+            listenablefuture_dir = root / ('gradle/caches/modules-2/files-2.1/com.google.guava/'
+                                            'listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/hash')
+            listenablefuture_dir.mkdir(parents=True)
+            (listenablefuture_dir / 'listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.pom').write_text(
+                '<project xmlns="http://maven.apache.org/POM/4.0.0"><artifactId>listenablefuture</artifactId></project>',
+                encoding='utf-8')
+            records = AUDIT['audit_maven_licenses'](
+                'debugRuntimeClasspath\n+--- androidx.media3:media3-exoplayer:1.11.1'
+                '\n+--- com.google.guava:failureaccess:1.0.2'
+                '\n+--- com.google.guava:guava:33.3.1-android'
+                '\n+--- com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava',
+                root / 'gradle', output)
+            listenablefuture_record = next(
+                r for r in records if r.startswith(
+                    'com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava'))
+            self.assertIn('Apache License, Version 2.0', listenablefuture_record)
+            self.assertIn('guava-parent/26.0-android', listenablefuture_record)
+
             pom.write_text('''<project xmlns="http://maven.apache.org/POM/4.0.0">
               <licenses><license><name>Unknown terms</name></license></licenses>
             </project>''', encoding='utf-8')

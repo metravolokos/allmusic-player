@@ -89,10 +89,15 @@ Java runtime архивов и NDK NOTICE/NOTICE.toolchain (они охваты�
 аудит; Multimedia/FFmpeg/TagLib/SQLite не добавлялись.
 
 Каждый runtime Maven artifact должен иметь распознанную лицензию в POM.
-Исключения узкие и привязаны к точным версиям: `com.google.guava:guava:33.3.1-android`
-и `com.google.guava:failureaccess:1.0.2` не содержат license metadata в Maven POM.
-Их Apache-2.0 подтверждён [upstream POM Google Guava v33.3.1](https://github.com/google/guava/blob/v33.3.1/pom.xml)
-и [исходником failureaccess](https://github.com/google/guava/blob/v33.3.1/futures/failureaccess/src/com/google/common/util/concurrent/internal/InternalFutureFailureAccess.java).
+Исключения узкие и привязаны к точным версиям: `com.google.guava:guava:33.3.1-android`,
+`com.google.guava:failureaccess:1.0.2` и пустой
+`com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava`
+не содержат license metadata непосредственно в Maven POM. Для них Apache-2.0
+подтверждён [upstream POM Google Guava v33.3.1](https://github.com/google/guava/blob/v33.3.1/pom.xml),
+[исходником failureaccess](https://github.com/google/guava/blob/v33.3.1/futures/failureaccess/src/com/google/common/util/concurrent/internal/InternalFutureFailureAccess.java)
+и [точным parent POM пустого listenablefuture artifact 26.0-android](https://repo.maven.apache.org/maven2/com/google/guava/guava-parent/26.0-android/guava-parent-26.0-android.pom).
+Описание upstream POM подтверждает, что последняя версия — пустой placeholder,
+нужный Guava, чтобы избежать конфликта с её классом ListenableFuture.
 Другие отсутствующие или неизвестные сведения останавливают audit.
 
 LGPL-обязательства распространяются и на тестовые бинарные пакеты; персональное

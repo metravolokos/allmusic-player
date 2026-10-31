@@ -33,6 +33,10 @@ MAVEN_LICENSE_OVERRIDES = {
         "Apache License, Version 2.0 (Google Guava v33.3.1 source: "
         "https://github.com/google/guava/blob/v33.3.1/futures/failureaccess/src/"
         "com/google/common/util/concurrent/internal/InternalFutureFailureAccess.java)",
+    ("com.google.guava", "listenablefuture", "9999.0-empty-to-avoid-conflict-with-guava"):
+        "Apache License, Version 2.0 (empty artifact POM inherits Google Guava parent "
+        "26.0-android license: https://repo.maven.apache.org/maven2/com/google/guava/"
+        "guava-parent/26.0-android/guava-parent-26.0-android.pom)",
 }
 
 
@@ -141,8 +145,8 @@ def audit_maven_licenses(dependencies, gradle_home, output):
                 f"License needs manual review: {group}:{artifact}:{version}: {label} ({url})"
             licenses.append(f"{label} ({url})" if url else label)
         if not licenses:
-            # These Guava POMs omit license metadata; their pinned upstream source
-            # declares Apache-2.0. Keep each exception version-specific.
+            # These exact Guava artifacts omit license metadata; pinned upstream
+            # POMs or source declare Apache-2.0. Keep each exception version-specific.
             override = MAVEN_LICENSE_OVERRIDES.get((group, artifact, version))
             assert override, f"Maven POM has no declared license: {group}:{artifact}:{version}"
             licenses.append(override)
