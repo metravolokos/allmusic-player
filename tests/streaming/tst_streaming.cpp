@@ -1168,6 +1168,16 @@ private slots:
         char resumedByte = 0;
         std::thread resumed([&] { resumedRead = device->read(&resumedByte, 1); });
         resumed.join();
+        if (resumedRead.load() != 1) {
+            qWarning() << "Cloud Mail resume failed; error=" << device->errorString()
+                       << "position=" << device->pos()
+                       << "open=" << device->isOpen()
+                       << "requests=" << server.requests.size()
+                       << "active responses=" << server.activeResponses;
+            for (const auto &request : server.requests)
+                qWarning() << request.method << request.target
+                           << request.headers.value("range");
+        }
         QCOMPARE(resumedRead.load(), 1);
         QCOMPARE(uchar(resumedByte), uchar(audio[1]));
         QCOMPARE(server.requests.size(), 2);
