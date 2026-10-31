@@ -227,5 +227,5 @@ QtObject {
     }
 };
 
-QTEST_APPLESS_MAIN(AndroidMedia3StateTest)
+QTEST_GUILESS_MAIN(AndroidMedia3StateTest)
 #include "tst_android_media3_state.moc"
