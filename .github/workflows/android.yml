@@ -79,7 +79,7 @@ jobs:
       - name: Проверить Android assets и аудит упаковки без SDK
         run: |
           python3 -m unittest discover -s tests/android -v
-          python3 -m py_compile scripts/package-android.py scripts/build-android-openssl.py
+          python3 -m py_compile scripts/ci_result.py scripts/package-android.py scripts/build-android-openssl.py
       - name: Записать объём Draft-проверки
         run: |
           echo "Draft fast mode: tests/android и статическая проверка Python; Android SDK, Qt, NDK и APK не запускались." >> "$GITHUB_STEP_SUMMARY"
@@ -331,12 +331,17 @@ jobs:
           CHANGE_REASON: ${{ needs.classify.outputs.reason }}
           SOURCE_SHA: ${{ needs.classify.outputs.source_sha }}
           TESTED_SHA: ${{ needs.classify.outputs.tested_sha }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           python3 - <<'PY'
           import os
           import sys
+          from scripts.ci_result import required_pr_gate_error
 
           failures = []
+          gate_error = required_pr_gate_error(os.environ["EVENT_NAME"], os.environ["CI_MODE"])
+          if gate_error:
+              failures.append(f"MERGE GATE: {gate_error}")
           if os.environ["CLASSIFY_RESULT"] != "success":
               failures.append(f"CLASSIFY: {os.environ['CLASSIFY_RESULT']}")
           if not os.environ["CI_MODE"]:
@@ -370,6 +375,7 @@ jobs:
                   f"Фактически: лёгкие Android-проверки — {os.environ['FAST_RESULT']} "
                   f"(нужны: {os.environ['EXPECT_FAST']}); Android build/audit — "
                   f"{os.environ['ANDROID_RESULT']}; warm-cache — {os.environ['CACHE_RESULT']}.\n"
+                  f"Required PR merge gate: {'blocked' if gate_error else 'passed for this CI mode'}.\n"
               )
           if failures:
               print("\n".join(failures), file=sys.stderr)

@@ -96,6 +96,7 @@ class ChangeSelection(unittest.TestCase):
 
     def test_classifier_tests_and_workflow_changes_fail_closed(self):
         for path in ("scripts/classify-ci-changes.py", "scripts/check_repository.py",
+                     "scripts/ci_result.py",
                      "tests/ci/test_classify_ci_changes.py",
                      ".github/workflows/desktop.yml", ".github/workflows/android.yml"):
             with self.subTest(path=path):
@@ -144,21 +145,42 @@ class ChangeSelection(unittest.TestCase):
                          ["git", "rev-list", "--parents", "-n", "1", HEAD_SHA])
         self.assertEqual(run.call_args_list[1].args[0][4], f"{PARENT_SHA}..{HEAD_SHA}")
 
-    def test_draft_classifier_change_forces_full_fail_closed(self):
+    def test_draft_ci_policy_changes_use_fast_checks_but_not_full_platform_jobs(self):
         environment = {
             "CI_DRAFT": "true",
             "CI_BASE_SHA": BASE_SHA,
             "CI_HEAD_SHA": HEAD_SHA,
         }
+        for path in (".github/workflows/desktop.yml", "scripts/classify-ci-changes.py",
+                     "scripts/ci_result.py"):
+            with self.subTest(path=path), patch.dict(os.environ, environment, clear=False), patch.object(
+                    CLASSIFIER.subprocess, "run",
+                    side_effect=[completed_text(f"{HEAD_SHA} {PARENT_SHA}\n"),
+                                 completed((path + "\0").encode())]):
+                result = CLASSIFIER.selections_for_event("pull_request")
+            self.assertEqual(result["ci_mode"], "draft-fast")
+            self.assertTrue(result["android_fast_checks"])
+            for job in ("desktop_linux", "desktop_windows", "fixtures", "android",
+                        "windows_zip", "webdav_test_kit", "desktop_cache_validation",
+                        "android_cache_validation"):
+                self.assertFalse(result[job], job)
+
+    def test_ready_ci_policy_change_still_forces_full_fail_closed(self):
+        environment = {
+            "CI_DRAFT": "false",
+            "CI_BASE_SHA": BASE_SHA,
+            "CI_HEAD_SHA": HEAD_SHA,
+        }
         with patch.dict(os.environ, environment, clear=False), patch.object(
                 CLASSIFIER.subprocess, "run",
-                side_effect=[completed_text(f"{HEAD_SHA} {PARENT_SHA}\n"),
-                             completed(b"scripts/classify-ci-changes.py\0")]):
+                return_value=completed(b".github/workflows/desktop.yml\0")):
             result = CLASSIFIER.selections_for_event("pull_request")
         self.assertEqual(result["ci_mode"], "full-fail-closed")
         self.assertTrue(result["desktop_linux"])
         self.assertTrue(result["desktop_windows"])
         self.assertTrue(result["android"])
+        self.assertTrue(result["windows_zip"])
+        self.assertTrue(result["webdav_test_kit"])
 
     def test_ready_pr_uses_full_cumulative_base_to_head_diff(self):
         environment = {

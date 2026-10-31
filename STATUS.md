@@ -10,12 +10,13 @@ Total output lines: 434
 
 Рабочая ветка `issue-30-ci-opt-002` создана отдельно от PR #29 и основана на
 актуальной `main` `c511cf252f5c8dd4d5a481b3b91e5e18379accc5`. Реализованы
-Draft fast mode, полная классификация cumulative diff для Ready PR, общие
-Desktop/Android зависимости Cloud WebDAV и итоговые отчёты workflow. PR #31
-остаётся Draft. Полный fail-closed CI прошёл: [Desktop #41212231519](https://github.com/metravolokos/allmusic-player/actions/runs/41212231519)
-и [Android #41212231535](https://github.com/metravolokos/allmusic-player/actions/runs/41212231535);
-20.22 фактических runner-minutes / 28.55 с Windows ×2.
-Требуемые статусы и защита `main` не менялись. Draft fast CI прошёл: [Desktop #41213093024](https://github.com/metravolokos/allmusic-player/actions/runs/41213093024) и [Android #41213092971](https://github.com/metravolokos/allmusic-player/actions/runs/41213092971), 26 секунд фактического runner time. В этой паре запусков разница с полным fail-closed CI составляет 19.78 фактических минут / 28.12 взвешенных минут; детали в docs/CI.md.
+Draft fast mode, fail-closed merge gate, полная классификация cumulative diff
+для Ready PR, общие Desktop/Android зависимости Cloud WebDAV и отчёты workflow.
+PR #31 остаётся Draft. В режиме `draft-fast` быстрые jobs проходят, а оба
+обязательных статуса завершаются ошибкой до Ready/full CI. Локально прошли
+31 тест CI, 16 Android offline tests и `scripts/check_repository.py`.
+GitHub проверка нового gate ещё ожидается. Прежний полный run и замер Draft
+описаны в docs/CI.md; настройки защиты `main` не менялись.
 
 **Дата:** 31.10.2026. **Текущий статус:** 002-A принята владельцем в [PR #19](https://github.com/metravolokos/allmusic-player/pull/19); 002-B и Desktop 002-C приняты в `main`. Android Media3 по Issue #26 прошёл Android/Desktop CI и ручную проверку на Huawei. Android Cloud Mail по Issue #24 принят владельцем и объединён в `main` через [PR #29](https://github.com/metravolokos/allmusic-player/pull/29), commit `c511cf252f5c8dd4d5a481b3b91e5e18379accc5`; CI и согласованные Huawei сценарии пройдены. Навигация по вложенным папкам для медиатеки владельца неприменима; неудобство длинного списка отложено в отдельный UX backlog. CI использует только mock; пароль и медиатека владельца не используются.
 

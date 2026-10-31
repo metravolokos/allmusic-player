@@ -100,7 +100,8 @@ def classify_paths(paths):
             result["webdav_test_kit"] = True
         elif path.startswith(".github/workflows/"):
             workflow_change = True
-        elif path in {"scripts/classify-ci-changes.py", "scripts/check_repository.py"} \
+        elif path in {"scripts/classify-ci-changes.py", "scripts/check_repository.py",
+                      "scripts/ci_result.py"} \
                 or path.startswith("tests/ci/"):
             classifier_change = True
         elif path in {"scripts/package-android.py", "scripts/build-android-openssl.py",
@@ -240,7 +241,11 @@ def selections_for_event(event):
         try:
             paths = git_paths(event, draft=draft)
             classified = classify_paths(paths)
-            if classified.get("ci_mode") == "full-fail-closed":
+            # Draft changes to CI rules still run the fast checks. The required
+            # result jobs reject draft-fast below, so this cannot satisfy the
+            # merge gate; the cumulative Ready run remains full fail-closed.
+            if classified.get("ci_mode") == "full-fail-closed" and not (
+                    draft and classified.get("ci_rules_changed")):
                 return classified
             targets = platform_summary(classified)
             if draft:
