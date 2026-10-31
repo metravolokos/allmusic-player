@@ -70,8 +70,15 @@ public:
             QObject::disconnect(connection);
 
             if (m_terminalCancelled
-                || cancellationGeneration != m_cancellationGeneration.load())
+                || cancellationGeneration != m_cancellationGeneration.load()) {
+                // A cancelled QNetworkReply can leave the probe's manager with
+                // a reply/connection that is not suitable for the next seek.
+                // Drop the probe on its owning worker thread and recreate it
+                // from the fetcher's still-private credential copy on demand.
+                delete m_probe;
+                m_probe = nullptr;
                 return cancelledResult();
+            }
             if (completed.error == Error::Auth || completed.error == Error::Tls) {
                 cancelAndClear();
                 return completed;
