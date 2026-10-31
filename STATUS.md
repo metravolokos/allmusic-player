@@ -1,3 +1,9 @@
+# Текущий статус проекта — AllMusic Player
+
+## SEL-001 — выборочная интеграция проверок трёх AllMusic (31.10.2026)
+
+Отдельный PR: исполняемый QML→C++ тест реальной Android-модели каталога и статическая проверка Android `public slots/Q_PROPERTY/Q_INVOKABLE`. Код проектов не копировался. WebDAV, Media3, Desktop playback, Android UI, workflow и кэши не менялись. Матрица: `docs/SELECTIVE-INTEGRATION-2026-10-31.md`. Платформенные проверки до получения CI — **НЕ ПРОВЕРЕНЫ**.
+
 Warning: truncated output (original token count: 13807)
 Total output lines: 473
 

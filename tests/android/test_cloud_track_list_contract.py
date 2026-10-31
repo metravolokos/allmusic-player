@@ -93,6 +93,34 @@ class CloudTrackListContractTest(unittest.TestCase):
         self.assertIn('text: "Совпадений нет"', qml)
         self.assertIn('android:windowSoftInputMode="adjustResize"', manifest)
 
+    def test_android_qml_methods_are_slots_and_properties_are_exposed(self):
+        # Static Android JNI-controller contract supplements the runtime
+        # QtQml model test run in Desktop CTest.
+        import re
+
+        qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
+        controller = (ROOT / "src/app/AndroidMedia3Controller.h").read_text(encoding="utf-8")
+        model = (ROOT / "src/app/AndroidCloudTrackListModel.h").read_text(encoding="utf-8")
+        self.assertIn("public slots:", controller)
+        slots = controller.split("public slots:", 1)[1].split("signals:", 1)[0]
+        methods = set(re.findall(r"\bmedia3\.([A-Za-z]\w*)\s*\(", qml))
+        self.assertTrue(methods)
+        for name in sorted(methods):
+            with self.subTest(slot=name):
+                self.assertRegex(slots, rf"\b{re.escape(name)}\s*\(")
+
+        for name in ("cloudEntriesModel", "cloudConnected", "cloudBusy",
+                     "cloudStatus", "cloudDirectoryLabel", "activeTrackName",
+                     "stateText", "errorText", "positionMs", "durationMs",
+                     "playEnabled", "pauseEnabled", "stopEnabled", "seekEnabled",
+                     "trackNames", "trackIndex", "outputStatusText"):
+            with self.subTest(property=name):
+                self.assertRegex(controller, rf"Q_PROPERTY\([^\n]*\b{re.escape(name)}\b")
+        for name in ("searchText", "sortMode", "totalCount", "resultCount"):
+            with self.subTest(model_property=name):
+                self.assertRegex(model, rf"Q_PROPERTY\([^\n]*\b{re.escape(name)}\b")
+        self.assertRegex(model, r"Q_INVOKABLE\s+bool\s+containsSourceIndex\s*\(")
+
     def test_android_manifest_locks_the_activity_to_portrait(self):
         manifest_path = ROOT / "android/AndroidManifest.xml"
         manifest = ET.parse(manifest_path).getroot()

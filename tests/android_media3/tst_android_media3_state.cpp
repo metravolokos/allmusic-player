@@ -1,7 +1,12 @@
 #include "AndroidCloudTrackListModel.h"
 #include "AndroidMedia3State.h"
 
+#include <QQmlComponent>
+#include <QQmlContext>
+#include <QQmlEngine>
 #include <QtTest>
+
+#include <memory>
 
 namespace {
 QVariantMap cloudEntry(const QString &label)
@@ -141,6 +146,66 @@ private slots:
         QVERIFY(!model.containsSourceIndex(0));
         model.setSearchText(QString());
         QVERIFY(model.containsSourceIndex(0));
+    }
+
+    // Exercise the real Qt QML runtime, not just textual QML expectations.
+    // This never opens the network or needs Android, audio output or user files.
+    void qmlCallsCppModelAndReceivesPropertyNotifications()
+    {
+        AndroidCloudTrackListModel model;
+        model.setEntries({cloudEntry(QStringLiteral("КИНО.mp3")),
+                          cloudEntry(QStringLiteral("Другой.flac")),
+                          cloudEntry(QStringLiteral("кино.flac"))});
+
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("cloudModel"), &model);
+        QQmlComponent component(&engine);
+        component.setData(R"QML(
+import QtQml
+QtObject {
+    property int matches: cloudModel.resultCount
+    property string query: cloudModel.searchText
+    property int ordering: cloudModel.sortMode
+    function searchAndCheck() {
+        cloudModel.searchText = "кИНО"
+        return cloudModel.containsSourceIndex(0)
+               && cloudModel.containsSourceIndex(2)
+               && !cloudModel.containsSourceIndex(1)
+    }
+    function setDescending() {
+        cloudModel.sortMode = 1
+        return cloudModel.sortMode
+    }
+}
+)QML", QUrl(QStringLiteral("file:///qml-cpp-contract.qml")));
+
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        std::unique_ptr<QObject> qml(component.create());
+        QVERIFY2(qml != nullptr, qPrintable(component.errorString()));
+        QCOMPARE(qml->property("matches").toInt(), 3);
+
+        QSignalSpy searchChanged(&model, &AndroidCloudTrackListModel::searchTextChanged);
+        QVariant accepted;
+        QVERIFY(QMetaObject::invokeMethod(qml.get(), "searchAndCheck",
+                                          Q_RETURN_ARG(QVariant, accepted)));
+        QVERIFY(accepted.toBool());
+        QCOMPARE(searchChanged.count(), 1);
+        QCOMPARE(model.resultCount(), 2);
+        QCOMPARE(qml->property("matches").toInt(), 2);
+        QCOMPARE(qml->property("query").toString(), QStringLiteral("кИНО"));
+
+        QSignalSpy sortingChanged(&model, &AndroidCloudTrackListModel::sortModeChanged);
+        QVariant ordering;
+        QVERIFY(QMetaObject::invokeMethod(qml.get(), "setDescending",
+                                          Q_RETURN_ARG(QVariant, ordering)));
+        QCOMPARE(ordering.toInt(), AndroidCloudTrackListModel::NameDescending);
+        QCOMPARE(sortingChanged.count(), 1);
+        QCOMPARE(qml->property("ordering").toInt(),
+                 AndroidCloudTrackListModel::NameDescending);
+
+        // Source snapshot replacement must update the already-bound QML property.
+        model.setEntries({cloudEntry(QStringLiteral("Новое.mp3"))});
+        QCOMPARE(qml->property("matches").toInt(), 0);
     }
 
     void cloudModelHandlesFiveThousandSyntheticEntries()
