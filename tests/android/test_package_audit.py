@@ -85,7 +85,7 @@ class PublicationBoundary(unittest.TestCase):
                 with self.subTest(dependencies=dependencies), self.assertRaises(AssertionError):
                     AUDIT['check_runtime'](apk, dependencies)
 
-    def test_qt_multimedia_ffmpeg_and_media3_ffmpeg_are_rejected(self):
+    def test_qt_multimedia_and_ffmpeg_runtime_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             apk = Path(directory) / 'fixture.apk'
             write_test_apk(apk, extra_native=('libQt6Multimedia',
@@ -99,7 +99,14 @@ class PublicationBoundary(unittest.TestCase):
 
             write_test_apk(apk)
             with self.assertRaises(AssertionError):
-                AUDIT['check_runtime'](apk, DEPENDENCIES + '\nandroidx.media3:media3-exoplayer-ffmpeg:1.11.1')
+                AUDIT['check_runtime'](apk, DEPENDENCIES + '\nandroidx.media3:media3-decoder-ffmpeg:1.11.1')
+
+            write_test_apk(apk, dex=DEX + b' androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer')
+            self.assertEqual(len(AUDIT['check_runtime'](apk, DEPENDENCIES)), len(NATIVE))
+
+            write_test_apk(apk, dex=DEX + b' Landroidx/media3/decoder/ffmpeg/FfmpegAudioRenderer;')
+            with self.assertRaises(AssertionError):
+                AUDIT['check_runtime'](apk, DEPENDENCIES)
 
     def test_missing_media3_classes_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

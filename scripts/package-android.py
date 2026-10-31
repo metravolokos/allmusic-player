@@ -16,6 +16,9 @@ FORBIDDEN = re.compile(
     r"com[./]google[./](?:android[./]gms|firebase)|"
     r"com\.google\.gms:|play-services|firebase-|"
     r"ffmpeg|avcodec|avformat|avutil|swresample|swscale", re.I)
+GOOGLE_FORBIDDEN = re.compile(
+    r"com[./]google[./](?:android[./]gms|firebase)|"
+    r"com\.google\.gms:|play-services|firebase-", re.I)
 MEDIA3_VERSION = "1.11.1"
 EXPECTED_ASSETS = {
     "assets/audio/synthetic-440hz.mp3",
@@ -57,7 +60,7 @@ def check_runtime(apk, dependencies):
     assert "debugRuntimeClasspath" in dependencies, "Missing Gradle dependency evidence"
     assert f"androidx.media3:media3-exoplayer:{MEDIA3_VERSION}" in dependencies, \
         "Pinned Media3 ExoPlayer runtime dependency missing"
-    assert "media3-exoplayer-ffmpeg" not in dependencies.lower(), \
+    assert "media3-decoder-ffmpeg" not in dependencies.lower(), \
         "Media3 FFmpeg extension must not be packaged"
     with zipfile.ZipFile(apk) as archive:
         names = archive.namelist()
@@ -84,11 +87,14 @@ def check_runtime(apk, dependencies):
             assert not name.lower().endswith((".keystore", ".jks", ".testkey", ".pem"))
             if re.fullmatch(r"classes\d*\.dex", name):
                 data = archive.read(name)
-                assert not FORBIDDEN.search(data.decode("latin-1")), "Forbidden runtime reference in DEX"
+                # DefaultRenderersFactory reflectively probes the optional FFmpeg renderer by
+                # class-name string. Reject the extension's actual DEX class descriptor below.
+                assert not GOOGLE_FORBIDDEN.search(data.decode("latin-1")), \
+                    "Forbidden GMS/Firebase runtime reference in DEX"
                 dex_data += data
         assert b"androidx/media3/exoplayer" in dex_data, "Media3 ExoPlayer classes missing from APK"
         assert b"Media3PlaybackAdapter" in dex_data, "Qt JNI adapter missing from APK"
-        assert b"androidx/media3/exoplayer/ffmpeg" not in dex_data, \
+        assert b"Landroidx/media3/decoder/ffmpeg/" not in dex_data, \
             "Media3 FFmpeg decoder classes must not be packaged"
     return native
 
