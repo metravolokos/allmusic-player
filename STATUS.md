@@ -414,8 +414,17 @@ Gradle и ADB; Android сборка, Desktop C++ тесты, аудит факт
 Pause/Resume, seek, Stop/Play и переключение трека; WAV — регрессионный сценарий,
 пропавший файл — видимая ошибка; сворачивание — остановка. Инструкция:
 [docs/ANDROID-MEDIA3-SPIKE-TEST.md](docs/ANDROID-MEDIA3-SPIKE-TEST.md).
-Draft [PR #27](https://github.com/metravolokos/allmusic-player/pull/27) открыт.
-Android run #88 и Desktop run #122 запущены; ручной `workflow_dispatch` вернул
-GitHub 403, поэтому загрузка проверочного APK ограничена только этой явно
-заказанной PR-веткой. Размер APK и итоговые статусы будут дописаны по результатам
-run. Объединять PR до Huawei испытания нельзя.
+Кодовый SHA `83df8f95e0531d54ba446d0d3a9c80fa21a44544` прошёл [Android CI #98](https://github.com/metravolokos/allmusic-player/actions/runs/41179403741)
+и [Desktop CI #132](https://github.com/metravolokos/allmusic-player/actions/runs/41179403707)
+успешно; Linux и Windows CTest/build jobs завершились без ошибок.
+APK audit проверил debug signature, 16 KiB alignment, только arm64-v8a,
+отсутствие разрешений и Qt Multimedia/FFmpeg runtime, Media3 classes и все
+лицензии runtime dependencies. APK имеет размер 50 799 168 bytes; ZIP-комплект
+с APK, BUILD-INFO.json, SHA256SUMS, audit evidence, инструкцией и лицензиями —
+19 789 522 bytes. [Скачать Actions artifact](https://github.com/metravolokos/allmusic-player/actions/runs/41179403741/artifacts/13034078403),
+он хранится до 14.11.2026.
+
+Draft [PR #27](https://github.com/metravolokos/allmusic-player/pull/27) остаётся
+открытым. Ручное испытание слышимого звука и контролов на Huawei ещё
+**НЕ ПРОВЕРЕНО**. Не объединять PR до его успешного завершения и подтверждения
+владельцем.
