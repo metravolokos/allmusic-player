@@ -25,6 +25,16 @@ ApplicationWindow {
     readonly property color accentTextColor: darkTheme ? "#102019" : "#ffffff"
     readonly property color accentWash: darkTheme ? "#263c32" : "#e0eee5"
 
+    palette.windowText: root.textColor
+    palette.base: root.surfaceColor
+    palette.alternateBase: root.raisedColor
+    palette.text: root.textColor
+    palette.button: root.surfaceColor
+    palette.buttonText: root.textColor
+    palette.highlight: root.accentColor
+    palette.highlightedText: root.accentTextColor
+    palette.placeholderText: root.secondaryColor
+
     property string screen: "tracks"
     property string selectedArtist: ""
     property string selectedAlbumKey: ""
@@ -252,6 +262,8 @@ ApplicationWindow {
             id: pages
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.preferredHeight: Math.max(1, root.height - miniPlayer.Layout.preferredHeight
+                - navigation.Layout.preferredHeight - miniPlayerSeparator.height)
             currentIndex: root.pageIndex()
 
             Item {
@@ -339,12 +351,16 @@ ApplicationWindow {
                             elide: Text.ElideRight
                         }
                         ComboBox {
+                            id: trackSortBox
                             Layout.preferredWidth: 132
                             implicitHeight: 38
                             model: ["Название ↑", "Название ↓", "Путь"]
                             currentIndex: library.sortMode
                             Accessible.name: "Сортировка композиций"
                             onActivated: library.sortMode = index
+                            contentItem: Label { leftPadding: 12; rightPadding: 26; text: trackSortBox.displayText; color: root.textColor; font: trackSortBox.font; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                            indicator: Label { x: trackSortBox.width - width - 10; anchors.verticalCenter: parent.verticalCenter; text: "⌄"; color: root.secondaryColor; font.pixelSize: 15 }
+                            background: Rectangle { radius: 10; color: root.surfaceColor; border.color: trackSortBox.activeFocus ? root.accentColor : root.borderColor; border.width: trackSortBox.activeFocus ? 2 : 1 }
                         }
                     }
 
@@ -671,7 +687,14 @@ ApplicationWindow {
                     RowLayout {
                         Layout.alignment: Qt.AlignHCenter
                         spacing: 14
-                        ToolButton { implicitWidth: 52; implicitHeight: 52; text: "|‹"; Accessible.name: "Предыдущая композиция"; enabled: root.showcaseMode || queue.canPrevious; onClicked: if (!root.showcaseMode) queue.previous(); background: Rectangle { radius: 26; color: parent.down ? root.raisedColor : "transparent" } }
+                        ToolButton {
+                            implicitWidth: 52; implicitHeight: 52
+                            text: "|‹"; Accessible.name: "Предыдущая композиция"
+                            enabled: root.showcaseMode || queue.canPrevious
+                            onClicked: if (!root.showcaseMode) queue.previous()
+                            contentItem: Label { text: parent.text; color: root.secondaryColor; font.pixelSize: 16; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            background: Rectangle { radius: 26; color: parent.down ? root.raisedColor : "transparent" }
+                        }
                         ToolButton {
                             implicitWidth: 66; implicitHeight: 66
                             text: mediaController.pauseEnabled ? "Ⅱ" : "▶"
@@ -681,14 +704,46 @@ ApplicationWindow {
                             contentItem: Label { text: parent.text; color: root.accentTextColor; font.pixelSize: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                             background: Rectangle { radius: 33; color: root.accentColor }
                         }
-                        ToolButton { implicitWidth: 52; implicitHeight: 52; text: "›|"; Accessible.name: "Следующая композиция"; enabled: root.showcaseMode || queue.canNext; onClicked: if (!root.showcaseMode) queue.next(); background: Rectangle { radius: 26; color: parent.down ? root.raisedColor : "transparent" } }
+                        ToolButton {
+                            implicitWidth: 52; implicitHeight: 52
+                            text: "›|"; Accessible.name: "Следующая композиция"
+                            enabled: root.showcaseMode || queue.canNext
+                            onClicked: if (!root.showcaseMode) queue.next()
+                            contentItem: Label { text: parent.text; color: root.secondaryColor; font.pixelSize: 16; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            background: Rectangle { radius: 26; color: parent.down ? root.raisedColor : "transparent" }
+                        }
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        Button { Layout.fillWidth: true; implicitHeight: 42; text: queue.shuffleEnabled ? "⇄  Перемешано" : "⇄  Перемешать"; checkable: true; checked: queue.shuffleEnabled; enabled: root.showcaseMode || queue.count > 0; onToggled: if (!root.showcaseMode) queue.shuffleEnabled = checked }
-                        Button { Layout.fillWidth: true; implicitHeight: 42; text: root.repeatLabel(); enabled: root.showcaseMode || queue.count > 0; onClicked: if (!root.showcaseMode) queue.repeatMode = (queue.repeatMode + 1) % 3 }
+                        ToolButton {
+                            Layout.fillWidth: true; implicitHeight: 42
+                            text: queue.shuffleEnabled ? "⇄  Перемешано" : "⇄  Перемешать"
+                            Accessible.name: "Перемешать очередь"
+                            checkable: true; checked: queue.shuffleEnabled
+                            enabled: root.showcaseMode || queue.count > 0
+                            onToggled: if (!root.showcaseMode) queue.shuffleEnabled = checked
+                            contentItem: Label { text: parent.text; color: parent.checked ? root.accentColor : root.textColor; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                            background: Rectangle { radius: 12; color: parent.checked ? root.accentWash : root.surfaceColor; border.color: parent.checked ? root.accentColor : root.borderColor }
+                        }
+                        ToolButton {
+                            Layout.fillWidth: true; implicitHeight: 42
+                            text: root.repeatLabel(); Accessible.name: root.repeatLabel()
+                            enabled: root.showcaseMode || queue.count > 0
+                            onClicked: if (!root.showcaseMode) queue.repeatMode = (queue.repeatMode + 1) % 3
+                            contentItem: Label { text: parent.text; color: root.textColor; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                            background: Rectangle { radius: 12; color: root.surfaceColor; border.color: root.borderColor }
+                        }
                     }
-                    RowLayout { Layout.fillWidth: true; Label { Layout.fillWidth: true; text: queue.count > 0 || root.showcaseMode ? mediaController.stateText : "Очередь пуста"; color: root.secondaryColor; font.pixelSize: 12 } Button { text: "Стоп"; enabled: root.showcaseMode || queue.active; onClicked: if (!root.showcaseMode) queue.stop() } }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label { Layout.fillWidth: true; text: queue.count > 0 || root.showcaseMode ? mediaController.stateText : "Очередь пуста"; color: root.secondaryColor; font.pixelSize: 12 }
+                        ToolButton {
+                            implicitHeight: 36; text: "Стоп"; enabled: root.showcaseMode || queue.active
+                            onClicked: if (!root.showcaseMode) queue.stop()
+                            contentItem: Label { text: parent.text; color: root.textColor; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            background: Rectangle { radius: 10; color: parent.down ? root.raisedColor : root.surfaceColor; border.color: root.borderColor }
+                        }
+                    }
                     Label { Layout.fillWidth: true; visible: queue.error.length > 0 || mediaController.errorText.length > 0; text: queue.error.length ? queue.error : mediaController.errorText; color: root.darkTheme ? "#ff9a91" : "#a32119"; wrapMode: Text.WordWrap; Accessible.role: Accessible.AlertMessage }
                     RowLayout { Layout.fillWidth: true; Label { Layout.fillWidth: true; text: "Очередь"; color: root.textColor; font.pixelSize: 16; font.weight: Font.DemiBold } Label { text: (root.showcaseMode ? showcaseTracks.count : queue.count) + " тр."; color: root.secondaryColor; font.pixelSize: 12 } }
                     ListView {
@@ -791,7 +846,12 @@ ApplicationWindow {
             }
         }
 
-        Rectangle { Layout.fillWidth: true; height: root.screen === "now" || root.screen === "settings" ? 0 : 1; color: root.borderColor }
+        Rectangle {
+            id: miniPlayerSeparator
+            Layout.fillWidth: true
+            height: root.screen === "now" || root.screen === "settings" ? 0 : 1
+            color: root.borderColor
+        }
 
         RowLayout {
             id: navigation
