@@ -2,14 +2,15 @@
 
 ## Актуальная сводка — 01.11.2026
 
-- **main**: 003-A (PR #44, Android «Избранное») принят; актуальная база для Issue #48 — `bd178de4f53f76140860463026b160e50f68198d`.
-- **Issue #48 / 004-A**: [Draft PR #49](https://github.com/metravolokos/allmusic-player/pull/49), ветка `issue-48-media3-buffering` от актуального `main`. Разведены первичная подготовка и повторная буферизация, добавлена защита Pause/Stop/Disconnect от поздних состояний, сохранены JNI-коды 0–6; состояние `Buffering` добавлено кодом 7. Добавлены Qt state tests и Android source-contract tests.
-- Локально пройдены `scripts/check_repository.py`, CI Python tests (31), Android Python tests (27), `git diff --check` и отдельная компиляция/проверка state-модели через `g++`. QtTest, Windows/Linux/Android сборки и Huawei APK-проверка **НЕ ПРОВЕРЕНЫ**: в рабочем окружении нет CMake, Ninja, Qt или Gradle/Android SDK.
-- Полный трёхплатформенный CI и APK ожидаются после перевода PR в Ready согласно `docs/CI.md`.
+- **main**: актуальная база для Issue #50 — `5251e518b827d171978a38888c285d64a6b16776` (содержит PR #49).
+- **Issue #50 / 005-A**: [Draft PR #51](https://github.com/metravolokos/allmusic-player/pull/51), ветка `issue-50-fusion-player`; реализация — commit `b651190aec008bf1310ccc33c7bcf038eb156c15`. Desktop получил основной каталог Cloud Mail, открытие локального файла и закреплённые элементы плеера; Desktop и Android используют Qt Quick Controls Fusion и сохранённый локально выбор системной/светлой/тёмной темы. Android-потоки поиска, сортировки и Media3 сохранены; Android C++/Media3 логика не менялась. Добавлены регрессионные проверки UI.
+- Для PR #51 локально пройдены Android Python tests (30), CI Python tests (31), `py_compile`, `scripts/check_repository.py` и `git diff --check`. Сборки Qt/QML, CMake и Android не запускались: в окружении нет CMake, Ninja и Qt 6; установленный `qmllint` — wrapper без доступного Qt 5 бинарника.
+- PR #51 оставлен Draft. Полный Windows/Linux/Android CI и Android APK согласно `docs/CI.md` ожидаются после перевода PR в Ready; проверка APK на Huawei остаётся **НЕ ПРОВЕРЕНА**. Merge не выполнялся.
+- **Issue #48 / 004-A**: PR #49 включён в базу `main`; исправления Media3 состояний сохранены.
 - **Issue #35**: завершено тестовое закрытие mock WebDAV соединений при ранней ошибке QtTest. Сетевой и Android Media3 production-код не менялся; возможную редкую гонку не следует считать полностью исключённой одним CI-прогоном.
 - **SEL-001 / PR #34**: выборочная интеграция работающих QML→C++ контрактных тестов и проверки свойств/слотов. Тесты/CI проходят при обновлении ветки; не утверждать об успешном новом CI до фактического завершения.
 - **Исторический журнал** ниже сохранён. Описания старых draft PR являются историческими и не отражают текущее состояние; достоверный статус подтверждают GitHub PR и CI.
-- **Далее**: после ревью 004-A нужны Ready-проверки Windows/Linux/Android и ручная проверка APK на Huawei; merge — только после подтверждения владельца.
+- **Далее**: после review PR #51 подготовить Ready-проверки Windows/Linux/Android и APK для ручной проверки на Huawei; merge — только после подтверждения владельца.
 - **Критерии**: не хранить пользовательские медиа и секреты, сохранять read-only WebDAV `/AllMusic`, Android Media3, Windows/Linux/Android и CI-кеши.
 
 ## История этапов
