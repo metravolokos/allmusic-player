@@ -672,7 +672,15 @@ ApplicationWindow {
                         Layout.alignment: Qt.AlignHCenter
                         spacing: 14
                         ToolButton { implicitWidth: 52; implicitHeight: 52; text: "|‹"; Accessible.name: "Предыдущая композиция"; enabled: root.showcaseMode || queue.canPrevious; onClicked: if (!root.showcaseMode) queue.previous(); background: Rectangle { radius: 26; color: parent.down ? root.raisedColor : "transparent" } }
-                        ToolButton { implicitWidth: 66; implicitHeight: 66; text: mediaController.pauseEnabled ? "Ⅱ" : "▶"; Accessible.name: mediaController.pauseEnabled ? "Пауза" : "Воспроизвести"; enabled: root.showcaseMode || queue.count > 0; onClicked: root.togglePlayback(); contentItem: Label { text: parent.text; color: root.accentTextColor; font.pixelSize: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }; background: Rectangle { radius: 33; color: root.accentColor } }
+                        ToolButton {
+                            implicitWidth: 66; implicitHeight: 66
+                            text: mediaController.pauseEnabled ? "Ⅱ" : "▶"
+                            Accessible.name: mediaController.pauseEnabled ? "Пауза" : "Воспроизвести"
+                            enabled: root.showcaseMode || queue.count > 0
+                            onClicked: root.togglePlayback()
+                            contentItem: Label { text: parent.text; color: root.accentTextColor; font.pixelSize: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            background: Rectangle { radius: 33; color: root.accentColor }
+                        }
                         ToolButton { implicitWidth: 52; implicitHeight: 52; text: "›|"; Accessible.name: "Следующая композиция"; enabled: root.showcaseMode || queue.canNext; onClicked: if (!root.showcaseMode) queue.next(); background: Rectangle { radius: 26; color: parent.down ? root.raisedColor : "transparent" } }
                     }
                     RowLayout {
@@ -771,7 +779,14 @@ ApplicationWindow {
                     Label { Layout.fillWidth: true; text: root.displayedTitle().length ? root.displayedTitle() : "Выберите композицию"; color: root.textColor; font.pixelSize: 14; font.weight: Font.DemiBold; elide: Text.ElideRight }
                     Label { Layout.fillWidth: true; visible: root.displayedArtist().length > 0; text: root.displayedArtist(); color: root.secondaryColor; font.pixelSize: 11; elide: Text.ElideRight }
                 }
-                ToolButton { implicitWidth: 44; implicitHeight: 48; text: mediaController.pauseEnabled ? "Ⅱ" : "▶"; Accessible.name: mediaController.pauseEnabled ? "Пауза" : "Воспроизвести"; enabled: root.showcaseMode || queue.count > 0; onClicked: root.togglePlayback(); background: Rectangle { radius: 14; color: parent.down ? root.raisedColor : "transparent" } }
+                ToolButton {
+                    implicitWidth: 44; implicitHeight: 48
+                    text: mediaController.pauseEnabled ? "Ⅱ" : "▶"
+                    Accessible.name: mediaController.pauseEnabled ? "Пауза" : "Воспроизвести"
+                    enabled: root.showcaseMode || queue.count > 0
+                    onClicked: root.togglePlayback()
+                    background: Rectangle { radius: 14; color: parent.down ? root.raisedColor : "transparent" }
+                }
                 ToolButton { implicitWidth: 40; implicitHeight: 48; text: "⌃"; Accessible.name: "Открыть экран Сейчас играет"; onClicked: root.setScreen("now"); background: Rectangle { radius: 14; color: parent.down ? root.raisedColor : "transparent" } }
             }
         }
