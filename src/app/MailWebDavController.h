@@ -27,6 +27,8 @@ public:
     QString currentDirectory() const { return m_currentDirectory; }
     QVariantList entries() const;
     int entryCount() const { return m_entries.size(); }
+    int sourceIndexForStableId(const QString &stableId) const;
+    QString sourcePathForStableId(const QString &stableId) const;
 
     Q_INVOKABLE bool checkConnection(QString email, QString appPassword);
     Q_INVOKABLE bool canCheckRange(int index) const;

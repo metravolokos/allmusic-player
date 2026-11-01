@@ -5,6 +5,8 @@
 #include <QHash>
 #include <QLocale>
 #include <QSortFilterProxyModel>
+#include <QSet>
+#include <QStringList>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QVector>
@@ -20,7 +22,11 @@ public:
         IsAudioRole,
         SizeRole,
         SourceIndexRole,
-        NormalizedLabelRole
+        NormalizedLabelRole,
+        StableIdRole,
+        IsFavoriteRole,
+        IsAvailableRole,
+        IsMissingRole
     };
 
     explicit AndroidCloudTrackSourceModel(QObject *parent = nullptr);
@@ -29,9 +35,13 @@ public:
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
     void setEntries(const QVariantList &entries);
+    void setFavoriteIds(const QSet<QString> &favoriteIds);
+    int sourceIndexForStableId(const QString &stableId) const;
 
 private:
     QVector<QVariantMap> m_rows;
+    QSet<QString> m_favoriteIds;
+    QHash<QString, int> m_sourceIndicesByStableId;
 };
 
 class AndroidCloudTrackListModel final : public QSortFilterProxyModel
@@ -58,10 +68,12 @@ public:
     int resultCount() const { return rowCount(); }
 
     void setEntries(const QVariantList &entries);
+    void setFavoriteIds(const QStringList &favoriteIds);
     void setSearchText(const QString &text);
     void setSortMode(int mode);
 
     Q_INVOKABLE bool containsSourceIndex(int sourceIndex) const;
+    Q_INVOKABLE int sourceIndexForStableId(const QString &stableId) const;
 
 signals:
     void searchTextChanged();

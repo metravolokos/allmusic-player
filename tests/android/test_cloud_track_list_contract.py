@@ -38,7 +38,8 @@ class CloudTrackListContractTest(unittest.TestCase):
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
         cloud_list = block_for_id(qml, "cloudList")
 
-        self.assertIn("model: media3.cloudEntriesModel", cloud_list)
+        self.assertIn("model: root.showFavorites ? media3.favoritesModel : media3.cloudEntriesModel",
+                      cloud_list)
         self.assertIn("clip: true", cloud_list)
         self.assertIn("anchors.top: topPanel.bottom", cloud_list)
         self.assertIn("anchors.bottom: playerPanel.top", cloud_list)
@@ -110,6 +111,7 @@ class CloudTrackListContractTest(unittest.TestCase):
                 self.assertRegex(slots, rf"\b{re.escape(name)}\s*\(")
 
         for name in ("cloudEntriesModel", "cloudConnected", "cloudBusy",
+                     "favoritesModel",
                      "cloudStatus", "cloudDirectoryLabel", "activeTrackName",
                      "stateText", "errorText", "positionMs", "durationMs",
                      "playEnabled", "pauseEnabled", "stopEnabled", "seekEnabled",
@@ -120,6 +122,27 @@ class CloudTrackListContractTest(unittest.TestCase):
             with self.subTest(model_property=name):
                 self.assertRegex(model, rf"Q_PROPERTY\([^\n]*\b{re.escape(name)}\b")
         self.assertRegex(model, r"Q_INVOKABLE\s+bool\s+containsSourceIndex\s*\(")
+
+    def test_favorite_view_uses_stable_ids_and_keeps_missing_entries(self):
+        qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
+        controller = (ROOT / "src/app/AndroidMedia3Controller.h").read_text(encoding="utf-8")
+        favorites = (ROOT / "src/app/AndroidFavoritesModel.h").read_text(encoding="utf-8")
+        webdav_controller = (ROOT / "src/app/MailWebDavController.cpp").read_text(encoding="utf-8")
+
+        self.assertIn("required property string stableId", qml)
+        self.assertIn("media3.toggleFavorite(stableId, label)", qml)
+        self.assertIn("media3.removeFavorite(stableId)", qml)
+        self.assertIn("media3.favoritesModel", qml)
+        self.assertIn('text: root.showFavorites && isMissing ? label + " · недоступен"', qml)
+        self.assertIn("Q_PROPERTY(AndroidFavoritesModel *favoritesModel", controller)
+        self.assertIn("continueFavoriteNavigation()", controller)
+        self.assertIn("media3.canPlayFavorite(root.selectedFavoriteId)", qml)
+        self.assertIn("QSettings", (ROOT / "src/app/AndroidFavoritesModel.cpp").read_text(encoding="utf-8"))
+        self.assertIn("IsMissingRole", favorites)
+        self.assertIn('TrackIdentity::stableIdForPath(entry.path)', webdav_controller)
+        self.assertIn("sourcePathForStableId(const QString &stableId) const", webdav_controller)
+        self.assertNotIn('row.insert(QStringLiteral("remotePath")', webdav_controller)
+        self.assertNotIn("remotePath", qml)
 
     def test_android_manifest_locks_the_activity_to_portrait(self):
         manifest_path = ROOT / "android/AndroidManifest.xml"

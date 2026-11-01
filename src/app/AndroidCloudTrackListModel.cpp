@@ -34,6 +34,14 @@ QVariant AndroidCloudTrackSourceModel::data(const QModelIndex &index, int role) 
         return row.value(QStringLiteral("sourceIndex"));
     case NormalizedLabelRole:
         return row.value(QStringLiteral("normalizedLabel"));
+    case StableIdRole:
+        return row.value(QStringLiteral("stableId"));
+    case IsFavoriteRole:
+        return row.value(QStringLiteral("isFavorite"));
+    case IsAvailableRole:
+        return true;
+    case IsMissingRole:
+        return false;
     default:
         return {};
     }
@@ -47,12 +55,17 @@ QHash<int, QByteArray> AndroidCloudTrackSourceModel::roleNames() const
         {IsAudioRole, "isAudio"},
         {SizeRole, "size"},
         {SourceIndexRole, "sourceIndex"},
+        {StableIdRole, "stableId"},
+        {IsFavoriteRole, "isFavorite"},
+        {IsAvailableRole, "isAvailable"},
+        {IsMissingRole, "isMissing"},
     };
 }
 
 void AndroidCloudTrackSourceModel::setEntries(const QVariantList &entries)
 {
     QVector<QVariantMap> nextRows;
+    QHash<QString, int> nextSourceIndices;
     nextRows.reserve(entries.size());
     for (qsizetype index = 0; index < entries.size(); ++index) {
         const QVariantMap source = entries.at(index).toMap();
@@ -65,12 +78,40 @@ void AndroidCloudTrackSourceModel::setEntries(const QVariantList &entries)
         row.insert(QStringLiteral("isAudio"), source.value(QStringLiteral("isAudio")));
         row.insert(QStringLiteral("size"), source.value(QStringLiteral("size")));
         row.insert(QStringLiteral("sourceIndex"), static_cast<int>(index));
+        const QString stableId = source.value(QStringLiteral("stableId")).toString();
+        row.insert(QStringLiteral("stableId"), stableId);
+        row.insert(QStringLiteral("isFavorite"), m_favoriteIds.contains(stableId));
+        nextSourceIndices.insert(stableId, static_cast<int>(index));
         nextRows.push_back(std::move(row));
     }
 
     beginResetModel();
     m_rows = std::move(nextRows);
+    m_sourceIndicesByStableId = std::move(nextSourceIndices);
     endResetModel();
+}
+
+void AndroidCloudTrackSourceModel::setFavoriteIds(const QSet<QString> &favoriteIds)
+{
+    if (m_favoriteIds == favoriteIds)
+        return;
+    m_favoriteIds = favoriteIds;
+
+    bool changed = false;
+    for (QVariantMap &row : m_rows) {
+        const bool isFavorite = m_favoriteIds.contains(row.value(QStringLiteral("stableId")).toString());
+        if (row.value(QStringLiteral("isFavorite")).toBool() != isFavorite) {
+            row.insert(QStringLiteral("isFavorite"), isFavorite);
+            changed = true;
+        }
+    }
+    if (changed && !m_rows.isEmpty())
+        emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {IsFavoriteRole});
+}
+
+int AndroidCloudTrackSourceModel::sourceIndexForStableId(const QString &stableId) const
+{
+    return m_sourceIndicesByStableId.value(stableId, -1);
 }
 
 AndroidCloudTrackListModel::AndroidCloudTrackListModel(QObject *parent)
@@ -94,6 +135,16 @@ void AndroidCloudTrackListModel::setEntries(const QVariantList &entries)
         source->setEntries(entries);
         emit totalCountChanged();
         emit resultCountChanged();
+    }
+}
+
+void AndroidCloudTrackListModel::setFavoriteIds(const QStringList &favoriteIds)
+{
+    if (auto *source = sourceEntriesModel()) {
+        QSet<QString> ids;
+        for (const QString &id : favoriteIds)
+            ids.insert(id);
+        source->setFavoriteIds(ids);
     }
 }
 
@@ -129,6 +180,12 @@ bool AndroidCloudTrackListModel::containsSourceIndex(int sourceIndex) const
     if (!source || sourceIndex < 0 || sourceIndex >= source->rowCount())
         return false;
     return mapFromSource(source->index(sourceIndex, 0)).isValid();
+}
+
+int AndroidCloudTrackListModel::sourceIndexForStableId(const QString &stableId) const
+{
+    const auto *source = sourceEntriesModel();
+    return source ? source->sourceIndexForStableId(stableId) : -1;
 }
 
 bool AndroidCloudTrackListModel::filterAcceptsRow(

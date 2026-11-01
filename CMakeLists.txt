@@ -81,7 +81,10 @@ if(BUILD_TESTING)
     add_executable(android-media3-state-tests tests/android_media3/tst_android_media3_state.cpp)
     target_sources(android-media3-state-tests PRIVATE
         src/app/AndroidCloudTrackListModel.cpp
-        src/app/AndroidCloudTrackListModel.h)
+        src/app/AndroidCloudTrackListModel.h
+        src/app/AndroidFavoritesModel.cpp
+        src/app/AndroidFavoritesModel.h
+        src/app/TrackIdentity.h)
     target_include_directories(android-media3-state-tests PRIVATE src/app)
     # Headless execution of real QML -> QObject calls/properties on Desktop CI.
     target_link_libraries(android-media3-state-tests PRIVATE Qt6::Test Qt6::Qml)
