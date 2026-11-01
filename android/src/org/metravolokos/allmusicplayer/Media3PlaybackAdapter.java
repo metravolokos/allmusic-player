@@ -27,6 +27,8 @@ public final class Media3PlaybackAdapter {
     public static final int STOPPED = 4;
     public static final int FINISHED = 5;
     public static final int ERROR = 6;
+    // Append new JNI values; the original 0..6 contract is kept stable.
+    public static final int BUFFERING = 7;
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static volatile ExoPlayer player;
@@ -37,6 +39,7 @@ public final class Media3PlaybackAdapter {
     private static volatile String activeTrack = "";
     private static volatile long cloudHandle;
     private static boolean stoppedByUser;
+    private static boolean hasReachedReady;
 
     private static native long nativeSize(long handle);
     private static native boolean nativeSeek(long handle, long position);
@@ -158,7 +161,7 @@ public final class Media3PlaybackAdapter {
             long duration = current.getDuration();
             positionMs = Math.max(0, position);
             durationMs = duration == C.TIME_UNSET ? 0 : Math.max(0, duration);
-            if (current.isPlaying())
+            if (current.isPlaying() && !stoppedByUser)
                 state = PLAYING;
             MAIN.postDelayed(this, 200);
         }
@@ -181,17 +184,37 @@ public final class Media3PlaybackAdapter {
 
                     @Override
                     public void onIsPlayingChanged(boolean isPlaying) {
+                        if (stoppedByUser)
+                            return;
                         if (isPlaying) {
-                            stoppedByUser = false;
                             state = PLAYING;
                         } else if (player != null && player.getPlaybackState() == Player.STATE_READY
                                 && state == PLAYING) {
+                            state = player.getPlayWhenReady() ? READY : PAUSED;
+                        } else if (player != null
+                                && player.getPlaybackState() == Player.STATE_BUFFERING
+                                && !player.getPlayWhenReady() && !stoppedByUser) {
+                            state = PAUSED;
+                        }
+                    }
+
+                    @Override
+                    public void onPlayWhenReadyChanged(boolean playWhenReady, int reason) {
+                        if (stoppedByUser || player == null)
+                            return;
+                        if (player.getPlaybackState() == Player.STATE_BUFFERING) {
+                            state = playWhenReady
+                                    ? (hasReachedReady ? BUFFERING : PREPARING) : PAUSED;
+                        } else if (player.getPlaybackState() == Player.STATE_READY
+                                && !playWhenReady) {
                             state = PAUSED;
                         }
                     }
 
                     @Override
                     public void onPlayerError(PlaybackException exception) {
+                        if (stoppedByUser)
+                            return;
                         stoppedByUser = false;
                         state = ERROR;
                         String code = PlaybackException.getErrorCodeName(exception.errorCode);
@@ -233,6 +256,7 @@ public final class Media3PlaybackAdapter {
             positionMs = 0;
             durationMs = 0;
             stoppedByUser = false;
+            hasReachedReady = false;
             state = PREPARING;
             try {
                 Uri uri = Uri.parse("asset:///" + assetPath);
@@ -260,6 +284,7 @@ public final class Media3PlaybackAdapter {
             positionMs = 0;
             durationMs = 0;
             stoppedByUser = false;
+            hasReachedReady = false;
             state = PREPARING;
             try {
                 Uri uri = Uri.parse("allmusic://stream/" + Long.toUnsignedString(handle));
@@ -280,9 +305,11 @@ public final class Media3PlaybackAdapter {
         MAIN.post(() -> {
             if (handle <= 0 || cloudHandle != handle)
                 return;
+            stoppedByUser = true;
             nativeInterrupt(handle);
             ExoPlayer current = player;
             if (current != null) {
+                current.pause();
                 current.stop();
                 current.clearMediaItems();
             }
@@ -290,6 +317,8 @@ public final class Media3PlaybackAdapter {
             activeTrack = "";
             positionMs = 0;
             durationMs = 0;
+            hasReachedReady = false;
+            errorText = "";
             state = STOPPED;
         });
     }
@@ -297,13 +326,18 @@ public final class Media3PlaybackAdapter {
     public static void reportNativeError(String message) {
         MAIN.post(() -> {
             ExoPlayer current = player;
+            if (stoppedByUser)
+                return;
             if (cloudHandle > 0)
                 nativeInterrupt(cloudHandle);
-            if (current != null)
+            if (current != null) {
+                current.pause();
                 current.stop();
+            }
             state = ERROR;
             errorText = message == null || message.isEmpty()
                     ? "Cloud Mail stream failed." : message;
+            hasReachedReady = false;
         });
     }
 
@@ -319,7 +353,10 @@ public final class Media3PlaybackAdapter {
             if (current.getPlaybackState() == Player.STATE_ENDED)
                 current.seekToDefaultPosition();
             current.play();
-            state = current.getPlaybackState() == Player.STATE_READY ? PLAYING : PREPARING;
+            state = current.getPlaybackState() == Player.STATE_BUFFERING
+                    ? (hasReachedReady ? BUFFERING : PREPARING)
+                    : (current.isPlaying() ? PLAYING
+                            : (current.getPlaybackState() == Player.STATE_READY ? READY : PREPARING));
         });
     }
 
@@ -329,7 +366,7 @@ public final class Media3PlaybackAdapter {
             if (current == null)
                 return;
             current.pause();
-            if (current.getPlaybackState() != Player.STATE_IDLE)
+            if (current.getPlaybackState() != Player.STATE_IDLE && !stoppedByUser)
                 state = PAUSED;
         });
     }
@@ -342,6 +379,7 @@ public final class Media3PlaybackAdapter {
             stoppedByUser = true;
             if (cloudHandle > 0)
                 nativeInterrupt(cloudHandle);
+            current.pause();
             current.stop();
             current.seekToDefaultPosition();
             positionMs = 0;
@@ -372,6 +410,8 @@ public final class Media3PlaybackAdapter {
                 nativeRelease(handle);
             if (current != null)
                 current.release();
+            stoppedByUser = true;
+            hasReachedReady = false;
             positionMs = 0;
             durationMs = 0;
             state = STOPPED;
@@ -395,19 +435,23 @@ public final class Media3PlaybackAdapter {
     }
 
     private static void updatePlaybackState(int playbackState) {
-        if (state == ERROR)
+        if (state == ERROR || stoppedByUser)
             return;
         if (playbackState == Player.STATE_BUFFERING) {
-            state = PREPARING;
+            state = player != null && !player.getPlayWhenReady() ? PAUSED
+                    : (hasReachedReady ? BUFFERING : PREPARING);
         } else if (playbackState == Player.STATE_READY) {
+            hasReachedReady = true;
             if (player != null && player.isPlaying())
                 state = PLAYING;
-            else if (state != PAUSED && state != STOPPED)
+            else if (player != null && !player.getPlayWhenReady())
+                state = PAUSED;
+            else
                 state = READY;
         } else if (playbackState == Player.STATE_ENDED) {
             state = FINISHED;
         } else if (playbackState == Player.STATE_IDLE) {
-            state = stoppedByUser ? STOPPED : (activeTrack.isEmpty() ? READY : PREPARING);
+            state = activeTrack.isEmpty() ? READY : PREPARING;
         }
     }
 }

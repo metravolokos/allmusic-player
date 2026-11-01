@@ -56,6 +56,78 @@ private slots:
         QVERIFY(actions.stop);
     }
 
+    void rebufferingKeepsPlaybackControlsAvailable()
+    {
+        const auto actions = AndroidMedia3State::actions(AndroidMedia3State::Value::Buffering);
+        QVERIFY(!actions.play);
+        QVERIFY(actions.pause);
+        QVERIFY(actions.stop);
+        QVERIFY(AndroidMedia3State::seekEnabled(AndroidMedia3State::Value::Buffering, true));
+        QVERIFY(!AndroidMedia3State::seekEnabled(AndroidMedia3State::Value::Buffering, false));
+    }
+
+    void appendedJniStatePreservesExistingNumbers()
+    {
+        QCOMPARE(static_cast<int>(AndroidMedia3State::Value::Preparing), 0);
+        QCOMPARE(static_cast<int>(AndroidMedia3State::Value::Ready), 1);
+        QCOMPARE(static_cast<int>(AndroidMedia3State::Value::Playing), 2);
+        QCOMPARE(static_cast<int>(AndroidMedia3State::Value::Paused), 3);
+        QCOMPARE(static_cast<int>(AndroidMedia3State::Value::Stopped), 4);
+        QCOMPARE(static_cast<int>(AndroidMedia3State::Value::Finished), 5);
+        QCOMPARE(static_cast<int>(AndroidMedia3State::Value::Error), 6);
+        QCOMPARE(static_cast<int>(AndroidMedia3State::Value::Buffering), 7);
+    }
+
+    void stoppedStateRejectsLateMedia3UpdatesUntilNewPlay()
+    {
+        for (const auto incoming : {AndroidMedia3State::Value::Preparing,
+                                    AndroidMedia3State::Value::Ready,
+                                    AndroidMedia3State::Value::Playing,
+                                    AndroidMedia3State::Value::Buffering}) {
+            QVERIFY(!AndroidMedia3State::acceptsRemoteUpdate(
+                AndroidMedia3State::Value::Stopped, incoming));
+        }
+        QVERIFY(AndroidMedia3State::acceptsRemoteUpdate(
+            AndroidMedia3State::Value::Stopped, AndroidMedia3State::Value::Stopped));
+        QVERIFY(AndroidMedia3State::acceptsRemoteUpdate(
+            AndroidMedia3State::Value::Preparing, AndroidMedia3State::Value::Buffering));
+    }
+
+    void pausedStateRejectsLateBufferingOrPlayingUpdates()
+    {
+        QVERIFY(!AndroidMedia3State::acceptsRemoteUpdate(
+            AndroidMedia3State::Value::Paused, AndroidMedia3State::Value::Buffering));
+        QVERIFY(!AndroidMedia3State::acceptsRemoteUpdate(
+            AndroidMedia3State::Value::Paused, AndroidMedia3State::Value::Playing));
+        QVERIFY(AndroidMedia3State::acceptsRemoteUpdate(
+            AndroidMedia3State::Value::Paused, AndroidMedia3State::Value::Error));
+        QVERIFY(AndroidMedia3State::acceptsRemoteUpdate(
+            AndroidMedia3State::Value::Preparing, AndroidMedia3State::Value::Playing));
+    }
+
+    void playSeekPauseAndStopTransitionsRemainValid()
+    {
+        using State = AndroidMedia3State::Value;
+        State state = State::Preparing;
+        QVERIFY(AndroidMedia3State::acceptsRemoteUpdate(state, State::Buffering));
+        state = State::Buffering;
+        QVERIFY(AndroidMedia3State::acceptsRemoteUpdate(state, State::Playing));
+        state = State::Playing;
+
+        // A seek can buffer again after playback has already started.
+        QVERIFY(AndroidMedia3State::acceptsRemoteUpdate(state, State::Buffering));
+        state = State::Buffering;
+        QVERIFY(AndroidMedia3State::acceptsRemoteUpdate(state, State::Paused));
+        state = State::Paused;
+        // A local Play command changes the UI intent before Java resumes.
+        state = State::Preparing;
+        QVERIFY(AndroidMedia3State::acceptsRemoteUpdate(state, State::Playing));
+        state = State::Playing;
+        QVERIFY(AndroidMedia3State::acceptsRemoteUpdate(state, State::Stopped));
+        state = State::Stopped;
+        QVERIFY(!AndroidMedia3State::acceptsRemoteUpdate(state, State::Playing));
+    }
+
     void pausedPlaybackAllowsResumeOrStop()
     {
         const auto actions = AndroidMedia3State::actions(AndroidMedia3State::Value::Paused);
@@ -77,6 +149,8 @@ private slots:
         QVERIFY(!AndroidMedia3State::seekEnabled(AndroidMedia3State::Value::Ready, false));
         QVERIFY(!AndroidMedia3State::seekEnabled(AndroidMedia3State::Value::Preparing, true));
         QVERIFY(!AndroidMedia3State::seekEnabled(AndroidMedia3State::Value::Error, true));
+        QVERIFY(!AndroidMedia3State::seekEnabled(AndroidMedia3State::Value::Stopped, true));
+        QVERIFY(!AndroidMedia3State::seekEnabled(AndroidMedia3State::Value::Finished, true));
         QVERIFY(AndroidMedia3State::seekEnabled(AndroidMedia3State::Value::Playing, true));
         QVERIFY(AndroidMedia3State::seekEnabled(AndroidMedia3State::Value::Paused, true));
     }

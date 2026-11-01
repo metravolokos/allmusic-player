@@ -495,11 +495,7 @@ Window {
             Text {
                 width: parent.width
                 height: 18
-                text: root.showFavorites && root.selectedFavoriteId.length > 0
-                      ? "Избранное: " + root.selectedCloudLabel
-                      : root.selectedCloudIndex >= 0
-                        ? "Выбрано: " + root.selectedCloudLabel
-                      : "Активный трек: " + media3.activeTrackName + " · " + media3.stateText
+                text: "Активный трек: " + media3.activeTrackName + " · " + media3.stateText
                 color: "#17212b"
                 font.pixelSize: 12
                 verticalAlignment: Text.AlignVCenter
