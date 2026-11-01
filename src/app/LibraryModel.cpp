@@ -184,7 +184,8 @@ void LibraryModel::setRemoteTracks(const QVector<Track> &tracks)
         if (!remote.metadataLoaded)
             remote.title = fallbackTitle(remote.path);
         const auto cachedIt = cached.constFind(remote.stableId);
-        if (cachedIt != cached.cend() && sameVersion(cachedIt.value(), remote)
+        if (!remote.metadataLoaded && cachedIt != cached.cend()
+            && sameVersion(cachedIt.value(), remote)
             && cachedIt->metadataLoaded) {
             remote.title = cachedIt->title;
             remote.artist = cachedIt->artist;
