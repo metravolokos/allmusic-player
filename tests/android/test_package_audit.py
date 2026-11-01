@@ -132,6 +132,28 @@ class PublicationBoundary(unittest.TestCase):
             with self.assertRaises(AssertionError):
                 AUDIT['check_runtime'](apk, DEPENDENCIES)
 
+    def test_fusion_qt_controls_are_audited_without_widening_unknown_modules(self):
+        # Exact names observed in the 6.12.0 Android arm64 APK after enabling Fusion.
+        qt_modules = (
+            "QuickControls2", "QuickControls2Impl", "QuickControls2Basic",
+            "QuickControls2BasicStyleImpl", "QuickControls2Fusion",
+            "QuickControls2FusionStyleImpl", "QuickControls2FluentWinUI3",
+            "QuickControls2FluentWinUI3StyleImpl", "QuickControls2Imagine",
+            "QuickControls2ImagineStyleImpl", "QuickControls2Material",
+            "QuickControls2MaterialStyleImpl", "QuickControls2Universal",
+            "QuickControls2UniversalStyleImpl", "QuickEffects", "QuickLayouts",
+            "QuickShapes", "QuickTemplates2",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            apk = Path(directory) / 'fusion.apk'
+            extra = tuple('libQt6' + module for module in qt_modules)
+            write_test_apk(apk, extra_native=extra)
+            self.assertEqual(len(AUDIT['check_runtime'](apk, DEPENDENCIES)),
+                             len(NATIVE) + len(extra))
+            write_test_apk(apk, extra_native=('libQt6QuickControls2Unreviewed',))
+            with self.assertRaisesRegex(AssertionError, 'Review Qt module license'):
+                AUDIT['check_runtime'](apk, DEPENDENCIES)
+
     def test_media3_dependency_is_required(self):
         with tempfile.TemporaryDirectory() as directory:
             apk = Path(directory) / 'fixture.apk'

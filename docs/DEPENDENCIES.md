@@ -18,7 +18,13 @@
 | install-qt-action / aqtinstall | Установщик CI, точный action закреплён SHA | [MIT](https://github.com/jurplel/install-qt-action/blob/v4/LICENSE), [MIT](https://github.com/miurahr/aqtinstall/blob/master/LICENSE) |
 
 FFmpeg, TagLib, SQLite и Qt Multimedia в задаче 000 не подключаются.
-Qt Quick Controls не требуется: экран использует Qt Quick и QtQuick.Window.
+С этапа 005-A используется Qt Quick Controls 2 в стиле Fusion (Qt Declarative
+6.12.0, открытая LGPLv3 либо альтернативная GPL/commercial). В Android APK
+`androiddeployqt` также упаковывает зависимости Quick Controls и дополнительные
+style plugins. Их точные названия из проверенной сборки перечислены в
+`scripts/package-android.py`; неизвестные библиотеки по-прежнему блокируют
+публикацию. Соответствующие исходники и тексты лицензий Qt Declarative
+включаются в распространяемый комплект.
 В Windows-пакете исключены необязательные плагины imageformats/iconengines,
 чтобы текстовый экран не подтягивал Qt SVG. PNG для снимка поддерживает Qt Gui.
 Не следует считать все модули Qt доступными под LGPL: каждый новый модуль
