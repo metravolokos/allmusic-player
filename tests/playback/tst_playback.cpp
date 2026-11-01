@@ -17,6 +17,8 @@ private slots:
         QVERIFY(!engine.openLocal(QUrl("https://example.invalid/music.mp3")));
         QVERIFY(engine.player()->source().isEmpty());
         QVERIFY(!engine.error().isEmpty());
+        QVERIFY(!engine.openLocal(QUrl("http://example.invalid/music.mp3")));
+        QVERIFY(engine.player()->source().isEmpty());
         QVERIFY(!engine.openLocal(QUrl("file://server/share/music.mp3")));
         QVERIFY(!engine.openLocal(QUrl::fromLocalFile("/not-present-001b1.mp3")));
         QTemporaryDir dir;
