@@ -2,6 +2,7 @@
 
 #include <QQuickStyle>
 #include <QGuiApplication>
+#include <QStyleHints>
 #include <QSettings>
 #include <QColor>
 #include <Qt>
@@ -53,11 +54,10 @@ void AppearanceController::applyColorScheme()
     const Qt::ColorScheme scheme = m_themeMode == QStringLiteral("dark") ? Qt::ColorScheme::Dark
         : m_themeMode == QStringLiteral("light") ? Qt::ColorScheme::Light
                                                   : Qt::ColorScheme::Unknown;
-    QQuickStyle::setColorScheme(scheme);
-
     auto *application = qobject_cast<QGuiApplication *>(QCoreApplication::instance());
     if (!application)
         return;
+    application->styleHints()->setColorScheme(scheme);
     if (m_themeMode == QStringLiteral("system")) {
         application->setPalette(m_systemPalette);
         return;
