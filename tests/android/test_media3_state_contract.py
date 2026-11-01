@@ -40,15 +40,16 @@ class Media3StateContractTest(unittest.TestCase):
         self.assertIn("current.pause();\n            current.stop();", java)
         self.assertIn("acceptsRemoteUpdate(m_state, remoteState)", controller)
 
-    def test_buffering_text_is_shown_by_the_android_player_panel(self):
+    def test_media3_state_and_buffering_text_are_visible_in_the_android_player(self):
         controller = (ROOT / "src/app/AndroidMedia3Controller.cpp")
         controller = controller.read_text(encoding="utf-8")
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
 
         self.assertIn('Value::Buffering: return tr("Буферизация Media3")', controller)
-        self.assertIn("media3.stateText", qml)
-        self.assertIn(r'"\nПлеер: " + media3.activeTrackName + " · " + media3.stateText', qml)
-        self.assertIn('"Избранное: " + root.selectedCloudLabel', qml)
+        self.assertIn("mediaController.stateText", qml)
+        self.assertIn('text: "Состояние воспроизведения: " + mediaController.stateText', qml)
+        self.assertIn('id: miniPlayer', qml)
+        self.assertIn('text: root.displayedTitle().length ? root.displayedTitle()', qml)
 
 
 if __name__ == "__main__":

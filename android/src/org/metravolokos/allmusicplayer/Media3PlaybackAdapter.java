@@ -38,6 +38,7 @@ public final class Media3PlaybackAdapter {
     private static volatile String errorText = "";
     private static volatile String activeTrack = "";
     private static volatile long cloudHandle;
+    private static volatile long cloudGeneration = -1;
     private static boolean stoppedByUser;
     private static boolean hasReachedReady;
 
@@ -251,6 +252,7 @@ public final class Media3PlaybackAdapter {
 
             boolean resume = current.getPlayWhenReady() || current.isPlaying();
             cloudHandle = 0;
+            cloudGeneration = -1;
             activeTrack = title == null ? "" : title;
             errorText = "";
             positionMs = 0;
@@ -271,6 +273,10 @@ public final class Media3PlaybackAdapter {
     }
 
     public static void selectCloudTrack(long handle) {
+        selectCloudTrack(handle, 0);
+    }
+
+    public static void selectCloudTrack(long handle, long generation) {
         MAIN.post(() -> {
             ExoPlayer current = player;
             if (current == null || handle <= 0) {
@@ -279,6 +285,7 @@ public final class Media3PlaybackAdapter {
                 return;
             }
             cloudHandle = handle;
+            cloudGeneration = generation;
             activeTrack = "Cloud Mail stream";
             errorText = "";
             positionMs = 0;
@@ -314,6 +321,7 @@ public final class Media3PlaybackAdapter {
                 current.clearMediaItems();
             }
             cloudHandle = 0;
+            cloudGeneration = -1;
             activeTrack = "";
             positionMs = 0;
             durationMs = 0;
@@ -420,6 +428,10 @@ public final class Media3PlaybackAdapter {
 
     public static int stateCode() {
         return state;
+    }
+
+    public static long currentCloudGeneration() {
+        return cloudGeneration;
     }
 
     public static long positionMs() {

@@ -189,6 +189,14 @@ jobs:
         run: xvfb-run -a ctest --preset desktop-release --verbose
         env:
           QT_QPA_PLATFORM: xcb
+      - name: Сохранить снимки экранов для проверки PR
+        if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || github.event_name == 'release'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: AllMusicPlayer-UI-Screenshots-${{ github.run_id }}
+          path: build/desktop-release/window-smoke*.png
+          if-no-files-found: error
+          retention-days: ${{ github.event_name == 'release' && 90 || 14 }}
       - name: Показать отчёт QtTest
         if: always()
         run: |
@@ -333,7 +341,7 @@ jobs:
           echo "Исходный commit: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
           echo "Ветка/событие: $GITHUB_REF_NAME / $GITHUB_EVENT_NAME" >> "$GITHUB_STEP_SUMMARY"
       - name: Сохранить Windows ZIP для ручной проверки или релиза
-        if: (github.event_name == 'release') || (github.event_name == 'workflow_dispatch' && inputs.windows_zip)
+        if: (github.event_name == 'release') || (github.event_name == 'workflow_dispatch' && inputs.windows_zip) || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: AllMusicPlayer-Windows-x64-${{ github.run_id }}

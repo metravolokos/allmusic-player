@@ -96,7 +96,18 @@ def check_runtime(apk, dependencies):
         assert any("libQt6Quick" in n for n in native), "Qt runtime must be bundled"
         # Licensing scope is deliberately narrow: a new Qt module needs review.
         allowed_qt = {"Concurrent", "Core", "Gui", "Network", "OpenGL",
-                      "Qml", "QmlMeta", "QmlModels", "QmlWorkerScript", "Quick", "QmlBuiltins"}
+                      "Qml", "QmlMeta", "QmlModels", "QmlWorkerScript", "Quick", "QmlBuiltins",
+                      # Qt Declarative 6.12.0: Quick Controls 2, Fusion and style plugins
+                      # that androiddeployqt includes in the audited APK. Keep exact names;
+                      # any future/new Qt module must still stop publication for review.
+                      "QuickControls2", "QuickControls2Impl", "QuickControls2Basic",
+                      "QuickControls2BasicStyleImpl", "QuickControls2Fusion",
+                      "QuickControls2FusionStyleImpl", "QuickControls2FluentWinUI3",
+                      "QuickControls2FluentWinUI3StyleImpl", "QuickControls2Imagine",
+                      "QuickControls2ImagineStyleImpl", "QuickControls2Material",
+                      "QuickControls2MaterialStyleImpl", "QuickControls2Universal",
+                      "QuickControls2UniversalStyleImpl", "QuickEffects", "QuickLayouts",
+                      "QuickShapes", "QuickTemplates2"}
         for name in native:
             match = re.search(r"/libQt6(\w+)_arm64-v8a\.so$", name)
             assert not match or match[1] in allowed_qt, f"Review Qt module license: {name}"

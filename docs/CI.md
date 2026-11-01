@@ -52,9 +52,9 @@ GitHub API подтвердил, что `main` защищена и требуе�
 
 ## Артефакты и безопасность
 
-- Draft PR не загружает Windows ZIP или Android APK. Ready PR, требующий Android binary job, **автоматически публикует Android APK и комплект лицензий только после успешной сборки и аудита APK** (14 дней), чтобы владелец мог установить приложение без ручного запуска workflow. Готовые Windows ZIP и WebDAV test kit из обычного PR не публикуются; если изменена упаковка, её проверяют на runner без автоматической выдачи ZIP.
+- Draft PR не загружает Windows ZIP или Android APK. Ready PR, требующий Android binary job, **автоматически публикует Android APK и комплект лицензий только после успешной сборки и аудита APK** (14 дней), чтобы владелец мог установить приложение без ручного запуска workflow. Обычный Ready PR не публикует Windows ZIP; для PR #51, где владелец прямо запросил сборки для проверки, Windows x64 ZIP загружается после успешной Windows упаковки, а PNG экранов — после успешного Linux CTest. Их наличие само по себе не означает успех другого workflow или всей проверки PR. WebDAV test kit из обычного PR не публикуется.
 - Синтетические тестовые аудиофикстуры могут сохраняться только на один день для платформенных тестов. Диагностика при ошибке сохраняется на три дня.
-- Ручной `workflow_dispatch` сохраняет ZIP/APK только при выбранном флажке; релиз сохраняет комплекты 90 дней. Ready PR Android и ручные артефакты хранятся 14 дней.
+- Ручной `workflow_dispatch` сохраняет ZIP/APK только при выбранном флажке; релиз сохраняет комплекты 90 дней. Ready PR Android и ручные артефакты хранятся 14 дней. В PR #51 Windows ZIP и PNG экраны также хранятся 14 дней.
 - APK audit проверяет manifest с единственным `INTERNET` разрешением, подпись и выравнивание, ABI, Media3/Qt runtime и Maven license metadata. Неизвестная Maven-лицензия останавливает аудит.
 - Windows ZIP содержит FFmpeg/Qt notices; WebDAV test kit собирает Qt Base/Declarative notices; Android kit содержит Qt/NDK notices, Media3 Apache-2.0 и распознанные лицензии Gradle runtime.
 - Workflow сохраняют `permissions: contents: read`, `persist-credentials: false` в checkout и `concurrency.cancel-in-progress`. В кэши не попадают Gradle home, Android SDK/NDK, signing files, credentials, секреты, токены, ключи или медиатека.
@@ -66,7 +66,7 @@ GitHub API подтвердил, что `main` защищена и требуе�
 3. Для Windows отметьте `windows_zip`, `webdav_test_kit` или обе опции. Для Android отметьте `android_apk` для скачиваемого комплекта либо `full_tests` для сборки и аудита без сохранения APK. Desktop `full_tests` запускает Linux и Windows.
 4. Скачайте выбранный артефакт со страницы run. Отчёт и `BUILD-INFO.json` содержат source SHA.
 
-`source_ref`, `full_tests`, `android_apk` и package inputs сохранены. APK для Ready PR с Android binary job загружается автоматически после аудита. Ручная сборка остаётся для отдельных запросов, Windows ZIP — по ручному запросу или при релизе. Автоматическая выгрузка после Ready не разрешает merge без обязательных успешных CI и ручного подтверждения владельца.
+`source_ref`, `full_tests`, `android_apk` и package inputs сохранены. APK для Ready PR с Android binary job загружается автоматически после аудита. Windows ZIP для PR #51 сохранится автоматически по прямому запросу владельца. Автоматическая выгрузка после Ready не разрешает merge без обязательных успешных CI и ручного подтверждения владельца.
 
 ## Кэши
 

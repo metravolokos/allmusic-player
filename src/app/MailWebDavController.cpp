@@ -1,11 +1,29 @@
 #include "MailWebDavController.h"
 #include "MailWebDavRangeDevice.h"
+#include "AudioMetadataReader.h"
 #include "TrackIdentity.h"
+
+#include <QTimer>
 
 #include <utility>
 
+namespace {
+constexpr qint64 LibraryMetadataRangeLimit = 64 * 1024;
+constexpr int LibraryEntryLimit = 20000;
+
+bool pathIsInsideMusicRoot(const QString &path, bool directory)
+{
+    const QString candidate = directory && !path.endsWith(u'/') ? path + u'/' : path;
+    return candidate.startsWith(QStringLiteral("/AllMusic/"))
+        && !candidate.contains(QStringLiteral("//"))
+        && !candidate.contains(QStringLiteral("/../"))
+        && !candidate.contains(QStringLiteral("/./"));
+}
+}
+
 MailWebDavController::MailWebDavController(QObject *parent, bool streamableFormatsOnly)
-    : QObject(parent), m_streamableFormatsOnly(streamableFormatsOnly)
+    : QObject(parent), m_libraryModel(new LibraryModel(this)),
+      m_streamableFormatsOnly(streamableFormatsOnly)
 {
 }
 
@@ -76,6 +94,11 @@ QString MailWebDavController::sourcePathForStableId(const QString &stableId) con
     return {};
 }
 
+QString MailWebDavController::titleForStableId(const QString &stableId) const
+{
+    return m_libraryModel ? m_libraryModel->trackForStableId(stableId).title : QString();
+}
+
 int MailWebDavController::sourceIndexForStableId(const QString &stableId) const
 {
     if (!TrackIdentity::isValidStableId(stableId))
@@ -113,8 +136,6 @@ QString MailWebDavController::displayName(const QString &path, bool directory)
     QString name = cleanPath.mid(slash + 1);
     if (directory)
         name += QStringLiteral("  · папка");
-    else
-        name += QStringLiteral("  · аудио");
     return name;
 }
 
@@ -186,6 +207,14 @@ bool MailWebDavController::canPlay(int index) const
     return !entry.directory && isStreamable(entry.path) && entry.size && *entry.size > 0;
 }
 
+bool MailWebDavController::canPlayStableId(const QString &stableId) const
+{
+    if (!m_connected || !m_probe || !TrackIdentity::isValidStableId(stableId))
+        return false;
+    const LibraryModel::Track track = m_libraryModel->trackForStableId(stableId);
+    return track.available && track.playable && track.size > 0;
+}
+
 void MailWebDavController::play(int index)
 {
     if (canPlay(index))
@@ -198,6 +227,16 @@ void MailWebDavController::setPlaybackActive(bool active)
         return;
     m_playbackActive = active;
     emit stateChanged();
+    if (!active && m_indexing) {
+        QTimer::singleShot(250, this, [this] {
+            if (!m_indexing || m_playbackActive || !m_indexProbe || m_indexProbe->busy())
+                return;
+            if (m_scanDiscovering)
+                requestNextLibraryDirectory();
+            else
+                requestNextTrackTags();
+        });
+    }
 }
 
 MailWebDavRangeDevice *MailWebDavController::takePlaybackDevice(
@@ -209,6 +248,22 @@ MailWebDavRangeDevice *MailWebDavController::takePlaybackDevice(
     if (displayLabel)
         *displayLabel = displayName(entry.path, false);
     return new MailWebDavRangeDevice(entry, m_probe->email, m_probe->password, parent);
+}
+
+MailWebDavRangeDevice *MailWebDavController::takePlaybackDeviceForStableId(
+    const QString &stableId, QString *displayLabel, QObject *parent)
+{
+    if (!canPlayStableId(stableId))
+        return nullptr;
+    const LibraryModel::Track track = m_libraryModel->trackForStableId(stableId);
+    for (const auto &entry : m_scanEntries) {
+        if (TrackIdentity::stableIdForPath(entry.path) != stableId)
+            continue;
+        if (displayLabel)
+            *displayLabel = track.title;
+        return new MailWebDavRangeDevice(entry, m_probe->email, m_probe->password, parent);
+    }
+    return nullptr;
 }
 
 void MailWebDavController::checkRange(int index)
@@ -236,6 +291,8 @@ void MailWebDavController::disconnectCloud()
     m_entries.clear();
     m_busy = false;
     m_connected = false;
+    if (m_libraryModel)
+        m_libraryModel->markUnavailable();
     emit entriesChanged();
     setStatus(QStringLiteral("Отключено. Временная сессия и учётные данные удалены."));
     emit sessionEnded();
@@ -243,12 +300,36 @@ void MailWebDavController::disconnectCloud()
 
 void MailWebDavController::dropSession()
 {
+    ++m_scanGeneration;
+    if (m_indexProbe) {
+        MailWebDavProbe *oldIndexProbe = m_indexProbe;
+        m_indexProbe = nullptr;
+        QObject::disconnect(oldIndexProbe, nullptr, this, nullptr);
+        oldIndexProbe->cancel();
+        oldIndexProbe->clearCredentials();
+        oldIndexProbe->deleteLater();
+    }
+    if (m_indexing) {
+        m_indexing = false;
+        emit indexingChanged();
+        if (m_libraryModel)
+            m_libraryModel->updateScanProgress(false, 0, 0);
+    }
+    m_scanEntries.clear();
+    m_scanDirectories.clear();
+    m_scanVisitedDirectories.clear();
+    m_scanQueuedDirectories.clear();
+    m_scanTrackPaths.clear();
+    m_scanMetadataCursor = 0;
+    m_scanMetadataCompleted = 0;
     m_pendingEmail.fill(QChar(u'\0'));
     m_pendingEmail.clear();
     m_pendingAppPassword.fill(QChar(u'\0'));
     m_pendingAppPassword.clear();
     emit disconnectPlayback();
     m_playbackActive = false;
+    if (m_libraryModel)
+        m_libraryModel->markUnavailable();
     if (!m_probe)
         return;
     MailWebDavProbe *old = m_probe;
@@ -512,6 +593,7 @@ void MailWebDavController::handleCompleted(const MailWebDavProbe::Result &result
 
     if (result.listing) {
         if (result.error == MailWebDavProbe::Error::None) {
+            const bool firstListing = !m_connected;
             m_entries.clear();
             for (const auto &entry : result.entries) {
                 if (entry.directory || (m_streamableFormatsOnly
@@ -528,6 +610,8 @@ void MailWebDavController::handleCompleted(const MailWebDavProbe::Result &result
             setStatus(text);
             emit entriesChanged();
             emit stateChanged();
+            if (firstListing)
+                startLibraryIndex();
             return;
         }
         const QString message = errorText(result);
@@ -550,5 +634,204 @@ void MailWebDavController::handleCompleted(const MailWebDavProbe::Result &result
         emit sessionEnded();
     }
     setStatus(message);
+    emit stateChanged();
+}
+
+void MailWebDavController::startLibraryIndex()
+{
+    if (!m_connected || !m_probe || m_probe->email.isEmpty() || m_probe->password.isEmpty())
+        return;
+    ++m_scanGeneration;
+    const quint64 generation = m_scanGeneration;
+    m_scanEntries.clear();
+    m_scanDirectories.clear();
+    m_scanVisitedDirectories.clear();
+    m_scanQueuedDirectories.clear();
+    m_scanTrackPaths.clear();
+    m_scanVisitedDirectories.insert(QStringLiteral("/AllMusic/"));
+    m_scanMetadataCursor = 0;
+    m_scanMetadataCompleted = 0;
+    m_scanDiscovering = true;
+    m_indexing = true;
+    emit indexingChanged();
+    m_libraryModel->updateScanProgress(true, 0, 0);
+    m_indexProbe = new MailWebDavProbe(this);
+    connect(m_indexProbe, &MailWebDavProbe::completed, this,
+            [this, generation](const MailWebDavProbe::Result &result) {
+        handleIndexCompleted(result, generation);
+    });
+    QString email = m_probe->email;
+    QString password = m_probe->password;
+    const bool started = m_indexProbe->listAllMusic(email, password);
+    email.fill(QChar(u'\0'));
+    password.fill(QChar(u'\0'));
+    if (!started)
+        finishLibraryIndex(QStringLiteral("Не удалось начать фоновое сканирование медиатеки."));
+}
+
+void MailWebDavController::handleIndexCompleted(const MailWebDavProbe::Result &result,
+                                                  quint64 generation)
+{
+    if (!m_indexing || generation != m_scanGeneration || !m_indexProbe)
+        return;
+
+    if (result.error == MailWebDavProbe::Error::Auth
+        || result.error == MailWebDavProbe::Error::Forbidden
+        || result.error == MailWebDavProbe::Error::Tls
+        || result.error == MailWebDavProbe::Error::UnsafePath) {
+        const QString message = errorText(result);
+        finishLibraryIndex(QStringLiteral("Сканирование медиатеки остановлено: %1").arg(message));
+        dropSession();
+        m_connected = false;
+        m_entries.clear();
+        emit entriesChanged();
+        emit sessionEnded();
+        return;
+    }
+
+    if (result.listing) {
+        if (result.error != MailWebDavProbe::Error::None) {
+            finishLibraryIndex(QStringLiteral("Сканирование медиатеки остановлено: %1")
+                                   .arg(errorText(result)));
+            return;
+        }
+        for (const auto &entry : result.entries) {
+                if (entry.directory) {
+                    if (pathIsInsideMusicRoot(entry.path, true)
+                        && !m_scanVisitedDirectories.contains(entry.path)
+                        && !m_scanQueuedDirectories.contains(entry.path)) {
+                        m_scanDirectories.push_back(entry.path);
+                        m_scanQueuedDirectories.insert(entry.path);
+                    }
+                } else if (isAudio(entry.path)) {
+                    if (!m_scanTrackPaths.contains(entry.path)) {
+                        m_scanEntries.push_back(entry);
+                        m_scanTrackPaths.insert(entry.path);
+                    }
+                }
+                if (m_scanEntries.size() + m_scanVisitedDirectories.size()
+                        + m_scanDirectories.size() > LibraryEntryLimit) {
+                    finishLibraryIndex(QStringLiteral("Медиатека превышает безопасный предел фонового индекса."));
+                    return;
+                }
+        }
+        if (m_playbackActive)
+            return;
+        requestNextLibraryDirectory();
+        return;
+    }
+
+    if (result.rangeCheck) {
+        if (result.error == MailWebDavProbe::Error::None) {
+            const AudioTags tags = AudioMetadataReader::read(m_scanCurrentEntry.path,
+                                                              result.rangeBytes);
+            m_libraryModel->applyTags(m_scanCurrentStableId, tags.title, tags.artist,
+                                      tags.albumArtist, tags.album, tags.discNumber,
+                                      tags.trackNumber);
+        } else if (result.error == MailWebDavProbe::Error::NotFound
+                   || result.error == MailWebDavProbe::Error::VersionChanged) {
+            m_libraryModel->markTrackUnavailable(m_scanCurrentStableId);
+        }
+        ++m_scanMetadataCompleted;
+        m_libraryModel->updateScanProgress(true, m_scanMetadataCompleted,
+                                           m_scanEntries.size());
+        if (!m_playbackActive)
+            requestNextTrackTags();
+    }
+}
+
+void MailWebDavController::requestNextLibraryDirectory()
+{
+    if (!m_indexing || !m_scanDiscovering || m_playbackActive || !m_indexProbe
+        || m_indexProbe->busy())
+        return;
+    while (!m_scanDirectories.isEmpty()) {
+        const QString directory = m_scanDirectories.takeFirst();
+        m_scanQueuedDirectories.remove(directory);
+        if (!pathIsInsideMusicRoot(directory, true)
+            || m_scanVisitedDirectories.contains(directory))
+            continue;
+        m_scanVisitedDirectories.insert(directory);
+        if (!m_indexProbe->listDirectory(directory)) {
+            finishLibraryIndex(QStringLiteral("Не удалось продолжить фоновое сканирование папок."));
+            return;
+        }
+        m_libraryModel->updateScanProgress(true, m_scanVisitedDirectories.size(),
+                                           m_scanVisitedDirectories.size() + m_scanDirectories.size());
+        return;
+    }
+    beginTagIndexing();
+}
+
+void MailWebDavController::beginTagIndexing()
+{
+    if (!m_indexing || !m_scanDiscovering || m_playbackActive)
+        return;
+    m_scanDiscovering = false;
+    QVector<LibraryModel::Track> tracks;
+    tracks.reserve(m_scanEntries.size());
+    for (const auto &entry : std::as_const(m_scanEntries)) {
+        LibraryModel::Track track;
+        track.path = entry.path;
+        track.stableId = TrackIdentity::stableIdForPath(entry.path);
+        track.size = entry.size.value_or(0);
+        track.etag = entry.etag;
+        tracks.push_back(std::move(track));
+    }
+    m_libraryModel->setRemoteTracks(tracks);
+    m_scanMetadataCursor = 0;
+    m_scanMetadataCompleted = 0;
+    m_libraryModel->updateScanProgress(true, 0, m_scanEntries.size());
+    requestNextTrackTags();
+}
+
+void MailWebDavController::requestNextTrackTags()
+{
+    if (!m_indexing || m_scanDiscovering || m_playbackActive || !m_indexProbe
+        || m_indexProbe->busy())
+        return;
+    while (m_scanMetadataCursor < m_scanEntries.size()) {
+        const auto entry = m_scanEntries.at(m_scanMetadataCursor++);
+        const QString stableId = TrackIdentity::stableIdForPath(entry.path);
+        if (!m_libraryModel->needsTags(stableId) || !entry.size || *entry.size <= 1) {
+            ++m_scanMetadataCompleted;
+            if (m_scanMetadataCompleted % 25 == 0)
+                m_libraryModel->updateScanProgress(true, m_scanMetadataCompleted,
+                                                   m_scanEntries.size());
+            continue;
+        }
+        const qint64 length = qMin(LibraryMetadataRangeLimit, *entry.size - 1);
+        m_scanCurrentEntry = entry;
+        m_scanCurrentStableId = stableId;
+        if (m_indexProbe->readRange(entry, 0, length))
+            return;
+        ++m_scanMetadataCompleted;
+    }
+    finishLibraryIndex(QStringLiteral("Сканирование завершено: %1 аудиофайлов в медиатеке.")
+                           .arg(m_scanEntries.size()));
+}
+
+void MailWebDavController::finishLibraryIndex(const QString &status)
+{
+    if (!m_indexing)
+        return;
+    m_indexing = false;
+    emit indexingChanged();
+    if (m_libraryModel) {
+        if (status.startsWith(QStringLiteral("Сканирование завершено:")))
+            m_libraryModel->finishScan();
+        else
+            m_libraryModel->updateScanProgress(false, m_libraryModel->scanCompleted(),
+                                                m_libraryModel->scanTotal());
+    }
+    if (m_indexProbe) {
+        MailWebDavProbe *old = m_indexProbe;
+        m_indexProbe = nullptr;
+        QObject::disconnect(old, nullptr, this, nullptr);
+        old->clearCredentials();
+        old->deleteLater();
+    }
+    if (!status.isEmpty())
+        setStatus(status);
     emit stateChanged();
 }

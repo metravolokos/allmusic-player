@@ -8,6 +8,7 @@
 #include <QTimer>
 
 class MailWebDavController;
+class MailWebDavRangeDevice;
 
 class AndroidMedia3Controller final : public QObject
 {
@@ -28,6 +29,7 @@ class AndroidMedia3Controller final : public QObject
     Q_PROPERTY(bool cloudBusy READ cloudBusy NOTIFY changed)
     Q_PROPERTY(QString cloudStatus READ cloudStatus NOTIFY changed)
     Q_PROPERTY(QString cloudDirectoryLabel READ cloudDirectoryLabel NOTIFY changed)
+    Q_PROPERTY(QString cloudDirectoryPath READ cloudDirectoryPath NOTIFY changed)
     Q_PROPERTY(AndroidCloudTrackListModel *cloudEntriesModel READ cloudEntriesModel CONSTANT)
     Q_PROPERTY(AndroidFavoritesModel *favoritesModel READ favoritesModel CONSTANT)
 
@@ -52,6 +54,7 @@ public:
     bool cloudBusy() const;
     QString cloudStatus() const;
     QString cloudDirectoryLabel() const;
+    QString cloudDirectoryPath() const;
     AndroidCloudTrackListModel *cloudEntriesModel() const;
     AndroidFavoritesModel *favoritesModel() const;
 
@@ -68,6 +71,7 @@ public slots:
     void goToCloudParent();
     bool canPlayCloud(int index) const;
     void playCloud(int index);
+    bool playCloudStableId(const QString &stableId, quint64 queueGeneration);
     bool canPlayFavorite(const QString &stableId) const;
     void playFavorite(const QString &stableId);
     bool toggleFavorite(const QString &stableId, const QString &label);
@@ -78,6 +82,7 @@ signals:
     void changed();
     void cloudSessionEnded();
     void cloudEntriesReset();
+    void trackFinished(quint64 queueGeneration);
 
 private slots:
     void refreshState();
@@ -88,6 +93,8 @@ private:
     void openFavoriteNavigationDirectory(const QString &directory);
     void cancelFavoriteNavigation();
     void playCloudSourceIndex(int index);
+    bool playCloudDevice(MailWebDavRangeDevice *device, const QString &label,
+                         quint64 queueGeneration);
     void releaseCloudSource();
     void stopForDisconnect();
     void invokeTrack(const QString &assetPath, const QString &title);
@@ -110,4 +117,7 @@ private:
     QString m_expectedFavoriteDirectory;
     bool m_waitingForFavoriteListing = false;
     bool m_released = false;
+    quint64 m_queueGeneration = 0;
+    bool m_cloudReadyObserved = false;
+    bool m_finishedReported = false;
 };

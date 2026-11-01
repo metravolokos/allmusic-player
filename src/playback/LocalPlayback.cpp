@@ -27,6 +27,8 @@ LocalPlayback::LocalPlayback(QObject *parent) : QObject(parent)
     });
     connect(&m_player, &QMediaPlayer::mediaStatusChanged, this,
             [this](QMediaPlayer::MediaStatus status) {
+        if (status == QMediaPlayer::EndOfMedia && m_cloudMailActive && m_playbackGeneration > 0)
+            emit trackFinished(m_playbackGeneration);
         if (status == QMediaPlayer::LoadedMedia) {
             QTimer::singleShot(0, this, [this] {
                 if (m_player.mediaStatus() == QMediaPlayer::LoadedMedia && !m_player.hasAudio())
@@ -115,6 +117,7 @@ void LocalPlayback::detachMailSource()
 
 void LocalPlayback::resetPlayerSource()
 {
+    m_playbackGeneration = 0;
     if (m_mailRangeDevice) {
         detachMailSource();
         return;
@@ -129,6 +132,7 @@ void LocalPlayback::resetPlayerSource()
 
 void LocalPlayback::stop()
 {
+    m_playbackGeneration = 0;
     if (m_mailRangeDevice) {
         detachMailSource();
     } else if (m_rangeDevice) {
@@ -146,6 +150,7 @@ void LocalPlayback::stop()
 
 void LocalPlayback::stopMail()
 {
+    m_playbackGeneration = 0;
     if (m_mailRangeDevice)
         detachMailSource();
     if (!m_activeSourceLabel.isEmpty()) {
@@ -180,6 +185,7 @@ void LocalPlayback::togglePlayback()
 
 bool LocalPlayback::openLocal(const QUrl &url)
 {
+    m_playbackGeneration = 0;
     resetPlayerSource();
     if (!m_activeSourceLabel.isEmpty()) {
         m_activeSourceLabel.clear();
@@ -319,7 +325,8 @@ bool LocalPlayback::openLoopback(int index)
     return true;
 }
 
-bool LocalPlayback::openMailDevice(MailWebDavRangeDevice *device, const QString &label)
+bool LocalPlayback::openMailDevice(MailWebDavRangeDevice *device, const QString &label,
+                                   quint64 playbackGeneration)
 {
     if (!device) {
         fail(QStringLiteral("Не удалось открыть выбранный файл Cloud Mail."));
@@ -367,6 +374,7 @@ bool LocalPlayback::openMailDevice(MailWebDavRangeDevice *device, const QString 
     });
     m_error.clear();
     emit errorChanged();
+    m_playbackGeneration = playbackGeneration;
     if (m_activeSourceLabel != label) {
         m_activeSourceLabel = label;
         emit activeSourceLabelChanged();

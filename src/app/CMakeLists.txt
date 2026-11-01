@@ -13,10 +13,18 @@ if(ANDROID)
         endif()
     endforeach()
     target_sources(allmusic-player PRIVATE
+        AppearanceController.cpp
+        AppearanceController.h
         AndroidCloudTrackListModel.cpp
         AndroidCloudTrackListModel.h
         AndroidFavoritesModel.cpp
         AndroidFavoritesModel.h
+        AudioMetadataReader.cpp
+        AudioMetadataReader.h
+        LibraryModel.cpp
+        LibraryModel.h
+        PlaybackQueueModel.cpp
+        PlaybackQueueModel.h
         TrackIdentity.h
         AndroidMedia3Controller.cpp
         AndroidMedia3Controller.h
@@ -27,20 +35,38 @@ if(ANDROID)
         MailWebDavController.h)
     target_link_libraries(allmusic-player PRIVATE mail-webdav-range)
     set(app_qml ${PROJECT_SOURCE_DIR}/ui/android/Main.qml)
+    set_source_files_properties(${app_qml} PROPERTIES QT_RESOURCE_ALIAS Main.qml)
+    set(qml_files ${app_qml})
 else()
     target_sources(allmusic-player PRIVATE
+        AppearanceController.cpp
+        AppearanceController.h
+        AudioMetadataReader.cpp
+        AudioMetadataReader.h
+        LibraryModel.cpp
+        LibraryModel.h
+        PlaybackQueueModel.cpp
+        PlaybackQueueModel.h
         MailWebDavController.cpp
         MailWebDavController.h)
     target_link_libraries(allmusic-player PRIVATE mail-webdav-diagnostic)
     set(app_qml ${PROJECT_SOURCE_DIR}/ui/desktop/Main.qml)
+    set_source_files_properties(${app_qml} PROPERTIES QT_RESOURCE_ALIAS Main.qml)
+    # QML module type names come from source file names. Give the Android
+    # preview a distinct generated filename so it does not collide with the
+    # Desktop Main.qml type inside the same module.
+    set(android_preview_source ${PROJECT_SOURCE_DIR}/ui/android/Main.qml)
+    set(android_preview_qml ${CMAKE_CURRENT_BINARY_DIR}/AndroidPreview.qml)
+    configure_file(${android_preview_source} ${android_preview_qml} COPYONLY)
+    set_source_files_properties(${android_preview_qml} PROPERTIES QT_RESOURCE_ALIAS AndroidPreview.qml)
+    set(qml_files ${app_qml} ${android_preview_qml})
 endif()
-set_source_files_properties(${app_qml} PROPERTIES QT_RESOURCE_ALIAS Main.qml)
 qt_add_qml_module(allmusic-player
     URI AllMusicPlayer
     VERSION 1.0
-    QML_FILES ${app_qml}
+    QML_FILES ${qml_files}
 )
-target_link_libraries(allmusic-player PRIVATE Qt6::Quick)
+target_link_libraries(allmusic-player PRIVATE Qt6::Quick Qt6::QuickControls2)
 set_target_properties(allmusic-player PROPERTIES
     WIN32_EXECUTABLE TRUE
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
@@ -88,7 +114,7 @@ add_library(local-playback STATIC
     ${PROJECT_SOURCE_DIR}/src/playback/WebDavRangeDevice.h)
 target_link_libraries(local-playback PUBLIC Qt6::Multimedia mail-webdav-diagnostic)
 target_include_directories(local-playback PUBLIC ${PROJECT_SOURCE_DIR}/src/playback)
-target_link_libraries(allmusic-player PRIVATE local-playback Qt6::QuickControls2)
+target_link_libraries(allmusic-player PRIVATE local-playback)
 if(MSVC)
     target_compile_options(local-playback PRIVATE /utf-8 /W4)
 endif()
