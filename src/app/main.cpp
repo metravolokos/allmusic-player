@@ -5,7 +5,9 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <QDebug>
+#include <QVariant>
 #include "AppearanceController.h"
+#include "PlaybackQueueModel.h"
 #ifndef Q_OS_ANDROID
 #include "LocalPlayback.h"
 #include "MailWebDavController.h"
@@ -13,6 +15,8 @@
 #include "AndroidMedia3Controller.h"
 #include "MailWebDavController.h"
 #endif
+
+#include <memory>
 
 int main(int argc, char *argv[])
 {
@@ -33,17 +37,18 @@ int main(int argc, char *argv[])
     AppearanceController appearance;
 
     const auto arguments = app.arguments();
-    const bool smokeTest = arguments.size() == 3
+    const bool smokeTest = (arguments.size() == 3 || arguments.size() == 4)
         && arguments.at(1) == QStringLiteral("--smoke-test");
     bool capturedFrame = false;
     if (arguments.size() != 1 && !smokeTest) {
-        qCritical() << "Usage: allmusic-player [--smoke-test screenshot.png]";
+        qCritical() << "Usage: allmusic-player [--smoke-test screenshot.png [screen]]";
         return 2;
     }
 
 #ifndef Q_OS_ANDROID
     LocalPlayback playback;
     MailWebDavController mailWebDav(nullptr, true);
+    auto queue = std::make_unique<PlaybackQueueModel>(mailWebDav.libraryModel());
     QObject::connect(&mailWebDav, &MailWebDavController::playbackRequested,
                      &playback, [&mailWebDav, &playback](int index) {
         QString label;
@@ -58,11 +63,55 @@ int main(int argc, char *argv[])
     });
     QObject::connect(&playback, &LocalPlayback::cloudMailSessionInvalid,
                      &mailWebDav, &MailWebDavController::disconnectCloud);
+    QObject::connect(queue.get(), &PlaybackQueueModel::trackRequested, &app,
+                     [&mailWebDav, &playback, q = queue.get()](const QVariantMap &track,
+                                                               quint64 generation) {
+        const QString stableId = track.value(QStringLiteral("stableId")).toString();
+        QString label;
+        auto *device = mailWebDav.takePlaybackDeviceForStableId(stableId, &label, nullptr);
+        if (!device) {
+            q->reportError(generation, QStringLiteral("Композиция больше недоступна в Cloud Mail."));
+            return;
+        }
+        if (!playback.openMailDevice(device, label, generation))
+            q->reportError(generation, playback.error().isEmpty()
+                               ? QStringLiteral("Не удалось открыть выбранную композицию.")
+                               : playback.error());
+    });
+    QObject::connect(queue.get(), &PlaybackQueueModel::stopRequested,
+                     &playback, &LocalPlayback::stop);
+    QObject::connect(&playback, &LocalPlayback::trackFinished,
+                     queue.get(), &PlaybackQueueModel::advance);
+    QObject::connect(&playback, &LocalPlayback::errorChanged, &app,
+                     [&playback, q = queue.get()] {
+        if (q->active() && !playback.error().isEmpty())
+            q->reportError(q->generation(), playback.error());
+    });
+    QObject::connect(&mailWebDav, &MailWebDavController::sessionEnded,
+                     queue.get(), &PlaybackQueueModel::clear);
     QObject::connect(&app, &QCoreApplication::aboutToQuit,
                      &mailWebDav, &MailWebDavController::disconnectCloud);
 #else
     MailWebDavController mailWebDav;
     AndroidMedia3Controller media3(&mailWebDav);
+    auto queue = std::make_unique<PlaybackQueueModel>(mailWebDav.libraryModel());
+    QObject::connect(queue.get(), &PlaybackQueueModel::trackRequested, &app,
+                     [&media3, q = queue.get()](const QVariantMap &track, quint64 generation) {
+        if (!media3.playCloudStableId(track.value(QStringLiteral("stableId")).toString(),
+                                      generation))
+            q->reportError(generation, QStringLiteral("Не удалось запустить композицию очереди."));
+    });
+    QObject::connect(queue.get(), &PlaybackQueueModel::stopRequested,
+                     &media3, &AndroidMedia3Controller::stop);
+    QObject::connect(&media3, &AndroidMedia3Controller::trackFinished,
+                     queue.get(), &PlaybackQueueModel::advance);
+    QObject::connect(&media3, &AndroidMedia3Controller::cloudSessionEnded,
+                     queue.get(), &PlaybackQueueModel::clear);
+    QObject::connect(&media3, &AndroidMedia3Controller::changed, &app,
+                     [&media3, q = queue.get()] {
+        if (q->active() && !media3.errorText().isEmpty())
+            q->reportError(q->generation(), media3.errorText());
+    });
 #endif
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed,
@@ -71,10 +120,17 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("buildLabel"),
                                             QStringLiteral(ALLMUSIC_BUILD_LABEL));
     engine.rootContext()->setContextProperty(QStringLiteral("media3"), &media3);
+    engine.rootContext()->setContextProperty(QStringLiteral("mailWebDav"), &mailWebDav);
+    engine.rootContext()->setContextProperty(QStringLiteral("library"), mailWebDav.libraryModel());
+    engine.rootContext()->setContextProperty(QStringLiteral("queue"), queue.get());
 #else
     engine.rootContext()->setContextProperty(QStringLiteral("playback"), &playback);
     engine.rootContext()->setContextProperty(QStringLiteral("mailWebDav"), &mailWebDav);
+    engine.rootContext()->setContextProperty(QStringLiteral("library"), mailWebDav.libraryModel());
+    engine.rootContext()->setContextProperty(QStringLiteral("queue"), queue.get());
 #endif
+    engine.rootContext()->setContextProperty(QStringLiteral("smokePage"),
+        smokeTest && arguments.size() == 4 ? QVariant(arguments.at(3)) : QVariant());
     engine.rootContext()->setContextProperty(QStringLiteral("appearance"), &appearance);
     engine.loadFromModule(QStringLiteral("AllMusicPlayer"), QStringLiteral("Main"));
     if (engine.rootObjects().isEmpty())

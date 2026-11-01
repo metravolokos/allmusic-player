@@ -54,13 +54,15 @@ Ninja собирается из официальных исходников: Pyt
 
 ## Что означает проверка окна
 
-`--smoke-test screenshot.png` требует создания QML-окна, его видимости,
+`--smoke-test screenshot.png [screen]` требует создания QML-окна, его видимости,
 доступности экрану и отрисованного кадра; сохраняет изображение и завершает
 приложение. Если кадра нет 15 секунд, возвращается ошибка. CTest ограничивает
-весь запуск 30 секундами. В CI используется программная отрисовка.
+весь запуск 30 секундами. В CI используется программная отрисовка. Необязательный
+экран: `artists`, `artistTracks`, `artistAlbums`, `albums`, `albumTracks`,
+`folders`, `now` или `settings`; без параметра открываются композиции.
 
-Снимок `build/desktop-release/window-smoke.png` приложен к диагностике CI.
-Он позволяет отдельно оценить текст и внешний вид. Тест не проверяет реальные
+Снимки `build/desktop-release/window-smoke*.png` сохраняют все состояния Desktop
+UI в PR #51 для просмотра. Тест не проверяет реальные
 драйверы, масштабирование экрана, Wayland, звук или пользовательские устройства.
 
 ## Windows
@@ -100,11 +102,13 @@ Android использует AndroidX Media3 / ExoPlayer через Java/JNI а�
 Mail подключён существующий C++ WebDAV/Range код; Qt Multimedia и Qt FFmpeg в
 Android target не подключаются. Основной путь — workflow `.github/workflows/android.yml`:
 `pull_request`, `workflow_dispatch`, push в main и опубликованный release;
-классификатор выбирает нужные проверки по diff. PR собирает и проверяет APK без
-его сохранения. Для Huawei APK и полного Android CI укажите
+классификатор выбирает нужные проверки по diff. Для Ready PR, где запускается
+Android binary job, APK комплект автоматически сохраняется после успешной
+сборки и package/license audit; в PR #51 он доступен в Artifacts Android
+workflow 14 дней. Для Huawei APK и полного Android CI вручную укажите
 `source_ref=codex/002-d-android-cloud-media3`, `android_apk=true`,
-`full_tests=true`. PR этой ветки также сохраняет APK артефакт, поскольку он
-явно запрошен в Issue #24. Артефакт хранится 14 дней.
+`full_tests=true`. Ручной `workflow_dispatch` остаётся дополнительным способом
+сохранить APK kit.
 
 На подготовленной Linux-машине с Android SDK, JDK 21, NDK 27.2.12479018,
 SDK platform 36 / build-tools 36.0.0, Qt 6.12.0 Android arm64 и host gcc_64:

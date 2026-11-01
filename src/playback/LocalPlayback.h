@@ -41,7 +41,8 @@ public:
     Q_INVOKABLE bool openLocal(const QUrl &url);
     Q_INVOKABLE void scanLoopback(int port);
     Q_INVOKABLE bool openLoopback(int index);
-    bool openMailDevice(MailWebDavRangeDevice *device, const QString &label);
+    bool openMailDevice(MailWebDavRangeDevice *device, const QString &label,
+                        quint64 playbackGeneration = 0);
     void stopMail();
     Q_INVOKABLE void togglePlayback();
     Q_INVOKABLE void stop();
@@ -55,6 +56,7 @@ signals:
     void loopbackFilesChanged();
     void networkBytesChanged();
     void currentLoopbackIndexChanged();
+    void trackFinished(quint64 playbackGeneration);
 private:
     void fail(const QString &message);
     void resetPlayerSource();
@@ -74,6 +76,7 @@ private:
     qint64 m_networkBytes = 0;
     quint16 m_loopbackPort = 0;
     int m_currentLoopbackIndex = -1;
+    quint64 m_playbackGeneration = 0;
     bool m_cloudMailActive = false;
     bool m_buffering = false;
     QString m_activeSourceLabel;

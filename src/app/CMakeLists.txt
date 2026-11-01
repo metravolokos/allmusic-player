@@ -19,6 +19,12 @@ if(ANDROID)
         AndroidCloudTrackListModel.h
         AndroidFavoritesModel.cpp
         AndroidFavoritesModel.h
+        AudioMetadataReader.cpp
+        AudioMetadataReader.h
+        LibraryModel.cpp
+        LibraryModel.h
+        PlaybackQueueModel.cpp
+        PlaybackQueueModel.h
         TrackIdentity.h
         AndroidMedia3Controller.cpp
         AndroidMedia3Controller.h
@@ -33,6 +39,12 @@ else()
     target_sources(allmusic-player PRIVATE
         AppearanceController.cpp
         AppearanceController.h
+        AudioMetadataReader.cpp
+        AudioMetadataReader.h
+        LibraryModel.cpp
+        LibraryModel.h
+        PlaybackQueueModel.cpp
+        PlaybackQueueModel.h
         MailWebDavController.cpp
         MailWebDavController.h)
     target_link_libraries(allmusic-player PRIVATE mail-webdav-diagnostic)

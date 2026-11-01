@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -6,103 +7,49 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def block_for_id(qml, object_id):
-    id_position = qml.index(f"id: {object_id}")
-    opening = qml.rfind("{", 0, id_position)
-    depth = 0
-    quote = None
-    escaped = False
-    for position in range(opening, len(qml)):
-        character = qml[position]
-        if quote:
-            if escaped:
-                escaped = False
-            elif character == "\\":
-                escaped = True
-            elif character == quote:
-                quote = None
-            continue
-        if character in {'"', "'"}:
-            quote = character
-        elif character == "{":
-            depth += 1
-        elif character == "}":
-            depth -= 1
-            if depth == 0:
-                return qml[opening:position + 1]
-    raise AssertionError(f"Unclosed QML object containing id: {object_id}")
-
-
-class CloudTrackListContractTest(unittest.TestCase):
-    def test_only_the_virtualized_catalog_list_scrolls_and_keeps_source_rows(self):
+class AndroidLibraryUiContractTest(unittest.TestCase):
+    def test_catalog_screens_use_virtualized_lists_and_shared_library_model(self):
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
-        cloud_list = block_for_id(qml, "cloudList")
+        for list_id in ("trackList", "artistList", "artistTrackList", "artistAlbumList", "albumList",
+                        "albumTrackList", "folderList", "queueList"):
+            with self.subTest(list_id=list_id):
+                self.assertIn(f"id: {list_id}", qml)
+        self.assertIn("model: library", qml)
+        self.assertIn("model: media3.cloudConnected ? mailWebDav.entries : []", qml)
+        self.assertIn("clip: true", qml)
+        self.assertIn("queue.jumpTo(stableId)", qml)
+        self.assertIn("queue.startFolder(media3.cloudDirectoryPath", qml)
 
-        self.assertIn("model: root.showFavorites ? media3.favoritesModel : media3.cloudEntriesModel",
-                      cloud_list)
-        self.assertIn("clip: true", cloud_list)
-        self.assertIn("Layout.fillHeight: true", cloud_list)
-        self.assertNotIn("header:", cloud_list)
-        self.assertNotIn("footer:", cloud_list)
-        self.assertIn("required property int sourceIndex", cloud_list)
-        self.assertIn("root.selectCloudEntry(sourceIndex, label, isDirectory)", cloud_list)
-        self.assertIn("onCloudEntriesReset()", qml)
-        self.assertIn("root.clearSelectionIfHidden()", qml)
-        self.assertEqual(qml.count("ListView {"), 1)
-        self.assertNotIn("Flickable {", qml)
+    def test_background_tag_scan_reads_bounded_ranges_without_whole_files(self):
+        controller = (ROOT / "src/app/MailWebDavController.cpp").read_text(encoding="utf-8")
+        self.assertIn("LibraryMetadataRangeLimit = 64 * 1024", controller)
+        self.assertIn("qMin(LibraryMetadataRangeLimit, *entry.size - 1)", controller)
+        self.assertIn("m_indexProbe->readRange(entry, 0, length)", controller)
 
-    def test_search_and_player_controls_stay_outside_the_scrolling_list(self):
+    def test_search_sort_and_touch_controls_stay_outside_the_lists(self):
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
-        cloud_list = block_for_id(qml, "cloudList")
-        top_panel = block_for_id(qml, "topPanel")
-        search_panel = block_for_id(qml, "searchPanel")
-        sort_panel = block_for_id(qml, "sortAndCountPanel")
-        player_panel = block_for_id(qml, "playerPanel")
+        track_list = qml.split("id: trackList", 1)[1].split("delegate: ItemDelegate", 1)[0]
+        self.assertNotIn("TextField", track_list)
+        self.assertIn("onTextChanged: library.searchText = text", qml)
+        self.assertIn("onActivated: library.sortMode = index", qml)
+        self.assertIn("implicitHeight: 54", qml)
+        self.assertIn("implicitHeight: 50", qml)
+        self.assertIn("id: miniPlayer", qml)
+        self.assertIn("id: navigation", qml)
 
-        self.assertIn("cloudSearchInput", top_panel)
-        self.assertIn("media3.cloudEntriesModel.searchText = text", search_panel)
-        self.assertIn("media3.cloudEntriesModel.sortMode =", sort_panel)
-        self.assertIn("media3.cloudEntriesModel.resultCount", sort_panel)
-        self.assertNotIn("cloudSearchInput", cloud_list)
-        self.assertIn("Layout.fillWidth: true", player_panel)
-        self.assertIn("media3.playCloud(root.selectedCloudIndex)", player_panel)
-        self.assertIn("media3.canPlayCloud(root.selectedCloudIndex)", player_panel)
-        self.assertIn("media3.pause()", player_panel)
-        self.assertIn("media3.stop()", player_panel)
-        self.assertIn("media3.seekTo(", player_panel)
-        self.assertNotIn("media3.playCloud(", cloud_list)
-        self.assertNotIn("media3.seekTo(", cloud_list)
-
-    def test_connection_form_collapses_after_connecting(self):
+    def test_connection_form_clears_password_and_shows_live_status(self):
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
-        top_panel = block_for_id(qml, "topPanel")
-
-        connect_form = block_for_id(qml, "connectForm")
-        connected_bar = block_for_id(qml, "connectedBar")
-
-        self.assertIn("visible: !media3.cloudConnected", connect_form)
-        self.assertIn("visible: media3.cloudConnected", connected_bar)
-        self.assertIn("media3.disconnectCloud()", connected_bar)
-
-    def test_search_and_sort_are_local_and_keyboard_resizes_the_view(self):
-        qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
-        manifest = (ROOT / "android/AndroidManifest.xml").read_text(encoding="utf-8")
-
-        self.assertIn("media3.cloudEntriesModel.searchText = text", qml)
-        self.assertIn("media3.cloudEntriesModel.sortMode =", qml)
-        self.assertIn("media3.cloudEntriesModel.resultCount", qml)
-        self.assertIn('text: "Совпадений нет"', qml)
-        self.assertIn('android:windowSoftInputMode="adjustResize"', manifest)
+        self.assertIn('echoMode: TextInput.Password', qml)
+        self.assertIn("passwordInput.clear()", qml)
+        self.assertIn("media3.connectCloud(emailInput.text, passwordInput.text)", qml)
+        self.assertIn("media3.disconnectCloud()", qml)
+        self.assertIn("text: media3.cloudStatus", qml)
+        self.assertIn("!media3.cloudBusy && !media3.cloudConnected", qml)
 
     def test_android_qml_methods_are_slots_and_properties_are_exposed(self):
-        # Static Android JNI-controller contract supplements the runtime
-        # QtQml model test run in Desktop CTest.
-        import re
-
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
         controller = (ROOT / "src/app/AndroidMedia3Controller.h").read_text(encoding="utf-8")
         model = (ROOT / "src/app/AndroidCloudTrackListModel.h").read_text(encoding="utf-8")
-        self.assertIn("public slots:", controller)
         slots = controller.split("public slots:", 1)[1].split("signals:", 1)[0]
         methods = set(re.findall(r"\bmedia3\.([A-Za-z]\w*)\s*\(", qml))
         self.assertTrue(methods)
@@ -110,12 +57,11 @@ class CloudTrackListContractTest(unittest.TestCase):
             with self.subTest(slot=name):
                 self.assertRegex(slots, rf"\b{re.escape(name)}\s*\(")
 
-        for name in ("cloudEntriesModel", "cloudConnected", "cloudBusy",
-                     "favoritesModel",
-                     "cloudStatus", "cloudDirectoryLabel", "activeTrackName",
-                     "stateText", "errorText", "positionMs", "durationMs",
-                     "playEnabled", "pauseEnabled", "stopEnabled", "seekEnabled",
-                     "trackNames", "trackIndex", "outputStatusText"):
+        for name in ("cloudEntriesModel", "cloudConnected", "cloudBusy", "favoritesModel",
+                     "cloudStatus", "cloudDirectoryLabel", "cloudDirectoryPath",
+                     "activeTrackName", "stateText", "errorText", "positionMs",
+                     "durationMs", "playEnabled", "pauseEnabled", "stopEnabled",
+                     "seekEnabled", "trackNames", "trackIndex", "outputStatusText"):
             with self.subTest(property=name):
                 self.assertRegex(controller, rf"Q_PROPERTY\([^\n]*\b{re.escape(name)}\b")
         for name in ("searchText", "sortMode", "totalCount", "resultCount"):
@@ -123,33 +69,22 @@ class CloudTrackListContractTest(unittest.TestCase):
                 self.assertRegex(model, rf"Q_PROPERTY\([^\n]*\b{re.escape(name)}\b")
         self.assertRegex(model, r"Q_INVOKABLE\s+bool\s+containsSourceIndex\s*\(")
 
-    def test_favorite_view_uses_stable_ids_and_keeps_missing_entries(self):
+    def test_favorites_backend_remains_while_ui_has_no_favorites_controls(self):
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
         controller = (ROOT / "src/app/AndroidMedia3Controller.h").read_text(encoding="utf-8")
         favorites = (ROOT / "src/app/AndroidFavoritesModel.h").read_text(encoding="utf-8")
-        webdav_controller = (ROOT / "src/app/MailWebDavController.cpp").read_text(encoding="utf-8")
-
-        self.assertIn("required property string stableId", qml)
-        self.assertIn("media3.toggleFavorite(stableId, label)", qml)
-        self.assertIn("media3.removeFavorite(stableId)", qml)
-        self.assertIn("media3.favoritesModel", qml)
-        self.assertIn('label + " · недоступен"', qml)
+        implementation = (ROOT / "src/app/AndroidFavoritesModel.cpp").read_text(encoding="utf-8")
+        self.assertNotIn("избран", qml.casefold())
         self.assertIn("Q_PROPERTY(AndroidFavoritesModel *favoritesModel", controller)
-        self.assertIn("continueFavoriteNavigation()", controller)
-        self.assertIn("media3.canPlayFavorite(root.selectedFavoriteId)", qml)
-        self.assertIn("QSettings", (ROOT / "src/app/AndroidFavoritesModel.cpp").read_text(encoding="utf-8"))
+        self.assertIn("toggleFavorite", controller)
+        self.assertIn("QSettings", implementation)
         self.assertIn("IsMissingRole", favorites)
-        self.assertIn('TrackIdentity::stableIdForPath(entry.path)', webdav_controller)
-        self.assertIn("sourcePathForStableId(const QString &stableId) const", webdav_controller)
-        self.assertNotIn('row.insert(QStringLiteral("remotePath")', webdav_controller)
-        self.assertNotIn("remotePath", qml)
 
     def test_android_manifest_locks_the_activity_to_portrait(self):
         manifest_path = ROOT / "android/AndroidManifest.xml"
         manifest = ET.parse(manifest_path).getroot()
         android_namespace = "{http://schemas.android.com/apk/res/android}"
         activity = manifest.find(".//activity")
-
         self.assertIsNotNone(activity)
         self.assertEqual(activity.get(android_namespace + "screenOrientation"), "portrait")
 

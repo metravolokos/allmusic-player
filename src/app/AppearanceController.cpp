@@ -75,5 +75,16 @@ void AppearanceController::applyColorScheme()
     palette.setColor(QPalette::Highlight, dark ? QColor("#86b7d8") : QColor("#3a6f91"));
     palette.setColor(QPalette::HighlightedText, dark ? QColor("#10212e") : QColor("#ffffff"));
     palette.setColor(QPalette::BrightText, dark ? QColor("#ff8a80") : QColor("#b3261e"));
+    palette.setColor(QPalette::PlaceholderText, dark ? QColor("#aeb5bc") : QColor("#62676c"));
+    palette.setColor(QPalette::Mid, dark ? QColor("#737980") : QColor("#8a9096"));
+    palette.setColor(QPalette::Midlight, dark ? QColor("#45494e") : QColor("#d7dade"));
+    palette.setColor(QPalette::Disabled, QPalette::Text,
+                     dark ? QColor("#a0a4aa") : QColor("#666b70"));
+    palette.setColor(QPalette::Disabled, QPalette::WindowText,
+                     dark ? QColor("#a0a4aa") : QColor("#666b70"));
+    palette.setColor(QPalette::Disabled, QPalette::ButtonText,
+                     dark ? QColor("#a0a4aa") : QColor("#666b70"));
+    palette.setColor(QPalette::Disabled, QPalette::PlaceholderText,
+                     dark ? QColor("#8e949a") : QColor("#757a7f"));
     application->setPalette(palette);
 }

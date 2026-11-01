@@ -89,6 +89,23 @@ if(BUILD_TESTING)
     # Headless execution of real QML -> QObject calls/properties on Desktop CI.
     target_link_libraries(android-media3-state-tests PRIVATE Qt6::Test Qt6::Qml)
     add_test(NAME android-media3-state COMMAND android-media3-state-tests)
+    add_executable(library-queue-tests
+        tests/library/tst_library_queue.cpp
+        src/app/AudioMetadataReader.cpp
+        src/app/AudioMetadataReader.h
+        src/app/LibraryModel.cpp
+        src/app/LibraryModel.h
+        src/app/PlaybackQueueModel.cpp
+        src/app/PlaybackQueueModel.h
+        src/app/TrackIdentity.h)
+    target_include_directories(library-queue-tests PRIVATE src/app)
+    target_link_libraries(library-queue-tests PRIVATE Qt6::Test)
+    if(MSVC)
+        target_compile_options(library-queue-tests PRIVATE /utf-8 /W4)
+    else()
+        target_compile_options(library-queue-tests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME library-queue COMMAND library-queue-tests)
     add_test(NAME webdav-safety COMMAND webdav-tests)
     set_tests_properties(webdav-safety PROPERTIES TIMEOUT 90)
     add_executable(mail-webdav-tests tests/webdav/tst_mail_webdav.cpp tests/webdav/MockWebDav.h)
@@ -105,7 +122,13 @@ if(BUILD_TESTING)
     set_tests_properties(mail-webdav-safety PROPERTIES TIMEOUT 90)
     add_test(NAME window-smoke COMMAND allmusic-player --smoke-test
         "${CMAKE_CURRENT_BINARY_DIR}/window-smoke.png")
-    set_tests_properties(window-smoke PROPERTIES TIMEOUT 30
+    foreach(screen IN ITEMS artists artistTracks artistAlbums albums albumTracks folders now settings)
+        add_test(NAME window-smoke-${screen} COMMAND allmusic-player --smoke-test
+            "${CMAKE_CURRENT_BINARY_DIR}/window-smoke-${screen}.png" "${screen}")
+    endforeach()
+    set_tests_properties(window-smoke window-smoke-artists window-smoke-artistTracks
+        window-smoke-artistAlbums window-smoke-albums window-smoke-albumTracks window-smoke-folders
+        window-smoke-now window-smoke-settings PROPERTIES TIMEOUT 30
         ENVIRONMENT "QT_QUICK_BACKEND=software")
 endif()
 

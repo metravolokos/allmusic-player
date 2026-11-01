@@ -25,32 +25,41 @@ class PlayerUiContractTest(unittest.TestCase):
         self.assertIn("Q_PROPERTY(QString themeMode", header)
         self.assertIn("AppearanceController::prepareFusionStyle();", main)
 
-    def test_desktop_library_and_controls_are_visible_in_primary_layout(self):
+    def test_both_platforms_expose_real_catalog_scopes_and_queue_controls(self):
+        for platform in ("android", "desktop"):
+            with self.subTest(platform=platform):
+                qml = (ROOT / "ui" / platform / "Main.qml").read_text(encoding="utf-8")
+                for contract in (
+                    "library.firstPlayableStableId", "queue.startArtist", "queue.startAlbum",
+                    "queue.startFolder", "queue.previous()", "queue.next()",
+                    "queue.repeatMode", "queue.shuffleEnabled", "Очередь воспроизведения",
+                    "artistAlbums", "Альбомы исполнителя",
+                    "echoMode: TextInput.Password", "appearance.setThemeMode",
+                ):
+                    self.assertIn(contract, qml)
+                self.assertNotIn("избран", qml.casefold())
+
+    def test_desktop_connects_cloud_and_local_playback(self):
         qml = (ROOT / "ui/desktop/Main.qml").read_text(encoding="utf-8")
         for contract in (
-            "ListView {", "model: mailWebDav.entries", "mailWebDav.openDirectory(window.selectedEntry)",
-            "mailWebDav.goToParent()", "mailWebDav.play(window.selectedEntry)",
-            "playback.openLocal(selectedFile)", "playback.togglePlayback()", "playback.stop()",
-            "media.setPosition(value)", "playback.audio.volume = value",
-            "property bool diagnosticsExpanded: false",
+            "model: mailWebDav.entries", "mailWebDav.openDirectory(index)",
+            "mailWebDav.goToParent()", "queue.startFolder(mailWebDav.currentDirectory",
+            "playback.openLocal(selectedFile)", "playback.togglePlayback()",
+            "playback.stop()", "media.setPosition(value)",
+            "playback.audio.volume = value", "mailAppPassword.clear()",
+            "Реквизиты не сохраняются",
         ):
             with self.subTest(contract=contract):
                 self.assertIn(contract, qml)
-        self.assertIn('echoMode: TextInput.Password', qml)
-        self.assertIn("mailAppPassword.clear()", qml)
-        self.assertIn("Данные не сохраняются", qml)
-        self.assertIn("id: playerPanel", qml)
-        self.assertIn("id: cloudPanel", qml)
 
-    def test_android_retains_touch_controls_and_media3_status(self):
+    def test_android_uses_media3_and_large_touch_targets(self):
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
-        self.assertIn("id: cloudList", qml)
         self.assertIn("media3.stateText", qml)
-        self.assertIn("media3.playCloud(root.selectedCloudIndex)", qml)
         self.assertIn("media3.seekTo(Math.round(value))", qml)
         self.assertIn("media3.disconnectCloud()", qml)
         self.assertIn("implicitHeight: 54", qml)
         self.assertIn("implicitHeight: 48", qml)
+        self.assertIn('text: "Стоп"', qml)
 
 
 if __name__ == "__main__":

@@ -242,6 +242,11 @@ QString AndroidMedia3Controller::cloudDirectoryLabel() const
     return slash >= 0 ? path.mid(slash + 1) : path;
 }
 
+QString AndroidMedia3Controller::cloudDirectoryPath() const
+{
+    return m_cloud ? m_cloud->currentDirectory() : QString();
+}
+
 AndroidCloudTrackListModel *AndroidMedia3Controller::cloudEntriesModel() const
 {
     return m_cloudEntriesModel;
@@ -355,11 +360,19 @@ void AndroidMedia3Controller::pause()
 void AndroidMedia3Controller::stop()
 {
     cancelFavoriteNavigation();
-    if (m_released || !stopEnabled())
+    if (m_released)
+        return;
+    if (m_cloudTrackActive) {
+        invokeCommand("stop");
+        releaseCloudSource();
+        m_state = AndroidMedia3State::Value::Stopped;
+        m_positionMs = 0;
+        emit changed();
+        return;
+    }
+    if (!stopEnabled())
         return;
     invokeCommand("stop");
-    if (m_cloudTrackActive && m_cloud)
-        m_cloud->setPlaybackActive(false);
     m_state = AndroidMedia3State::Value::Stopped;
     m_positionMs = 0;
     emit changed();
@@ -515,22 +528,38 @@ void AndroidMedia3Controller::playCloudSourceIndex(int index)
 {
     if (m_released || !m_cloud || !m_cloud->canPlay(index))
         return;
-
-    releaseCloudSource();
     QString label;
     auto *device = m_cloud->takePlaybackDevice(index, &label, nullptr);
+    playCloudDevice(device, label, 0);
+}
+
+bool AndroidMedia3Controller::playCloudStableId(const QString &stableId,
+                                                quint64 queueGeneration)
+{
+    if (m_released || !m_cloud || !m_cloud->canPlayStableId(stableId))
+        return false;
+    QString label;
+    auto *device = m_cloud->takePlaybackDeviceForStableId(stableId, &label, nullptr);
+    return playCloudDevice(device, label, queueGeneration);
+}
+
+bool AndroidMedia3Controller::playCloudDevice(MailWebDavRangeDevice *device,
+                                              const QString &label,
+                                              quint64 queueGeneration)
+{
+    releaseCloudSource();
     if (!device || !device->open(QIODevice::ReadOnly)) {
         if (device)
             delete device;
         setError(tr("Не удалось открыть поток Cloud Mail."));
-        return;
+        return false;
     }
 
     const qint64 handle = AndroidMailRangeRegistry::add(device);
     if (handle <= 0) {
         device->retire();
         setError(tr("Не удалось создать поток Media3."));
-        return;
+        return false;
     }
 
     connect(device, &MailWebDavRangeDevice::requestFailed, this,
@@ -552,9 +581,12 @@ void AndroidMedia3Controller::playCloudSourceIndex(int index)
             m_cloud, &MailWebDavController::disconnectCloud);
 
     m_cloudHandle = handle;
-    m_cloudTrackIndex = index;
+    m_cloudTrackIndex = -1;
     m_cloudTrackActive = true;
     m_cloudTrackName = label;
+    m_queueGeneration = queueGeneration;
+    m_cloudReadyObserved = false;
+    m_finishedReported = false;
     m_trackIndex = -1;
     m_error.clear();
     m_positionMs = 0;
@@ -562,14 +594,15 @@ void AndroidMedia3Controller::playCloudSourceIndex(int index)
     m_state = AndroidMedia3State::Value::Preparing;
     m_cloud->setPlaybackActive(true);
     QJniObject::callStaticMethod<void>(kAdapterClass, "selectCloudTrack",
-        "(J)V", static_cast<jlong>(handle));
+        "(JJ)V", static_cast<jlong>(handle), static_cast<jlong>(queueGeneration));
     QJniEnvironment environment;
     if (hasJniException(environment)) {
         releaseCloudSource();
         setError(tr("Media3 не смог открыть поток Cloud Mail."));
-        return;
+        return false;
     }
     emit changed();
+    return true;
 }
 
 void AndroidMedia3Controller::seekTo(qint64 positionMs)
@@ -613,6 +646,9 @@ void AndroidMedia3Controller::releaseCloudSource()
     m_cloudTrackActive = false;
     m_cloudTrackIndex = -1;
     m_cloudTrackName.clear();
+    m_queueGeneration = 0;
+    m_cloudReadyObserved = false;
+    m_finishedReported = false;
     if (m_cloud)
         m_cloud->setPlaybackActive(false);
 }
@@ -635,6 +671,8 @@ void AndroidMedia3Controller::refreshState()
 
     QJniEnvironment environment;
     const jint state = QJniObject::callStaticMethod<jint>(kAdapterClass, "stateCode", "()I");
+    const jlong remoteGeneration = QJniObject::callStaticMethod<jlong>(
+        kAdapterClass, "currentCloudGeneration", "()J");
     const jlong position = QJniObject::callStaticMethod<jlong>(kAdapterClass, "positionMs", "()J");
     const jlong duration = QJniObject::callStaticMethod<jlong>(kAdapterClass, "durationMs", "()J");
     const QString error = QJniObject::callStaticObjectMethod(kAdapterClass, "errorText",
@@ -643,6 +681,9 @@ void AndroidMedia3Controller::refreshState()
         setError(tr("Не удалось прочитать состояние Android Media3."));
         return;
     }
+
+    if (m_cloudTrackActive && static_cast<quint64>(remoteGeneration) != m_queueGeneration)
+        return;
 
     const auto remoteState = valueFromJava(state);
     if (!AndroidMedia3State::acceptsRemoteUpdate(m_state, remoteState))
@@ -659,6 +700,16 @@ void AndroidMedia3Controller::refreshState()
     m_durationMs = nextDuration;
     m_error = error;
     emit changed();
+    if (m_cloudTrackActive && (nextState == AndroidMedia3State::Value::Ready
+                               || nextState == AndroidMedia3State::Value::Playing
+                               || nextState == AndroidMedia3State::Value::Paused)) {
+        m_cloudReadyObserved = true;
+    } else if (m_cloudTrackActive && m_cloudReadyObserved
+               && nextState == AndroidMedia3State::Value::Finished
+               && !m_finishedReported) {
+        m_finishedReported = true;
+        emit trackFinished(m_queueGeneration);
+    }
 }
 
 void AndroidMedia3Controller::setError(const QString &message)
