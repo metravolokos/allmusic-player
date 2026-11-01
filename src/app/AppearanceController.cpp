@@ -49,6 +49,15 @@ void AppearanceController::setThemeMode(const QString &mode)
     emit themeModeChanged();
 }
 
+void AppearanceController::setPreviewThemeMode(const QString &mode)
+{
+    if (!isSupportedMode(mode) || m_themeMode == mode)
+        return;
+    m_themeMode = mode;
+    applyColorScheme();
+    emit themeModeChanged();
+}
+
 void AppearanceController::applyColorScheme()
 {
     const Qt::ColorScheme scheme = m_themeMode == QStringLiteral("dark") ? Qt::ColorScheme::Dark
@@ -65,26 +74,26 @@ void AppearanceController::applyColorScheme()
 
     QPalette palette;
     const bool dark = m_themeMode == QStringLiteral("dark");
-    palette.setColor(QPalette::Window, dark ? QColor("#1d1f22") : QColor("#f5f6f8"));
-    palette.setColor(QPalette::WindowText, dark ? QColor("#e6e2dc") : QColor("#202124"));
-    palette.setColor(QPalette::Base, dark ? QColor("#141517") : QColor("#ffffff"));
-    palette.setColor(QPalette::AlternateBase, dark ? QColor("#24272b") : QColor("#f1f3f4"));
-    palette.setColor(QPalette::Text, dark ? QColor("#e6e2dc") : QColor("#202124"));
-    palette.setColor(QPalette::Button, dark ? QColor("#2a2d31") : QColor("#eceff1"));
-    palette.setColor(QPalette::ButtonText, dark ? QColor("#e6e2dc") : QColor("#202124"));
-    palette.setColor(QPalette::Highlight, dark ? QColor("#86b7d8") : QColor("#3a6f91"));
-    palette.setColor(QPalette::HighlightedText, dark ? QColor("#10212e") : QColor("#ffffff"));
-    palette.setColor(QPalette::BrightText, dark ? QColor("#ff8a80") : QColor("#b3261e"));
-    palette.setColor(QPalette::PlaceholderText, dark ? QColor("#aeb5bc") : QColor("#62676c"));
-    palette.setColor(QPalette::Mid, dark ? QColor("#737980") : QColor("#8a9096"));
-    palette.setColor(QPalette::Midlight, dark ? QColor("#45494e") : QColor("#d7dade"));
+    palette.setColor(QPalette::Window, dark ? QColor("#111815") : QColor("#f3f5f2"));
+    palette.setColor(QPalette::WindowText, dark ? QColor("#eef3ef") : QColor("#202a25"));
+    palette.setColor(QPalette::Base, dark ? QColor("#18211d") : QColor("#ffffff"));
+    palette.setColor(QPalette::AlternateBase, dark ? QColor("#202b25") : QColor("#edf1ed"));
+    palette.setColor(QPalette::Text, dark ? QColor("#eef3ef") : QColor("#202a25"));
+    palette.setColor(QPalette::Button, dark ? QColor("#293630") : QColor("#e7eee9"));
+    palette.setColor(QPalette::ButtonText, dark ? QColor("#eef3ef") : QColor("#202a25"));
+    palette.setColor(QPalette::Highlight, dark ? QColor("#7bc5a4") : QColor("#397b60"));
+    palette.setColor(QPalette::HighlightedText, dark ? QColor("#102019") : QColor("#ffffff"));
+    palette.setColor(QPalette::BrightText, dark ? QColor("#ff9387") : QColor("#a32119"));
+    palette.setColor(QPalette::PlaceholderText, dark ? QColor("#abb8b0") : QColor("#5e6a63"));
+    palette.setColor(QPalette::Mid, dark ? QColor("#6d7c73") : QColor("#849087"));
+    palette.setColor(QPalette::Midlight, dark ? QColor("#3b4941") : QColor("#d6ddd7"));
     palette.setColor(QPalette::Disabled, QPalette::Text,
-                     dark ? QColor("#a0a4aa") : QColor("#666b70"));
+                     dark ? QColor("#a3b0a8") : QColor("#5c665f"));
     palette.setColor(QPalette::Disabled, QPalette::WindowText,
-                     dark ? QColor("#a0a4aa") : QColor("#666b70"));
+                     dark ? QColor("#a3b0a8") : QColor("#5c665f"));
     palette.setColor(QPalette::Disabled, QPalette::ButtonText,
-                     dark ? QColor("#a0a4aa") : QColor("#666b70"));
+                     dark ? QColor("#a3b0a8") : QColor("#5c665f"));
     palette.setColor(QPalette::Disabled, QPalette::PlaceholderText,
-                     dark ? QColor("#8e949a") : QColor("#757a7f"));
+                     dark ? QColor("#89968e") : QColor("#68736c"));
     application->setPalette(palette);
 }

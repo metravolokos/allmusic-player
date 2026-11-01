@@ -126,9 +126,27 @@ if(BUILD_TESTING)
         add_test(NAME window-smoke-${screen} COMMAND allmusic-player --smoke-test
             "${CMAKE_CURRENT_BINARY_DIR}/window-smoke-${screen}.png" "${screen}")
     endforeach()
+    foreach(platform IN ITEMS desktop android)
+        foreach(theme IN ITEMS light dark)
+            foreach(page IN ITEMS library now)
+                if(page STREQUAL "library")
+                    set(preview_screen tracks)
+                else()
+                    set(preview_screen ${page})
+                endif()
+                add_test(NAME ui-preview-${platform}-${page}-${theme} COMMAND allmusic-player
+                    --smoke-test "${CMAKE_CURRENT_BINARY_DIR}/window-smoke-${platform}-${page}-${theme}.png"
+                    "${preview_screen}" "${theme}" "${platform}")
+            endforeach()
+        endforeach()
+    endforeach()
     set_tests_properties(window-smoke window-smoke-artists window-smoke-artistTracks
         window-smoke-artistAlbums window-smoke-albums window-smoke-albumTracks window-smoke-folders
-        window-smoke-now window-smoke-settings PROPERTIES TIMEOUT 30
+        window-smoke-now window-smoke-settings
+        ui-preview-desktop-library-light ui-preview-desktop-library-dark
+        ui-preview-desktop-now-light ui-preview-desktop-now-dark
+        ui-preview-android-library-light ui-preview-android-library-dark
+        ui-preview-android-now-light ui-preview-android-now-dark PROPERTIES TIMEOUT 30
         ENVIRONMENT "QT_QUICK_BACKEND=software")
 endif()
 

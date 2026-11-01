@@ -15,10 +15,10 @@ class AndroidLibraryUiContractTest(unittest.TestCase):
             with self.subTest(list_id=list_id):
                 self.assertIn(f"id: {list_id}", qml)
         self.assertIn("model: library", qml)
-        self.assertIn("model: media3.cloudConnected ? mailWebDav.entries : []", qml)
+        self.assertIn("model: root.cloudConnected() ? mailWebDav.entries : []", qml)
         self.assertIn("clip: true", qml)
         self.assertIn("queue.jumpTo(stableId)", qml)
-        self.assertIn("queue.startFolder(media3.cloudDirectoryPath", qml)
+        self.assertIn("queue.startFolder(root.cloudDirectory()", qml)
 
     def test_background_tag_scan_reads_bounded_ranges_without_whole_files(self):
         controller = (ROOT / "src/app/MailWebDavController.cpp").read_text(encoding="utf-8")
@@ -30,10 +30,10 @@ class AndroidLibraryUiContractTest(unittest.TestCase):
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
         track_list = qml.split("id: trackList", 1)[1].split("delegate: ItemDelegate", 1)[0]
         self.assertNotIn("TextField", track_list)
-        self.assertIn("onTextChanged: library.searchText = text", qml)
+        self.assertIn("library.searchText = text", qml)
         self.assertIn("onActivated: library.sortMode = index", qml)
-        self.assertIn("implicitHeight: 54", qml)
-        self.assertIn("implicitHeight: 50", qml)
+        self.assertIn("implicitHeight: 60", qml)
+        self.assertIn("implicitHeight: 46", qml)
         self.assertIn("id: miniPlayer", qml)
         self.assertIn("id: navigation", qml)
 
@@ -41,17 +41,17 @@ class AndroidLibraryUiContractTest(unittest.TestCase):
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
         self.assertIn('echoMode: TextInput.Password', qml)
         self.assertIn("passwordInput.clear()", qml)
-        self.assertIn("media3.connectCloud(emailInput.text, passwordInput.text)", qml)
-        self.assertIn("media3.disconnectCloud()", qml)
-        self.assertIn("text: media3.cloudStatus", qml)
-        self.assertIn("!media3.cloudBusy && !media3.cloudConnected", qml)
+        self.assertIn("mediaController.connectCloud(emailInput.text, passwordInput.text)", qml)
+        self.assertIn("mediaController.disconnectCloud()", qml)
+        self.assertIn("root.cloudStatus()", qml)
+        self.assertIn("!root.isCloudBusy() && !root.cloudConnected()", qml)
 
     def test_android_qml_methods_are_slots_and_properties_are_exposed(self):
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
         controller = (ROOT / "src/app/AndroidMedia3Controller.h").read_text(encoding="utf-8")
         model = (ROOT / "src/app/AndroidCloudTrackListModel.h").read_text(encoding="utf-8")
         slots = controller.split("public slots:", 1)[1].split("signals:", 1)[0]
-        methods = set(re.findall(r"\bmedia3\.([A-Za-z]\w*)\s*\(", qml))
+        methods = set(re.findall(r"\bmediaController\.([A-Za-z]\w*)\s*\(", qml))
         self.assertTrue(methods)
         for name in sorted(methods):
             with self.subTest(slot=name):

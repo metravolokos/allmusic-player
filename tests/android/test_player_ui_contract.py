@@ -39,6 +39,30 @@ class PlayerUiContractTest(unittest.TestCase):
                     self.assertIn(contract, qml)
                 self.assertNotIn("избран", qml.casefold())
 
+    def test_screens_use_flat_media_rows_and_documented_visual_preview_mode(self):
+        for platform in ("android", "desktop"):
+            with self.subTest(platform=platform):
+                qml = (ROOT / "ui" / platform / "Main.qml").read_text(encoding="utf-8")
+                self.assertIn("readonly property color accentColor", qml)
+                self.assertIn("readonly property color surfaceColor", qml)
+                self.assertIn("background: Rectangle", qml)
+                self.assertIn("property bool isCurrent:", qml)
+                self.assertIn("showcaseMode", qml)
+                self.assertIn('stableId: "preview-02"', qml)
+
+        main = (ROOT / "src/app/main.cpp").read_text(encoding="utf-8")
+        cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("setPreviewThemeMode(smokeTheme)", main)
+        self.assertIn('QStringLiteral("AndroidPreview")', main)
+        for variant in (
+            "ui-preview-android-library-light", "ui-preview-android-library-dark",
+            "ui-preview-android-now-light", "ui-preview-android-now-dark",
+            "ui-preview-desktop-library-light", "ui-preview-desktop-library-dark",
+            "ui-preview-desktop-now-light", "ui-preview-desktop-now-dark",
+        ):
+            with self.subTest(variant=variant):
+                self.assertIn(variant, cmake)
+
     def test_desktop_connects_cloud_and_local_playback(self):
         qml = (ROOT / "ui/desktop/Main.qml").read_text(encoding="utf-8")
         for contract in (
@@ -54,10 +78,10 @@ class PlayerUiContractTest(unittest.TestCase):
 
     def test_android_uses_media3_and_large_touch_targets(self):
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
-        self.assertIn("media3.stateText", qml)
-        self.assertIn("media3.seekTo(Math.round(value))", qml)
-        self.assertIn("media3.disconnectCloud()", qml)
-        self.assertIn("implicitHeight: 54", qml)
+        self.assertIn("mediaController.stateText", qml)
+        self.assertIn("mediaController.seekTo(Math.round(value))", qml)
+        self.assertIn("mediaController.disconnectCloud()", qml)
+        self.assertIn("implicitHeight: 60", qml)
         self.assertIn("implicitHeight: 48", qml)
         self.assertIn('text: "Стоп"', qml)
 

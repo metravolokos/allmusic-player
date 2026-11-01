@@ -14,6 +14,7 @@ public:
 
     QString themeMode() const { return m_themeMode; }
     Q_INVOKABLE void setThemeMode(const QString &mode);
+    void setPreviewThemeMode(const QString &mode);
 
     static void prepareFusionStyle();
 

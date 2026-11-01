@@ -37,13 +37,30 @@ int main(int argc, char *argv[])
     AppearanceController appearance;
 
     const auto arguments = app.arguments();
-    const bool smokeTest = (arguments.size() == 3 || arguments.size() == 4)
+    const bool smokeTest = arguments.size() >= 3 && arguments.size() <= 6
         && arguments.at(1) == QStringLiteral("--smoke-test");
     bool capturedFrame = false;
+    const QString smokeTheme = smokeTest && arguments.size() >= 5
+        ? arguments.at(4) : QString();
+    const QString smokePlatform = smokeTest && arguments.size() >= 6
+        ? arguments.at(5) : QString();
     if (arguments.size() != 1 && !smokeTest) {
-        qCritical() << "Usage: allmusic-player [--smoke-test screenshot.png [screen]]";
+        qCritical() << "Usage: allmusic-player [--smoke-test screenshot.png [screen [light|dark [desktop|android]]]]";
         return 2;
     }
+    if (smokeTest && arguments.size() >= 5
+        && smokeTheme != QStringLiteral("light") && smokeTheme != QStringLiteral("dark")) {
+        qCritical() << "Smoke theme must be light or dark";
+        return 2;
+    }
+    if (smokeTest && arguments.size() == 6
+        && smokePlatform != QStringLiteral("desktop")
+        && smokePlatform != QStringLiteral("android")) {
+        qCritical() << "Smoke platform must be desktop or android";
+        return 2;
+    }
+    if (smokeTest && !smokeTheme.isEmpty())
+        appearance.setPreviewThemeMode(smokeTheme);
 
 #ifndef Q_OS_ANDROID
     LocalPlayback playback;
@@ -130,9 +147,13 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("queue"), queue.get());
 #endif
     engine.rootContext()->setContextProperty(QStringLiteral("smokePage"),
-        smokeTest && arguments.size() == 4 ? QVariant(arguments.at(3)) : QVariant());
+        smokeTest && arguments.size() >= 4 ? QVariant(arguments.at(3)) : QVariant());
+    engine.rootContext()->setContextProperty(QStringLiteral("smokeTheme"), smokeTheme);
+    engine.rootContext()->setContextProperty(QStringLiteral("smokePlatform"), smokePlatform);
     engine.rootContext()->setContextProperty(QStringLiteral("appearance"), &appearance);
-    engine.loadFromModule(QStringLiteral("AllMusicPlayer"), QStringLiteral("Main"));
+    engine.loadFromModule(QStringLiteral("AllMusicPlayer"),
+        smokePlatform == QStringLiteral("android")
+            ? QStringLiteral("AndroidPreview") : QStringLiteral("Main"));
     if (engine.rootObjects().isEmpty())
         return 1;
 

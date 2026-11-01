@@ -35,6 +35,8 @@ if(ANDROID)
         MailWebDavController.h)
     target_link_libraries(allmusic-player PRIVATE mail-webdav-range)
     set(app_qml ${PROJECT_SOURCE_DIR}/ui/android/Main.qml)
+    set_source_files_properties(${app_qml} PROPERTIES QT_RESOURCE_ALIAS Main.qml)
+    set(qml_files ${app_qml})
 else()
     target_sources(allmusic-player PRIVATE
         AppearanceController.cpp
@@ -49,12 +51,15 @@ else()
         MailWebDavController.h)
     target_link_libraries(allmusic-player PRIVATE mail-webdav-diagnostic)
     set(app_qml ${PROJECT_SOURCE_DIR}/ui/desktop/Main.qml)
+    set_source_files_properties(${app_qml} PROPERTIES QT_RESOURCE_ALIAS Main.qml)
+    set(android_preview_qml ${PROJECT_SOURCE_DIR}/ui/android/Main.qml)
+    set_source_files_properties(${android_preview_qml} PROPERTIES QT_RESOURCE_ALIAS AndroidPreview.qml)
+    set(qml_files ${app_qml} ${android_preview_qml})
 endif()
-set_source_files_properties(${app_qml} PROPERTIES QT_RESOURCE_ALIAS Main.qml)
 qt_add_qml_module(allmusic-player
     URI AllMusicPlayer
     VERSION 1.0
-    QML_FILES ${app_qml}
+    QML_FILES ${qml_files}
 )
 target_link_libraries(allmusic-player PRIVATE Qt6::Quick Qt6::QuickControls2)
 set_target_properties(allmusic-player PROPERTIES

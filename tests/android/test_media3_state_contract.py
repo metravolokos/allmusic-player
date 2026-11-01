@@ -46,11 +46,10 @@ class Media3StateContractTest(unittest.TestCase):
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
 
         self.assertIn('Value::Buffering: return tr("Буферизация Media3")', controller)
-        self.assertIn("media3.stateText", qml)
-        self.assertIn('text: queue.count > 0 ? media3.stateText', qml)
-        self.assertIn('text: "Media3: " + media3.stateText', qml)
+        self.assertIn("mediaController.stateText", qml)
+        self.assertIn('text: "Состояние воспроизведения: " + mediaController.stateText', qml)
         self.assertIn('id: miniPlayer', qml)
-        self.assertIn('text: queue.currentTitle.length ? queue.currentTitle', qml)
+        self.assertIn('text: root.displayedTitle().length ? root.displayedTitle()', qml)
 
 
 if __name__ == "__main__":

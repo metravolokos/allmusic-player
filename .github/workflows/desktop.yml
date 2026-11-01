@@ -193,7 +193,7 @@ jobs:
         if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || github.event_name == 'release'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: AllMusicPlayer-Desktop-Screenshots-${{ github.run_id }}
+          name: AllMusicPlayer-UI-Screenshots-${{ github.run_id }}
           path: build/desktop-release/window-smoke*.png
           if-no-files-found: error
           retention-days: ${{ github.event_name == 'release' && 90 || 14 }}
