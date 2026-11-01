@@ -17,6 +17,14 @@ class RequiredPrGate(unittest.TestCase):
     def test_forced_full_pr_mode_satisfies_mode_gate(self):
         self.assertIsNone(required_pr_gate_error("pull_request", "full-fail-closed"))
 
+    def test_pr_gate_rejects_noncanonical_full_modes(self):
+        for mode in ("READY-FULL", " ready-full ", "full-fail-closed\n"):
+            with self.subTest(mode=mode):
+                self.assertIsNotNone(required_pr_gate_error("pull_request", mode))
+        for mode in ("ready-full", "full-fail-closed"):
+            with self.subTest(mode=mode):
+                self.assertIsNone(required_pr_gate_error("pull_request", mode))
+
     def test_unknown_or_missing_pr_mode_fails_closed(self):
         for mode in ("main-lightweight", "", None):
             with self.subTest(mode=mode):
