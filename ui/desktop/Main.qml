@@ -477,7 +477,15 @@ ApplicationWindow {
                             RowLayout {
                                 Layout.alignment: Qt.AlignHCenter; spacing: 8
                                 ToolButton { implicitWidth: 46; implicitHeight: 46; text: "|‹"; Accessible.name: "Предыдущая композиция"; enabled: root.showcaseMode || queue.canPrevious; onClicked: if (!root.showcaseMode) queue.previous() }
-                                ToolButton { implicitWidth: 54; implicitHeight: 54; text: media.playbackState === MediaPlayer.PlayingState || root.showcaseMode ? "Ⅱ" : "▶"; Accessible.name: media.playbackState === MediaPlayer.PlayingState ? "Пауза" : "Воспроизвести"; enabled: root.showcaseMode || queue.count > 0 || media.hasAudio; onClicked: root.togglePlayback(); contentItem: Label { text: parent.text; color: root.accentTextColor; font.pixelSize: 20; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }; background: Rectangle { radius: 27; color: root.accentColor } }
+                                ToolButton {
+                                    implicitWidth: 54; implicitHeight: 54
+                                    text: media.playbackState === MediaPlayer.PlayingState || root.showcaseMode ? "Ⅱ" : "▶"
+                                    Accessible.name: media.playbackState === MediaPlayer.PlayingState ? "Пауза" : "Воспроизвести"
+                                    enabled: root.showcaseMode || queue.count > 0 || media.hasAudio
+                                    onClicked: root.togglePlayback()
+                                    contentItem: Label { text: parent.text; color: root.accentTextColor; font.pixelSize: 20; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                    background: Rectangle { radius: 27; color: root.accentColor }
+                                }
                                 ToolButton { implicitWidth: 46; implicitHeight: 46; text: "›|"; Accessible.name: "Следующая композиция"; enabled: root.showcaseMode || queue.canNext; onClicked: if (!root.showcaseMode) queue.next() }
                                 ToolButton { implicitWidth: 42; implicitHeight: 46; text: "■"; Accessible.name: "Стоп"; enabled: root.showcaseMode || queue.active || media.playbackState !== MediaPlayer.StoppedState; onClicked: if (!root.showcaseMode) { if (queue.count > 0) queue.stop(); else playback.stop() } }
                             }
@@ -554,7 +562,15 @@ ApplicationWindow {
                 RowLayout {
                     Layout.preferredWidth: 142; spacing: 2
                     ToolButton { implicitWidth: 40; implicitHeight: 46; text: "|‹"; Accessible.name: "Предыдущая композиция"; enabled: root.showcaseMode || queue.canPrevious; onClicked: if (!root.showcaseMode) queue.previous() }
-                    ToolButton { implicitWidth: 46; implicitHeight: 46; text: media.playbackState === MediaPlayer.PlayingState || root.showcaseMode ? "Ⅱ" : "▶"; Accessible.name: media.playbackState === MediaPlayer.PlayingState ? "Пауза" : "Воспроизвести"; enabled: root.showcaseMode || queue.count > 0 || media.hasAudio; onClicked: root.togglePlayback(); contentItem: Label { text: parent.text; color: root.accentTextColor; font.pixelSize: 17; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }; background: Rectangle { radius: 23; color: root.accentColor } }
+                    ToolButton {
+                        implicitWidth: 46; implicitHeight: 46
+                        text: media.playbackState === MediaPlayer.PlayingState || root.showcaseMode ? "Ⅱ" : "▶"
+                        Accessible.name: media.playbackState === MediaPlayer.PlayingState ? "Пауза" : "Воспроизвести"
+                        enabled: root.showcaseMode || queue.count > 0 || media.hasAudio
+                        onClicked: root.togglePlayback()
+                        contentItem: Label { text: parent.text; color: root.accentTextColor; font.pixelSize: 17; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        background: Rectangle { radius: 23; color: root.accentColor }
+                    }
                     ToolButton { implicitWidth: 40; implicitHeight: 46; text: "›|"; Accessible.name: "Следующая композиция"; enabled: root.showcaseMode || queue.canNext; onClicked: if (!root.showcaseMode) queue.next() }
                 }
                 ColumnLayout {
