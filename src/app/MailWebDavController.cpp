@@ -1,5 +1,6 @@
 #include "MailWebDavController.h"
 #include "MailWebDavRangeDevice.h"
+#include "TrackIdentity.h"
 
 #include <utility>
 
@@ -55,12 +56,35 @@ QVariantList MailWebDavController::entries() const
     for (const auto &entry : m_entries) {
         QVariantMap row;
         row.insert(QStringLiteral("label"), displayName(entry.path, entry.directory));
+        row.insert(QStringLiteral("stableId"), TrackIdentity::stableIdForPath(entry.path));
         row.insert(QStringLiteral("isDirectory"), entry.directory);
         row.insert(QStringLiteral("isAudio"), !entry.directory && isAudio(entry.path));
         row.insert(QStringLiteral("size"), entry.size ? QVariant::fromValue(*entry.size) : QVariant());
         model.push_back(row);
     }
     return model;
+}
+
+QString MailWebDavController::sourcePathForStableId(const QString &stableId) const
+{
+    if (!TrackIdentity::isValidStableId(stableId))
+        return {};
+    for (const auto &entry : m_entries) {
+        if (TrackIdentity::stableIdForPath(entry.path) == stableId)
+            return entry.path;
+    }
+    return {};
+}
+
+int MailWebDavController::sourceIndexForStableId(const QString &stableId) const
+{
+    if (!TrackIdentity::isValidStableId(stableId))
+        return -1;
+    for (int index = 0; index < m_entries.size(); ++index) {
+        if (TrackIdentity::stableIdForPath(m_entries.at(index).path) == stableId)
+            return index;
+    }
+    return -1;
 }
 
 bool MailWebDavController::isAudio(const QString &path)

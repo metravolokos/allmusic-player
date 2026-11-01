@@ -15,6 +15,9 @@ if(ANDROID)
     target_sources(allmusic-player PRIVATE
         AndroidCloudTrackListModel.cpp
         AndroidCloudTrackListModel.h
+        AndroidFavoritesModel.cpp
+        AndroidFavoritesModel.h
+        TrackIdentity.h
         AndroidMedia3Controller.cpp
         AndroidMedia3Controller.h
         AndroidMedia3State.h

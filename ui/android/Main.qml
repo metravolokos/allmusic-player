@@ -10,6 +10,8 @@ Window {
     color: "#f5f6f8"
     property int selectedCloudIndex: -1
     property string selectedCloudLabel: ""
+    property string selectedFavoriteId: ""
+    property bool showFavorites: false
     property bool showSyntheticTracks: false
 
     function formatTime(milliseconds) {
@@ -20,6 +22,7 @@ Window {
     function clearCloudSelection() {
         selectedCloudIndex = -1
         selectedCloudLabel = ""
+        selectedFavoriteId = ""
     }
 
     function selectCloudEntry(sourceIndex, label, isDirectory) {
@@ -33,6 +36,12 @@ Window {
     }
 
     function clearSelectionIfHidden() {
+        if (showFavorites) {
+            if (selectedFavoriteId.length > 0
+                    && !media3.favoritesModel.contains(selectedFavoriteId))
+                clearCloudSelection()
+            return
+        }
         if (selectedCloudIndex >= 0
                 && !media3.cloudEntriesModel.containsSourceIndex(selectedCloudIndex))
             clearCloudSelection()
@@ -256,7 +265,7 @@ Window {
                     font.pixelSize: 13
                     color: "#17212b"
                     inputMethodHints: Qt.ImhNoPredictiveText
-                    enabled: media3.cloudConnected && !media3.cloudBusy
+                    enabled: media3.cloudConnected && !media3.cloudBusy && !root.showFavorites
                     onTextChanged: {
                         if (media3.cloudEntriesModel.searchText !== text)
                             media3.cloudEntriesModel.searchText = text
@@ -287,22 +296,44 @@ Window {
             spacing: 8
 
             Text {
-                width: parent.width - 146
+                width: parent.width - 254
                 height: parent.height
-                text: "Показано " + media3.cloudEntriesModel.resultCount
-                      + " из " + media3.cloudEntriesModel.totalCount
+                text: root.showFavorites
+                      ? "Избранное: " + media3.favoritesModel.count
+                      : "Показано " + media3.cloudEntriesModel.resultCount
+                        + " из " + media3.cloudEntriesModel.totalCount
                 color: "#526171"
                 font.pixelSize: 12
                 verticalAlignment: Text.AlignVCenter
             }
             Rectangle {
+                width: 94
+                height: parent.height
+                radius: 8
+                color: root.showFavorites ? "#1769aa" : "#dceaf5"
+                Text {
+                    anchors.centerIn: parent
+                    text: root.showFavorites ? "Избранное" : "Все"
+                    color: root.showFavorites ? "white" : "#17212b"
+                    font.pixelSize: 11
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        root.showFavorites = !root.showFavorites
+                        root.clearCloudSelection()
+                    }
+                }
+            }
+            Rectangle {
                 width: 138
                 height: parent.height
                 radius: 8
-                color: media3.cloudConnected ? "#dceaf5" : "#e5e9ed"
+                color: media3.cloudConnected && !root.showFavorites ? "#dceaf5" : "#e5e9ed"
                 Text {
                     anchors.centerIn: parent
-                    text: media3.cloudEntriesModel.sortMode === 0 ? "Сортировка: А → Я"
+                    text: root.showFavorites ? "Порядок добавления"
+                          : media3.cloudEntriesModel.sortMode === 0 ? "Сортировка: А → Я"
                           : media3.cloudEntriesModel.sortMode === 1 ? "Сортировка: Я → А"
                           : "Сортировка: исходная"
                     color: "#17212b"
@@ -310,7 +341,7 @@ Window {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    enabled: media3.cloudConnected && !media3.cloudBusy
+                    enabled: media3.cloudConnected && !media3.cloudBusy && !root.showFavorites
                     onClicked: media3.cloudEntriesModel.sortMode = (media3.cloudEntriesModel.sortMode + 1) % 3
                 }
             }
@@ -319,7 +350,7 @@ Window {
         Text {
             x: 12
             width: parent.width - 24
-            visible: media3.cloudConnected && media3.cloudEntriesModel.totalCount > 0
+            visible: !root.showFavorites && media3.cloudConnected && media3.cloudEntriesModel.totalCount > 0
                      && media3.cloudEntriesModel.resultCount === 0
             text: "Совпадений нет"
             color: "#526171"
@@ -330,13 +361,23 @@ Window {
         Text {
             x: 12
             width: parent.width - 24
-            visible: media3.cloudConnected && !media3.cloudBusy
+            visible: !root.showFavorites && media3.cloudConnected && !media3.cloudBusy
                      && media3.cloudEntriesModel.totalCount === 0
             text: "В этой папке нет поддерживаемых композиций."
             color: "#526171"
             font.pixelSize: 12
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
+        }
+
+        Text {
+            x: 12
+            width: parent.width - 24
+            visible: root.showFavorites && media3.favoritesModel.count === 0
+            text: "В избранном пока нет композиций."
+            color: "#526171"
+            font.pixelSize: 12
+            horizontalAlignment: Text.AlignHCenter
         }
     }
 
@@ -353,26 +394,38 @@ Window {
         clip: true
         spacing: 6
         boundsBehavior: Flickable.StopAtBounds
-        model: media3.cloudEntriesModel
+        model: root.showFavorites ? media3.favoritesModel : media3.cloudEntriesModel
 
         delegate: Rectangle {
             required property int sourceIndex
             required property string label
             required property bool isDirectory
+            required property bool isAudio
+            required property bool isFavorite
+            required property bool isAvailable
+            required property bool isMissing
+            required property string stableId
             width: cloudList.width
             height: 50
             radius: 8
-            color: root.selectedCloudIndex === sourceIndex ? "#dceaf5" : "white"
-            border.width: root.selectedCloudIndex === sourceIndex ? 2 : 1
-            border.color: root.selectedCloudIndex === sourceIndex ? "#1769aa" : "#d5dce3"
+            color: (root.showFavorites ? root.selectedFavoriteId === stableId
+                                      : root.selectedCloudIndex === sourceIndex)
+                   ? "#dceaf5" : "white"
+            border.width: (root.showFavorites ? root.selectedFavoriteId === stableId
+                                              : root.selectedCloudIndex === sourceIndex) ? 2 : 1
+            border.color: (root.showFavorites ? root.selectedFavoriteId === stableId
+                                              : root.selectedCloudIndex === sourceIndex)
+                          ? "#1769aa" : "#d5dce3"
 
             Text {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.leftMargin: 12
-                anchors.rightMargin: 12
+                anchors.rightMargin: 54
                 anchors.verticalCenter: parent.verticalCenter
-                text: label
+                text: root.showFavorites && isMissing ? label + " · недоступен"
+                      : root.showFavorites && !isAvailable ? label + " · доступность не проверена"
+                      : label
                 color: "#17212b"
                 font.pixelSize: 14
                 elide: Text.ElideMiddle
@@ -380,7 +433,45 @@ Window {
             MouseArea {
                 anchors.fill: parent
                 enabled: media3.cloudConnected && !media3.cloudBusy
-                onClicked: root.selectCloudEntry(sourceIndex, label, isDirectory)
+                onClicked: {
+                    if (root.showFavorites) {
+                        root.selectedFavoriteId = stableId
+                        root.selectedCloudIndex = -1
+                        root.selectedCloudLabel = label
+                    } else {
+                        root.selectCloudEntry(sourceIndex, label, isDirectory)
+                    }
+                }
+            }
+
+            Rectangle {
+                width: 42
+                height: 38
+                anchors.right: parent.right
+                anchors.rightMargin: 5
+                anchors.verticalCenter: parent.verticalCenter
+                radius: 7
+                color: "#f3f5f7"
+                visible: isAudio
+                Text {
+                    anchors.centerIn: parent
+                    text: isFavorite ? "★" : "☆"
+                    color: isFavorite ? "#c58b00" : "#526171"
+                    font.pixelSize: 21
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: root.showFavorites || (media3.cloudConnected && !media3.cloudBusy)
+                    onClicked: {
+                        if (root.showFavorites) {
+                            if (media3.removeFavorite(stableId)
+                                    && root.selectedFavoriteId === stableId)
+                                root.clearCloudSelection()
+                        } else {
+                            media3.toggleFavorite(stableId, label)
+                        }
+                    }
+                }
             }
         }
     }
@@ -404,8 +495,10 @@ Window {
             Text {
                 width: parent.width
                 height: 18
-                text: root.selectedCloudIndex >= 0
-                      ? "Выбрано: " + root.selectedCloudLabel
+                text: root.showFavorites && root.selectedFavoriteId.length > 0
+                      ? "Избранное: " + root.selectedCloudLabel
+                      : root.selectedCloudIndex >= 0
+                        ? "Выбрано: " + root.selectedCloudLabel
                       : "Активный трек: " + media3.activeTrackName + " · " + media3.stateText
                 color: "#17212b"
                 font.pixelSize: 12
@@ -418,19 +511,31 @@ Window {
                 width: parent.width
                 height: 38
                 radius: 8
-                color: (root.selectedCloudIndex >= 0
-                        && media3.canPlayCloud(root.selectedCloudIndex)) ? "#1769aa" : "#aab6c2"
+                color: (root.showFavorites
+                        ? root.selectedFavoriteId.length > 0
+                          && media3.canPlayFavorite(root.selectedFavoriteId)
+                        : root.selectedCloudIndex >= 0
+                          && media3.canPlayCloud(root.selectedCloudIndex)) ? "#1769aa" : "#aab6c2"
                 Text {
                     anchors.centerIn: parent
-                    text: "Воспроизвести выбранный MP3 / FLAC"
+                    text: root.showFavorites ? "Воспроизвести выбранное избранное"
+                          : "Воспроизвести выбранный MP3 / FLAC"
                     color: "white"
                     font.pixelSize: 13
                 }
                 MouseArea {
                     anchors.fill: parent
-                    enabled: root.selectedCloudIndex >= 0
-                             && media3.canPlayCloud(root.selectedCloudIndex)
-                    onClicked: media3.playCloud(root.selectedCloudIndex)
+                    enabled: root.showFavorites
+                             ? root.selectedFavoriteId.length > 0
+                               && media3.canPlayFavorite(root.selectedFavoriteId)
+                             : root.selectedCloudIndex >= 0
+                               && media3.canPlayCloud(root.selectedCloudIndex)
+                    onClicked: {
+                        if (root.showFavorites)
+                            media3.playFavorite(root.selectedFavoriteId)
+                        else
+                            media3.playCloud(root.selectedCloudIndex)
+                    }
                 }
             }
 

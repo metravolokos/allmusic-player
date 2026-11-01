@@ -1,6 +1,7 @@
 #include "AndroidMedia3Controller.h"
 #include "AndroidMailRangeRegistry.h"
 #include "MailWebDavController.h"
+#include "TrackIdentity.h"
 #include "../playback/MailWebDavRangeDevice.h"
 
 #include <QCoreApplication>
@@ -51,8 +52,19 @@ AndroidMedia3State::Value valueFromJava(jint value)
 AndroidMedia3Controller::AndroidMedia3Controller(MailWebDavController *cloud,
                                                  QObject *parent)
     : QObject(parent), m_cloud(cloud),
-      m_cloudEntriesModel(new AndroidCloudTrackListModel(this))
+      m_cloudEntriesModel(new AndroidCloudTrackListModel(this)),
+      m_favoritesModel(new AndroidFavoritesModel(this))
 {
+    m_cloudEntriesModel->setFavoriteIds(m_favoritesModel->favoriteIds());
+    connect(m_favoritesModel, &AndroidFavoritesModel::favoritesChanged, this, [this] {
+        m_cloudEntriesModel->setFavoriteIds(m_favoritesModel->favoriteIds());
+        if (!m_pendingFavoriteId.isEmpty()
+            && !m_favoritesModel->contains(m_pendingFavoriteId)) {
+            cancelFavoriteNavigation();
+        }
+        emit changed();
+    });
+
     if (!m_cloud || !AndroidMailRangeRegistry::registerJniMethods()) {
         setError(tr("Не удалось подключить безопасный мост Cloud Mail."));
         return;
@@ -88,15 +100,30 @@ AndroidMedia3Controller::AndroidMedia3Controller(MailWebDavController *cloud,
             this, &AndroidMedia3Controller::stopForDisconnect);
     connect(m_cloud, &MailWebDavController::playbackRequested,
             this, &AndroidMedia3Controller::playCloud);
-    connect(m_cloud, &MailWebDavController::stateChanged,
-            this, &AndroidMedia3Controller::changed);
-    connect(m_cloud, &MailWebDavController::entriesChanged, this, [this] {
-        m_cloudEntriesModel->setEntries(m_cloud->entries());
-        emit cloudEntriesReset();
+    connect(m_cloud, &MailWebDavController::stateChanged, this, [this] {
         emit changed();
+        if (!m_pendingFavoriteId.isEmpty() && !m_cloud->busy()) {
+            QTimer::singleShot(0, this, [this] {
+                if (!m_pendingFavoriteId.isEmpty())
+                    continueFavoriteNavigation();
+            });
+        }
     });
-    connect(m_cloud, &MailWebDavController::sessionEnded,
-            this, &AndroidMedia3Controller::cloudSessionEnded);
+    connect(m_cloud, &MailWebDavController::entriesChanged, this, [this] {
+        QTimer::singleShot(0, this, [this] {
+            const QVariantList entries = m_cloud->entries();
+            m_cloudEntriesModel->setEntries(entries);
+            m_favoritesModel->setCurrentEntries(entries, m_cloud->currentDirectory(),
+                                                m_cloud->connected() && !m_cloud->busy());
+            m_cloudEntriesModel->setFavoriteIds(m_favoritesModel->favoriteIds());
+            emit cloudEntriesReset();
+            emit changed();
+        });
+    });
+    connect(m_cloud, &MailWebDavController::sessionEnded, this, [this] {
+        cancelFavoriteNavigation();
+        emit cloudSessionEnded();
+    });
 
     selectTrack(0);
 }
@@ -219,6 +246,11 @@ AndroidCloudTrackListModel *AndroidMedia3Controller::cloudEntriesModel() const
     return m_cloudEntriesModel;
 }
 
+AndroidFavoritesModel *AndroidMedia3Controller::favoritesModel() const
+{
+    return m_favoritesModel;
+}
+
 void AndroidMedia3Controller::connectCloud(QString email, QString appPassword)
 {
     if (m_released || !m_cloud)
@@ -229,12 +261,14 @@ void AndroidMedia3Controller::connectCloud(QString email, QString appPassword)
 
 void AndroidMedia3Controller::disconnectCloud()
 {
+    cancelFavoriteNavigation();
     if (m_cloud)
         m_cloud->disconnectCloud();
 }
 
 void AndroidMedia3Controller::openCloudDirectory(int index)
 {
+    cancelFavoriteNavigation();
     if (m_cloud && m_cloudEntriesModel->containsSourceIndex(index))
         m_cloud->openDirectory(index);
 }
@@ -246,6 +280,7 @@ bool AndroidMedia3Controller::canGoToCloudParent() const
 
 void AndroidMedia3Controller::goToCloudParent()
 {
+    cancelFavoriteNavigation();
     if (m_cloud)
         m_cloud->goToParent();
 }
@@ -256,10 +291,36 @@ bool AndroidMedia3Controller::canPlayCloud(int index) const
         && m_cloud->canPlay(index);
 }
 
+bool AndroidMedia3Controller::toggleFavorite(const QString &stableId, const QString &label)
+{
+    if (m_released || !m_cloud || !m_favoritesModel || !m_cloud->connected()
+        || m_cloud->busy()) {
+        return false;
+    }
+
+    const QVariantList entries = m_cloud->entries();
+    for (const QVariant &value : entries) {
+        const QVariantMap entry = value.toMap();
+        if (entry.value(QStringLiteral("stableId")).toString() == stableId
+            && entry.value(QStringLiteral("isAudio")).toBool()
+            && !entry.value(QStringLiteral("isDirectory")).toBool()) {
+            const QString sourcePath = m_cloud->sourcePathForStableId(stableId);
+            return m_favoritesModel->toggleFavorite(stableId, label, sourcePath);
+        }
+    }
+    return false;
+}
+
+bool AndroidMedia3Controller::removeFavorite(const QString &stableId)
+{
+    return m_favoritesModel && m_favoritesModel->removeFavorite(stableId);
+}
+
 void AndroidMedia3Controller::selectTrack(int index)
 {
     if (m_released || index < 0 || index >= static_cast<int>(std::size(kTracks)))
         return;
+    cancelFavoriteNavigation();
     releaseCloudSource();
     m_trackIndex = index;
     m_error.clear();
@@ -292,6 +353,7 @@ void AndroidMedia3Controller::pause()
 
 void AndroidMedia3Controller::stop()
 {
+    cancelFavoriteNavigation();
     if (m_released || !stopEnabled())
         return;
     invokeCommand("stop");
@@ -304,8 +366,153 @@ void AndroidMedia3Controller::stop()
 
 void AndroidMedia3Controller::playCloud(int index)
 {
+    cancelFavoriteNavigation();
     if (m_released || !m_cloud || !m_cloudEntriesModel->containsSourceIndex(index)
         || !m_cloud->canPlay(index))
+        return;
+
+    playCloudSourceIndex(index);
+}
+
+bool AndroidMedia3Controller::canPlayFavorite(const QString &stableId) const
+{
+    if (m_released || !m_cloud || !m_cloudEntriesModel || !m_cloud->connected()
+        || m_cloud->busy() || !m_favoritesModel || !m_favoritesModel->contains(stableId)
+        || m_favoritesModel->isMissing(stableId)) {
+        return false;
+    }
+    const int sourceIndex = m_cloudEntriesModel->sourceIndexForStableId(stableId);
+    if (sourceIndex >= 0)
+        return m_cloud->canPlay(sourceIndex);
+
+    const QString sourcePath = m_favoritesModel->sourcePathForStableId(stableId);
+    if (!TrackIdentity::isValidPath(sourcePath))
+        return false;
+    const QString lowerPath = sourcePath.toLower();
+    return lowerPath.endsWith(QStringLiteral(".mp3"))
+        || lowerPath.endsWith(QStringLiteral(".flac"));
+}
+
+void AndroidMedia3Controller::playFavorite(const QString &stableId)
+{
+    if (!canPlayFavorite(stableId))
+        return;
+    const int sourceIndex = m_cloudEntriesModel->sourceIndexForStableId(stableId);
+    if (sourceIndex >= 0) {
+        playCloudSourceIndex(sourceIndex);
+        return;
+    }
+
+    cancelFavoriteNavigation();
+    m_pendingFavoriteId = stableId;
+    continueFavoriteNavigation();
+}
+
+void AndroidMedia3Controller::continueFavoriteNavigation()
+{
+    if (m_pendingFavoriteId.isEmpty() || m_waitingForFavoriteListing || !m_cloud
+        || m_cloud->busy()) {
+        return;
+    }
+    if (!m_cloud->connected()) {
+        cancelFavoriteNavigation();
+        return;
+    }
+
+    if (!m_expectedFavoriteDirectory.isEmpty()) {
+        if (m_cloud->currentDirectory() != m_expectedFavoriteDirectory) {
+            cancelFavoriteNavigation();
+            setError(tr("Не удалось открыть папку избранного."));
+            return;
+        }
+        m_expectedFavoriteDirectory.clear();
+    }
+
+    const QString stableId = m_pendingFavoriteId;
+    const QString sourcePath = m_favoritesModel->sourcePathForStableId(stableId);
+    const qsizetype separator = sourcePath.lastIndexOf(u'/');
+    if (!TrackIdentity::isValidPath(sourcePath) || separator < 0) {
+        cancelFavoriteNavigation();
+        return;
+    }
+    const QString targetDirectory = sourcePath.left(separator + 1);
+    const QString currentDirectory = m_cloud->currentDirectory();
+
+    if (currentDirectory == targetDirectory) {
+        const int sourceIndex = m_cloudEntriesModel->sourceIndexForStableId(stableId);
+        if (sourceIndex >= 0 && m_cloud->canPlay(sourceIndex)) {
+            cancelFavoriteNavigation();
+            playCloudSourceIndex(sourceIndex);
+        } else {
+            cancelFavoriteNavigation();
+            if (m_favoritesModel->isMissing(stableId))
+                setError(tr("Избранный трек больше не найден в медиатеке."));
+        }
+        return;
+    }
+
+    if (!currentDirectory.startsWith(QStringLiteral("/AllMusic/"))) {
+        cancelFavoriteNavigation();
+        setError(tr("Не удалось открыть папку избранного."));
+        return;
+    }
+
+    if (!targetDirectory.startsWith(currentDirectory)) {
+        if (!m_cloud->canGoToParent()) {
+            cancelFavoriteNavigation();
+            return;
+        }
+        QString parentDirectory = currentDirectory;
+        if (parentDirectory.endsWith(u'/'))
+            parentDirectory.chop(1);
+        const qsizetype parentSeparator = parentDirectory.lastIndexOf(u'/');
+        if (parentSeparator < 0) {
+            cancelFavoriteNavigation();
+            return;
+        }
+        m_expectedFavoriteDirectory = parentDirectory.left(parentSeparator + 1);
+        m_waitingForFavoriteListing = true;
+        m_cloud->goToParent();
+        m_waitingForFavoriteListing = false;
+        return;
+    }
+
+    const QString remainder = targetDirectory.mid(currentDirectory.size());
+    const qsizetype nextSeparator = remainder.indexOf(u'/');
+    if (nextSeparator < 0) {
+        cancelFavoriteNavigation();
+        setError(tr("Не удалось определить папку избранного."));
+        return;
+    }
+    const QString nextDirectory = currentDirectory + remainder.left(nextSeparator + 1);
+    openFavoriteNavigationDirectory(nextDirectory);
+}
+
+void AndroidMedia3Controller::openFavoriteNavigationDirectory(const QString &directory)
+{
+    const QString stableId = TrackIdentity::stableIdForPath(directory);
+    const int sourceIndex = m_cloud->sourceIndexForStableId(stableId);
+    if (m_cloud->canOpenDirectory(sourceIndex)) {
+        m_expectedFavoriteDirectory = directory;
+        m_waitingForFavoriteListing = true;
+        m_cloud->openDirectory(sourceIndex);
+        m_waitingForFavoriteListing = false;
+        return;
+    }
+    cancelFavoriteNavigation();
+    setError(tr("Папка избранного больше не найдена в медиатеке."));
+}
+
+void AndroidMedia3Controller::cancelFavoriteNavigation()
+{
+    m_pendingFavoriteId.clear();
+    m_expectedFavoriteDirectory.clear();
+    m_waitingForFavoriteListing = false;
+}
+
+void AndroidMedia3Controller::playCloudSourceIndex(int index)
+{
+    if (m_released || !m_cloud || !m_cloud->canPlay(index))
         return;
 
     releaseCloudSource();
@@ -384,6 +591,7 @@ void AndroidMedia3Controller::release()
     if (m_released)
         return;
     m_released = true;
+    cancelFavoriteNavigation();
     m_refreshTimer.stop();
     releaseCloudSource();
     AndroidMailRangeRegistry::releaseAll();

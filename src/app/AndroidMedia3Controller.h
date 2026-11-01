@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AndroidCloudTrackListModel.h"
+#include "AndroidFavoritesModel.h"
 #include "AndroidMedia3State.h"
 
 #include <QObject>
@@ -28,6 +29,7 @@ class AndroidMedia3Controller final : public QObject
     Q_PROPERTY(QString cloudStatus READ cloudStatus NOTIFY changed)
     Q_PROPERTY(QString cloudDirectoryLabel READ cloudDirectoryLabel NOTIFY changed)
     Q_PROPERTY(AndroidCloudTrackListModel *cloudEntriesModel READ cloudEntriesModel CONSTANT)
+    Q_PROPERTY(AndroidFavoritesModel *favoritesModel READ favoritesModel CONSTANT)
 
 public:
     explicit AndroidMedia3Controller(MailWebDavController *cloud,
@@ -51,6 +53,7 @@ public:
     QString cloudStatus() const;
     QString cloudDirectoryLabel() const;
     AndroidCloudTrackListModel *cloudEntriesModel() const;
+    AndroidFavoritesModel *favoritesModel() const;
 
 public slots:
     void selectTrack(int index);
@@ -65,6 +68,10 @@ public slots:
     void goToCloudParent();
     bool canPlayCloud(int index) const;
     void playCloud(int index);
+    bool canPlayFavorite(const QString &stableId) const;
+    void playFavorite(const QString &stableId);
+    bool toggleFavorite(const QString &stableId, const QString &label);
+    bool removeFavorite(const QString &stableId);
     void release();
 
 signals:
@@ -77,6 +84,10 @@ private slots:
 
 private:
     void setError(const QString &message);
+    void continueFavoriteNavigation();
+    void openFavoriteNavigationDirectory(const QString &directory);
+    void cancelFavoriteNavigation();
+    void playCloudSourceIndex(int index);
     void releaseCloudSource();
     void stopForDisconnect();
     void invokeTrack(const QString &assetPath, const QString &title);
@@ -85,6 +96,7 @@ private:
     QTimer m_refreshTimer;
     MailWebDavController *m_cloud = nullptr;
     AndroidCloudTrackListModel *m_cloudEntriesModel = nullptr;
+    AndroidFavoritesModel *m_favoritesModel = nullptr;
     qint64 m_cloudHandle = 0;
     int m_cloudTrackIndex = -1;
     bool m_cloudTrackActive = false;
@@ -94,5 +106,8 @@ private:
     qint64 m_durationMs = 0;
     QString m_error;
     QString m_cloudTrackName;
+    QString m_pendingFavoriteId;
+    QString m_expectedFavoriteDirectory;
+    bool m_waitingForFavoriteListing = false;
     bool m_released = false;
 };
