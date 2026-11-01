@@ -42,7 +42,7 @@ bool hasJniException(QJniEnvironment &environment)
 AndroidMedia3State::Value valueFromJava(jint value)
 {
     if (value < static_cast<jint>(AndroidMedia3State::Value::Preparing)
-        || value > static_cast<jint>(AndroidMedia3State::Value::Error)) {
+        || value > static_cast<jint>(AndroidMedia3State::Value::Buffering)) {
         return AndroidMedia3State::Value::Error;
     }
     return static_cast<AndroidMedia3State::Value>(value);
@@ -159,6 +159,7 @@ QString AndroidMedia3Controller::stateText() const
 {
     switch (m_state) {
     case AndroidMedia3State::Value::Preparing: return tr("Подготовка Media3");
+    case AndroidMedia3State::Value::Buffering: return tr("Буферизация Media3");
     case AndroidMedia3State::Value::Ready: return tr("Готово к запуску");
     case AndroidMedia3State::Value::Playing: return tr("Воспроизведение");
     case AndroidMedia3State::Value::Paused: return tr("Пауза");
@@ -618,11 +619,13 @@ void AndroidMedia3Controller::releaseCloudSource()
 
 void AndroidMedia3Controller::stopForDisconnect()
 {
-    if (m_released)
+    if (m_released || !m_cloudTrackActive)
         return;
-    if (m_cloudTrackActive)
-        invokeCommand("stop");
+    invokeCommand("stop");
     releaseCloudSource();
+    m_state = AndroidMedia3State::Value::Stopped;
+    m_positionMs = 0;
+    emit changed();
 }
 
 void AndroidMedia3Controller::refreshState()
@@ -641,7 +644,10 @@ void AndroidMedia3Controller::refreshState()
         return;
     }
 
-    const auto nextState = valueFromJava(state);
+    const auto remoteState = valueFromJava(state);
+    if (!AndroidMedia3State::acceptsRemoteUpdate(m_state, remoteState))
+        return;
+    const auto nextState = remoteState;
     const qint64 nextPosition = std::max<qint64>(0, position);
     const qint64 nextDuration = std::max<qint64>(0, duration);
     if (nextState == m_state && nextPosition == m_positionMs

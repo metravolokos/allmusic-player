@@ -494,16 +494,17 @@ Window {
 
             Text {
                 width: parent.width
-                height: 18
-                text: root.showFavorites && root.selectedFavoriteId.length > 0
+                height: 30
+                text: (root.showFavorites && root.selectedFavoriteId.length > 0
                       ? "Избранное: " + root.selectedCloudLabel
                       : root.selectedCloudIndex >= 0
                         ? "Выбрано: " + root.selectedCloudLabel
-                      : "Активный трек: " + media3.activeTrackName + " · " + media3.stateText
+                        : "Активный трек: " + media3.activeTrackName)
+                      + "\nПлеер: " + media3.activeTrackName + " · " + media3.stateText
                 color: "#17212b"
-                font.pixelSize: 12
+                font.pixelSize: 10
                 verticalAlignment: Text.AlignVCenter
-                elide: Text.ElideMiddle
+                elide: Text.ElideRight
             }
 
             Rectangle {
