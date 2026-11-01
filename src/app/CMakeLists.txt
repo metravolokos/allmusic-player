@@ -58,6 +58,7 @@ else()
     set(android_preview_source ${PROJECT_SOURCE_DIR}/ui/android/Main.qml)
     set(android_preview_qml ${CMAKE_CURRENT_BINARY_DIR}/AndroidPreview.qml)
     configure_file(${android_preview_source} ${android_preview_qml} COPYONLY)
+    set_source_files_properties(${android_preview_qml} PROPERTIES QT_RESOURCE_ALIAS AndroidPreview.qml)
     set(qml_files ${app_qml} ${android_preview_qml})
 endif()
 qt_add_qml_module(allmusic-player
