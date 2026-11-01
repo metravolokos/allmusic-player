@@ -747,7 +747,7 @@ ApplicationWindow {
                                 Label { Layout.fillWidth: true; text: library.trackCount + " композиций в медиатеке"; color: root.secondaryColor; font.pixelSize: 12 }
                                 Label { Layout.fillWidth: true; visible: library.scanRunning; text: library.scanTotal > 0 ? "Читает теги: " + library.scanCompleted + " / " + library.scanTotal : "Сканирует папки…"; color: root.secondaryColor; font.pixelSize: 12; wrapMode: Text.WordWrap }
                                 GroupBox {
-                                    Layout.fillWidth: true; title: "Локальный тест плеера"; checkable: true; checked: false
+                                    Layout.fillWidth: true; title: "Локальный тест плеера"
                                     ColumnLayout { anchors.fill: parent
                                         Label { Layout.fillWidth: true; text: mediaController.activeTrackName; color: root.secondaryColor; wrapMode: Text.WordWrap }
                                         ComboBox { id: diagnosticTrackPicker; Layout.fillWidth: true; model: mediaController.trackNames; currentIndex: mediaController.trackIndex >= 0 ? mediaController.trackIndex : 0; Accessible.name: "Тестовая композиция Media3"; onActivated: { queue.clear(); mediaController.selectTrack(index) } }
