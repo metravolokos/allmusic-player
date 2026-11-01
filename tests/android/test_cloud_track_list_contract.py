@@ -41,8 +41,7 @@ class CloudTrackListContractTest(unittest.TestCase):
         self.assertIn("model: root.showFavorites ? media3.favoritesModel : media3.cloudEntriesModel",
                       cloud_list)
         self.assertIn("clip: true", cloud_list)
-        self.assertIn("anchors.top: topPanel.bottom", cloud_list)
-        self.assertIn("anchors.bottom: playerPanel.top", cloud_list)
+        self.assertIn("Layout.fillHeight: true", cloud_list)
         self.assertNotIn("header:", cloud_list)
         self.assertNotIn("footer:", cloud_list)
         self.assertIn("required property int sourceIndex", cloud_list)
@@ -65,7 +64,7 @@ class CloudTrackListContractTest(unittest.TestCase):
         self.assertIn("media3.cloudEntriesModel.sortMode =", sort_panel)
         self.assertIn("media3.cloudEntriesModel.resultCount", sort_panel)
         self.assertNotIn("cloudSearchInput", cloud_list)
-        self.assertIn("anchors.bottom: parent.bottom", player_panel)
+        self.assertIn("Layout.fillWidth: true", player_panel)
         self.assertIn("media3.playCloud(root.selectedCloudIndex)", player_panel)
         self.assertIn("media3.canPlayCloud(root.selectedCloudIndex)", player_panel)
         self.assertIn("media3.pause()", player_panel)
@@ -78,11 +77,12 @@ class CloudTrackListContractTest(unittest.TestCase):
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
         top_panel = block_for_id(qml, "topPanel")
 
-        self.assertIn("id: connectForm", top_panel)
-        self.assertIn("visible: !media3.cloudConnected", top_panel)
-        self.assertIn("id: connectedBar", top_panel)
-        self.assertIn("visible: media3.cloudConnected", top_panel)
-        self.assertIn("media3.disconnectCloud()", top_panel)
+        connect_form = block_for_id(qml, "connectForm")
+        connected_bar = block_for_id(qml, "connectedBar")
+
+        self.assertIn("visible: !media3.cloudConnected", connect_form)
+        self.assertIn("visible: media3.cloudConnected", connected_bar)
+        self.assertIn("media3.disconnectCloud()", connected_bar)
 
     def test_search_and_sort_are_local_and_keyboard_resizes_the_view(self):
         qml = (ROOT / "ui/android/Main.qml").read_text(encoding="utf-8")
@@ -133,7 +133,7 @@ class CloudTrackListContractTest(unittest.TestCase):
         self.assertIn("media3.toggleFavorite(stableId, label)", qml)
         self.assertIn("media3.removeFavorite(stableId)", qml)
         self.assertIn("media3.favoritesModel", qml)
-        self.assertIn('text: root.showFavorites && isMissing ? label + " · недоступен"', qml)
+        self.assertIn('label + " · недоступен"', qml)
         self.assertIn("Q_PROPERTY(AndroidFavoritesModel *favoritesModel", controller)
         self.assertIn("continueFavoriteNavigation()", controller)
         self.assertIn("media3.canPlayFavorite(root.selectedFavoriteId)", qml)

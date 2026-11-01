@@ -1,13 +1,15 @@
 import QtQuick
-import QtQuick.Window
+import QtQuick.Controls
+import QtQuick.Controls.Fusion
+import QtQuick.Layouts
 
-Window {
+ApplicationWindow {
     id: root
     width: 400
     height: 820
     visible: true
-    title: "AllMusic Player — Cloud Mail Media3"
-    color: "#f5f6f8"
+    title: "AllMusic Player · Cloud Mail"
+
     property int selectedCloudIndex: -1
     property string selectedCloudLabel: ""
     property string selectedFavoriteId: ""
@@ -15,7 +17,7 @@ Window {
     property bool showSyntheticTracks: false
 
     function formatTime(milliseconds) {
-        var seconds = Math.max(0, Math.floor(milliseconds / 1000))
+        const seconds = Math.max(0, Math.floor(milliseconds / 1000))
         return Math.floor(seconds / 60) + ":" + ("0" + (seconds % 60)).slice(-2)
     }
 
@@ -32,6 +34,7 @@ Window {
         } else {
             selectedCloudIndex = sourceIndex
             selectedCloudLabel = label
+            selectedFavoriteId = ""
         }
     }
 
@@ -47,102 +50,72 @@ Window {
             clearCloudSelection()
     }
 
-    // Only this ListView scrolls; search and playback controls stay in place.
-    Column {
+    ColumnLayout {
         id: topPanel
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        height: implicitHeight
+        anchors.fill: parent
+        anchors.margins: 10
         spacing: 6
-        z: 2
 
-        Text {
-            x: 12
-            width: parent.width - 24
-            height: 26
-            text: "Cloud Mail · MP3 / FLAC"
-            color: "#17212b"
-            font.pixelSize: 20
-            font.bold: true
-            verticalAlignment: Text.AlignVCenter
+        RowLayout {
+            Layout.fillWidth: true
+            Label {
+                Layout.fillWidth: true
+                text: "AllMusic Player"
+                font.pixelSize: 20
+                font.bold: true
+            }
+            ComboBox {
+                id: themeSelector
+                Layout.preferredWidth: 142
+                model: ["Системная", "Светлая", "Тёмная"]
+                currentIndex: appearance.themeMode === "light" ? 1
+                    : appearance.themeMode === "dark" ? 2 : 0
+                Accessible.name: "Цветовая тема"
+                onActivated: appearance.setThemeMode(["system", "light", "dark"][index])
+            }
         }
 
-        Column {
+        GroupBox {
             id: connectForm
-            x: 12
-            width: parent.width - 24
-            spacing: 6
+            Layout.fillWidth: true
             visible: !media3.cloudConnected
-
-            Rectangle {
-                width: parent.width
-                height: 42
-                radius: 8
-                color: "white"
-                border.color: "#d5dce3"
-                Text {
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    verticalAlignment: Text.AlignVCenter
-                    text: "Адрес почты Cloud Mail"
-                    color: "#7f8e9b"
-                    font.pixelSize: 14
-                    visible: emailInput.text.length === 0
+            title: "Подключение Cloud Mail"
+            ColumnLayout {
+                anchors.fill: parent
+                Label {
+                    Layout.fillWidth: true
+                    text: "Используйте пароль внешнего приложения Mail. Данные не сохраняются; пароль очищается после отправки."
+                    wrapMode: Text.WordWrap
+                    opacity: 0.78
                 }
-                TextInput {
+                TextField {
                     id: emailInput
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    verticalAlignment: TextInput.AlignVCenter
-                    font.pixelSize: 14
-                    color: "#17212b"
-                    inputMethodHints: Qt.ImhEmailCharactersOnly
+                    Layout.fillWidth: true
+                    implicitHeight: 48
+                    placeholderText: "Адрес почты Mail"
+                    maximumLength: 320
+                    inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoAutoUppercase
                     enabled: !media3.cloudBusy
+                    Accessible.name: "Адрес почты Mail"
                 }
-            }
-
-            Rectangle {
-                width: parent.width
-                height: 42
-                radius: 8
-                color: "white"
-                border.color: "#d5dce3"
-                Text {
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    verticalAlignment: Text.AlignVCenter
-                    text: "Пароль внешнего приложения"
-                    color: "#7f8e9b"
-                    font.pixelSize: 14
-                    visible: passwordInput.text.length === 0
-                }
-                TextInput {
+                TextField {
                     id: passwordInput
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    verticalAlignment: TextInput.AlignVCenter
-                    font.pixelSize: 14
-                    color: "#17212b"
+                    Layout.fillWidth: true
+                    implicitHeight: 48
+                    placeholderText: "Пароль внешнего приложения"
+                    maximumLength: 256
                     echoMode: TextInput.Password
+                    passwordMaskDelay: 0
                     inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText
                     enabled: !media3.cloudBusy
+                    Accessible.name: "Пароль внешнего приложения Mail"
                 }
-            }
-
-            Rectangle {
-                width: parent.width
-                height: 40
-                radius: 8
-                color: media3.cloudBusy ? "#a43b3b" : "#1769aa"
-                Text {
-                    anchors.centerIn: parent
+                Button {
+                    Layout.fillWidth: true
+                    implicitHeight: 48
                     text: media3.cloudBusy ? "Отменить подключение" : "Подключиться"
-                    color: "white"
-                    font.pixelSize: 14
-                }
-                MouseArea {
-                    anchors.fill: parent
+                    enabled: media3.cloudBusy || (emailInput.text.length > 0
+                             && passwordInput.text.length > 0)
                     onClicked: {
                         if (media3.cloudBusy) {
                             media3.disconnectCloud()
@@ -154,314 +127,152 @@ Window {
                         }
                     }
                 }
+                Label {
+                    Layout.fillWidth: true
+                    visible: !media3.cloudConnected && media3.cloudStatus.length > 0
+                    text: media3.cloudStatus
+                    wrapMode: Text.WordWrap
+                    Accessible.role: Accessible.AlertMessage
+                }
             }
         }
 
-        Row {
+        RowLayout {
             id: connectedBar
-            x: 12
-            width: parent.width - 24
-            height: 38
-            spacing: 8
+            Layout.fillWidth: true
             visible: media3.cloudConnected
-
-            Text {
-                width: parent.width - 94
-                height: parent.height
+            Label {
+                Layout.fillWidth: true
                 text: media3.cloudStatus
-                color: "#526171"
-                font.pixelSize: 12
-                verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
             }
-            Rectangle {
-                width: 86
-                height: parent.height
-                radius: 8
-                color: "#a43b3b"
-                Text { anchors.centerIn: parent; text: "Отключиться"; color: "white"; font.pixelSize: 11 }
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: media3.cloudConnected || media3.cloudBusy
-                    onClicked: {
-                        media3.disconnectCloud()
-                        root.clearCloudSelection()
-                    }
-                }
+            Button {
+                implicitHeight: 46
+                text: "Отключиться"
+                enabled: media3.cloudConnected || media3.cloudBusy
+                onClicked: { media3.disconnectCloud(); root.clearCloudSelection() }
             }
         }
 
-        Text {
-            x: 12
-            width: parent.width - 24
-            visible: !media3.cloudConnected && media3.cloudStatus.length > 0
-            text: media3.cloudStatus
-            color: "#526171"
-            font.pixelSize: 12
-            wrapMode: Text.WordWrap
-        }
-
-        Row {
-            id: directoryBar
-            x: 12
-            width: parent.width - 24
-            height: 34
-            spacing: 8
+        RowLayout {
+            Layout.fillWidth: true
             visible: media3.cloudConnected
-
-            Rectangle {
-                width: 76
-                height: parent.height
-                radius: 8
-                color: media3.canGoToCloudParent() ? "#dceaf5" : "#e5e9ed"
-                Text { anchors.centerIn: parent; text: "↑ Назад"; color: "#17212b"; font.pixelSize: 12 }
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: media3.canGoToCloudParent()
-                    onClicked: {
-                        media3.goToCloudParent()
-                        root.clearCloudSelection()
-                    }
-                }
+            Button {
+                implicitHeight: 46
+                text: "↑ Назад"
+                enabled: media3.canGoToCloudParent() && !media3.cloudBusy
+                onClicked: { media3.goToCloudParent(); root.clearCloudSelection() }
             }
-            Text {
-                width: parent.width - 84
-                height: parent.height
+            Label {
+                Layout.fillWidth: true
                 text: media3.cloudDirectoryLabel
-                color: "#17212b"
-                font.pixelSize: 13
-                verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideMiddle
+                Accessible.name: "Текущая папка"
             }
         }
 
-        Row {
+        RowLayout {
             id: searchPanel
-            x: 12
-            width: parent.width - 24
-            height: 42
-            spacing: 8
-
-            Rectangle {
-                width: parent.width - 80
-                height: parent.height
-                radius: 8
-                color: "white"
-                border.color: "#d5dce3"
-                Text {
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    verticalAlignment: Text.AlignVCenter
-                    text: "Поиск по названию файла"
-                    color: "#7f8e9b"
-                    font.pixelSize: 13
-                    visible: cloudSearchInput.text.length === 0
+            Layout.fillWidth: true
+            visible: media3.cloudConnected
+            TextField {
+                id: cloudSearchInput
+                Layout.fillWidth: true
+                implicitHeight: 46
+                placeholderText: "Поиск по названию"
+                enabled: !media3.cloudBusy && !root.showFavorites
+                inputMethodHints: Qt.ImhNoPredictiveText
+                onTextChanged: {
+                    if (media3.cloudEntriesModel.searchText !== text)
+                        media3.cloudEntriesModel.searchText = text
                 }
-                TextInput {
-                    id: cloudSearchInput
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    verticalAlignment: TextInput.AlignVCenter
-                    font.pixelSize: 13
-                    color: "#17212b"
-                    inputMethodHints: Qt.ImhNoPredictiveText
-                    enabled: media3.cloudConnected && !media3.cloudBusy && !root.showFavorites
-                    onTextChanged: {
-                        if (media3.cloudEntriesModel.searchText !== text)
-                            media3.cloudEntriesModel.searchText = text
-                    }
-                    onAccepted: focus = false
-                }
+                onAccepted: focus = false
+                Accessible.name: "Поиск по названию файла"
             }
-
-            Rectangle {
-                width: 72
-                height: parent.height
-                radius: 8
-                color: cloudSearchInput.text.length > 0 ? "#dceaf5" : "#e5e9ed"
-                Text { anchors.centerIn: parent; text: "Очистить"; color: "#17212b"; font.pixelSize: 11 }
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: cloudSearchInput.text.length > 0 && !media3.cloudBusy
-                    onClicked: cloudSearchInput.clear()
+            Button {
+                implicitHeight: 46
+                text: root.showFavorites ? "Все композиции" : "Избранное"
+                onClicked: {
+                    root.showFavorites = !root.showFavorites
+                    root.clearCloudSelection()
                 }
             }
         }
 
-        Row {
+        RowLayout {
             id: sortAndCountPanel
-            x: 12
-            width: parent.width - 24
-            height: 34
-            spacing: 8
-
-            Text {
-                width: parent.width - 254
-                height: parent.height
+            Layout.fillWidth: true
+            visible: media3.cloudConnected
+            Label {
+                Layout.fillWidth: true
                 text: root.showFavorites
                       ? "Избранное: " + media3.favoritesModel.count
                       : "Показано " + media3.cloudEntriesModel.resultCount
                         + " из " + media3.cloudEntriesModel.totalCount
-                color: "#526171"
-                font.pixelSize: 12
-                verticalAlignment: Text.AlignVCenter
             }
-            Rectangle {
-                width: 94
-                height: parent.height
-                radius: 8
-                color: root.showFavorites ? "#1769aa" : "#dceaf5"
-                Text {
-                    anchors.centerIn: parent
-                    text: root.showFavorites ? "Избранное" : "Все"
-                    color: root.showFavorites ? "white" : "#17212b"
-                    font.pixelSize: 11
-                }
-                MouseArea {
-                    anchors.fill: parent
+            ComboBox {
+                id: sortSelector
+                Layout.preferredWidth: 158
+                enabled: !media3.cloudBusy && !root.showFavorites
+                model: ["А → Я", "Я → А", "Исходный порядок"]
+                currentIndex: media3.cloudEntriesModel.sortMode
+                Accessible.name: "Сортировка списка"
+                onActivated: media3.cloudEntriesModel.sortMode = index
+            }
+        }
+
+        ListView {
+            id: cloudList
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.minimumHeight: 100
+            clip: true
+            spacing: 2
+            boundsBehavior: Flickable.StopAtBounds
+            visible: media3.cloudConnected
+            model: root.showFavorites ? media3.favoritesModel : media3.cloudEntriesModel
+            Accessible.name: root.showFavorites ? "Избранные композиции" : "Папки и композиции"
+
+            delegate: RowLayout {
+                required property int sourceIndex
+                required property string label
+                required property bool isDirectory
+                required property bool isAudio
+                required property bool isFavorite
+                required property bool isAvailable
+                required property bool isMissing
+                required property string stableId
+                width: cloudList.width
+                spacing: 4
+
+                Button {
+                    Layout.fillWidth: true
+                    implicitHeight: 54
+                    highlighted: root.showFavorites
+                                 ? root.selectedFavoriteId === stableId
+                                 : root.selectedCloudIndex === sourceIndex
+                    text: (isDirectory ? "▸  " : "")
+                          + (root.showFavorites && isMissing ? label + " · недоступен"
+                             : root.showFavorites && !isAvailable
+                               ? label + " · доступность не проверена" : label)
                     onClicked: {
-                        root.showFavorites = !root.showFavorites
-                        root.clearCloudSelection()
+                        if (root.showFavorites) {
+                            root.selectedFavoriteId = stableId
+                            root.selectedCloudIndex = -1
+                            root.selectedCloudLabel = label
+                        } else {
+                            root.selectCloudEntry(sourceIndex, label, isDirectory)
+                        }
                     }
+                    Accessible.name: text
                 }
-            }
-            Rectangle {
-                width: 138
-                height: parent.height
-                radius: 8
-                color: media3.cloudConnected && !root.showFavorites ? "#dceaf5" : "#e5e9ed"
-                Text {
-                    anchors.centerIn: parent
-                    text: root.showFavorites ? "Порядок добавления"
-                          : media3.cloudEntriesModel.sortMode === 0 ? "Сортировка: А → Я"
-                          : media3.cloudEntriesModel.sortMode === 1 ? "Сортировка: Я → А"
-                          : "Сортировка: исходная"
-                    color: "#17212b"
-                    font.pixelSize: 11
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: media3.cloudConnected && !media3.cloudBusy && !root.showFavorites
-                    onClicked: media3.cloudEntriesModel.sortMode = (media3.cloudEntriesModel.sortMode + 1) % 3
-                }
-            }
-        }
-
-        Text {
-            x: 12
-            width: parent.width - 24
-            visible: !root.showFavorites && media3.cloudConnected && media3.cloudEntriesModel.totalCount > 0
-                     && media3.cloudEntriesModel.resultCount === 0
-            text: "Совпадений нет"
-            color: "#526171"
-            font.pixelSize: 12
-            horizontalAlignment: Text.AlignHCenter
-        }
-
-        Text {
-            x: 12
-            width: parent.width - 24
-            visible: !root.showFavorites && media3.cloudConnected && !media3.cloudBusy
-                     && media3.cloudEntriesModel.totalCount === 0
-            text: "В этой папке нет поддерживаемых композиций."
-            color: "#526171"
-            font.pixelSize: 12
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-        }
-
-        Text {
-            x: 12
-            width: parent.width - 24
-            visible: root.showFavorites && media3.favoritesModel.count === 0
-            text: "В избранном пока нет композиций."
-            color: "#526171"
-            font.pixelSize: 12
-            horizontalAlignment: Text.AlignHCenter
-        }
-    }
-
-    ListView {
-        id: cloudList
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: topPanel.bottom
-        anchors.bottom: playerPanel.top
-        anchors.leftMargin: 12
-        anchors.rightMargin: 12
-        anchors.topMargin: 4
-        anchors.bottomMargin: 4
-        clip: true
-        spacing: 6
-        boundsBehavior: Flickable.StopAtBounds
-        model: root.showFavorites ? media3.favoritesModel : media3.cloudEntriesModel
-
-        delegate: Rectangle {
-            required property int sourceIndex
-            required property string label
-            required property bool isDirectory
-            required property bool isAudio
-            required property bool isFavorite
-            required property bool isAvailable
-            required property bool isMissing
-            required property string stableId
-            width: cloudList.width
-            height: 50
-            radius: 8
-            color: (root.showFavorites ? root.selectedFavoriteId === stableId
-                                      : root.selectedCloudIndex === sourceIndex)
-                   ? "#dceaf5" : "white"
-            border.width: (root.showFavorites ? root.selectedFavoriteId === stableId
-                                              : root.selectedCloudIndex === sourceIndex) ? 2 : 1
-            border.color: (root.showFavorites ? root.selectedFavoriteId === stableId
-                                              : root.selectedCloudIndex === sourceIndex)
-                          ? "#1769aa" : "#d5dce3"
-
-            Text {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.leftMargin: 12
-                anchors.rightMargin: 54
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.showFavorites && isMissing ? label + " · недоступен"
-                      : root.showFavorites && !isAvailable ? label + " · доступность не проверена"
-                      : label
-                color: "#17212b"
-                font.pixelSize: 14
-                elide: Text.ElideMiddle
-            }
-            MouseArea {
-                anchors.fill: parent
-                enabled: media3.cloudConnected && !media3.cloudBusy
-                onClicked: {
-                    if (root.showFavorites) {
-                        root.selectedFavoriteId = stableId
-                        root.selectedCloudIndex = -1
-                        root.selectedCloudLabel = label
-                    } else {
-                        root.selectCloudEntry(sourceIndex, label, isDirectory)
-                    }
-                }
-            }
-
-            Rectangle {
-                width: 42
-                height: 38
-                anchors.right: parent.right
-                anchors.rightMargin: 5
-                anchors.verticalCenter: parent.verticalCenter
-                radius: 7
-                color: "#f3f5f7"
-                visible: isAudio
-                Text {
-                    anchors.centerIn: parent
-                    text: isFavorite ? "★" : "☆"
-                    color: isFavorite ? "#c58b00" : "#526171"
-                    font.pixelSize: 21
-                }
-                MouseArea {
-                    anchors.fill: parent
+                ToolButton {
+                    implicitWidth: 52
+                    implicitHeight: 52
+                    visible: isAudio
                     enabled: root.showFavorites || (media3.cloudConnected && !media3.cloudBusy)
+                    text: isFavorite ? "★" : "☆"
+                    Accessible.name: isFavorite ? "Убрать из избранного" : "Добавить в избранное"
                     onClicked: {
                         if (root.showFavorites) {
                             if (media3.removeFavorite(stableId)
@@ -474,58 +285,46 @@ Window {
                 }
             }
         }
-    }
 
-    Rectangle {
-        id: playerPanel
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: playerControls.implicitHeight + 16
-        color: "white"
-        border.color: "#d5dce3"
-        z: 3
+        Label {
+            Layout.fillWidth: true
+            visible: media3.cloudConnected && !root.showFavorites
+                     && media3.cloudEntriesModel.totalCount > 0
+                     && media3.cloudEntriesModel.resultCount === 0
+            text: "Совпадений нет"
+            horizontalAlignment: Text.AlignHCenter
+            opacity: 0.75
+        }
 
-        Column {
-            id: playerControls
-            anchors.fill: parent
-            anchors.margins: 8
-            spacing: 5
+        Label {
+            Layout.fillWidth: true
+            visible: root.showFavorites && media3.favoritesModel.count === 0
+            text: "В избранном пока нет композиций."
+            horizontalAlignment: Text.AlignHCenter
+            opacity: 0.75
+        }
 
-            Text {
-                width: parent.width
-                height: 30
-                text: (root.showFavorites && root.selectedFavoriteId.length > 0
-                      ? "Избранное: " + root.selectedCloudLabel
-                      : root.selectedCloudIndex >= 0
-                        ? "Выбрано: " + root.selectedCloudLabel
-                        : "Активный трек: " + media3.activeTrackName)
-                      + "\nПлеер: " + media3.activeTrackName + " · " + media3.stateText
-                color: "#17212b"
-                font.pixelSize: 10
-                verticalAlignment: Text.AlignVCenter
-                elide: Text.ElideRight
-            }
+        GroupBox {
+            id: playerPanel
+            Layout.fillWidth: true
+            title: "Плеер"
 
-            Rectangle {
-                id: playSelectedButton
-                width: parent.width
-                height: 38
-                radius: 8
-                color: (root.showFavorites
-                        ? root.selectedFavoriteId.length > 0
-                          && media3.canPlayFavorite(root.selectedFavoriteId)
-                        : root.selectedCloudIndex >= 0
-                          && media3.canPlayCloud(root.selectedCloudIndex)) ? "#1769aa" : "#aab6c2"
-                Text {
-                    anchors.centerIn: parent
-                    text: root.showFavorites ? "Воспроизвести выбранное избранное"
-                          : "Воспроизвести выбранный MP3 / FLAC"
-                    color: "white"
-                    font.pixelSize: 13
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 4
+                Label {
+                    Layout.fillWidth: true
+                    text: (root.selectedCloudLabel.length > 0
+                          ? "Выбрано: " + root.selectedCloudLabel + " · " : "")
+                          + media3.activeTrackName + " · " + media3.stateText
+                    wrapMode: Text.WordWrap
+                    Accessible.name: "Текущая композиция и состояние"
                 }
-                MouseArea {
-                    anchors.fill: parent
+                Button {
+                    Layout.fillWidth: true
+                    implicitHeight: 48
+                    text: root.showFavorites ? "Воспроизвести выбранное избранное"
+                          : "Воспроизвести выбранную композицию"
                     enabled: root.showFavorites
                              ? root.selectedFavoriteId.length > 0
                                && media3.canPlayFavorite(root.selectedFavoriteId)
@@ -538,146 +337,75 @@ Window {
                             media3.playCloud(root.selectedCloudIndex)
                     }
                 }
-            }
-
-            Row {
-                width: parent.width
-                height: 34
-                spacing: 8
-                Rectangle {
-                    width: (parent.width - parent.spacing * 2) / 3
-                    height: parent.height
-                    radius: 8
-                    color: media3.playEnabled ? "#1769aa" : "#aab6c2"
-                    Text { anchors.centerIn: parent; text: "Play / Resume"; color: "white"; font.pixelSize: 11 }
-                    MouseArea { anchors.fill: parent; enabled: media3.playEnabled; onClicked: media3.play() }
-                }
-                Rectangle {
-                    width: (parent.width - parent.spacing * 2) / 3
-                    height: parent.height
-                    radius: 8
-                    color: media3.pauseEnabled ? "#1769aa" : "#aab6c2"
-                    Text { anchors.centerIn: parent; text: "Пауза"; color: "white"; font.pixelSize: 11 }
-                    MouseArea { anchors.fill: parent; enabled: media3.pauseEnabled; onClicked: media3.pause() }
-                }
-                Rectangle {
-                    width: (parent.width - parent.spacing * 2) / 3
-                    height: parent.height
-                    radius: 8
-                    color: media3.stopEnabled ? "#a43b3b" : "#aab6c2"
-                    Text { anchors.centerIn: parent; text: "Stop"; color: "white"; font.pixelSize: 11 }
-                    MouseArea { anchors.fill: parent; enabled: media3.stopEnabled; onClicked: media3.stop() }
-                }
-            }
-
-            Row {
-                width: parent.width
-                height: 14
-                Text { id: elapsed; text: formatTime(media3.positionMs); color: "#526171"; font.pixelSize: 11 }
-                Item { width: parent.width - elapsed.width - remaining.width; height: 1 }
-                Text { id: remaining; text: formatTime(media3.durationMs); color: "#526171"; font.pixelSize: 11 }
-            }
-
-            Rectangle {
-                id: seekBar
-                width: parent.width
-                height: 14
-                radius: 7
-                color: "#d5dce3"
-                property real fraction: media3.durationMs > 0
-                    ? Math.max(0, Math.min(1, media3.positionMs / media3.durationMs)) : 0
-                Rectangle {
-                    width: seekBar.width * seekBar.fraction
-                    height: parent.height
-                    radius: parent.radius
-                    color: media3.seekEnabled ? "#4e91c3" : "#aab6c2"
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: media3.seekEnabled
-                    onClicked: function(mouse) {
-                        media3.seekTo(Math.round(mouse.x / width * media3.durationMs))
+                RowLayout {
+                    Layout.fillWidth: true
+                    Button {
+                        Layout.fillWidth: true
+                        implicitHeight: 48
+                        text: "Play / Resume"
+                        enabled: media3.playEnabled
+                        onClicked: media3.play()
+                    }
+                    Button {
+                        Layout.fillWidth: true
+                        implicitHeight: 48
+                        text: "Пауза"
+                        enabled: media3.pauseEnabled
+                        onClicked: media3.pause()
+                    }
+                    Button {
+                        Layout.fillWidth: true
+                        implicitHeight: 48
+                        text: "Stop"
+                        enabled: media3.stopEnabled
+                        onClicked: media3.stop()
                     }
                 }
-            }
-
-            Text {
-                width: parent.width
-                height: 14
-                text: media3.outputStatusText
-                color: "#526171"
-                font.pixelSize: 10
-                verticalAlignment: Text.AlignVCenter
-                elide: Text.ElideRight
-            }
-
-            Text {
-                width: parent.width
-                visible: media3.errorText.length > 0
-                text: "Ошибка: " + media3.errorText
-                color: "#a32020"
-                font.pixelSize: 12
-                wrapMode: Text.WordWrap
-            }
-
-            Rectangle {
-                width: parent.width
-                height: 24
-                radius: 6
-                color: "#eef1f4"
-                Text {
-                    anchors.centerIn: parent
-                    text: root.showSyntheticTracks
-                          ? "Скрыть локальные тестовые треки ▲"
-                          : "Локальные тестовые треки ▼"
-                    color: "#526171"
-                    font.pixelSize: 10
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label { text: root.formatTime(media3.positionMs) }
+                    Slider {
+                        id: seekBar
+                        Layout.fillWidth: true
+                        from: 0
+                        to: Math.max(1, media3.durationMs)
+                        value: media3.positionMs
+                        enabled: media3.seekEnabled && media3.durationMs > 0
+                        Accessible.name: "Позиция воспроизведения"
+                        onMoved: media3.seekTo(Math.round(value))
+                    }
+                    Label { text: root.formatTime(media3.durationMs) }
                 }
-                MouseArea {
-                    anchors.fill: parent
+                Label {
+                    Layout.fillWidth: true
+                    text: media3.errorText.length > 0
+                          ? "Ошибка: " + media3.errorText : media3.outputStatusText
+                    color: media3.errorText.length > 0 ? "#b3261e" : palette.windowText
+                    wrapMode: Text.WordWrap
+                    Accessible.role: Accessible.AlertMessage
+                }
+                Button {
+                    Layout.fillWidth: true
+                    text: root.showSyntheticTracks
+                          ? "Скрыть локальные тестовые треки" : "Локальные тестовые треки"
                     onClicked: root.showSyntheticTracks = !root.showSyntheticTracks
                 }
-            }
-
-            Column {
-                width: parent.width
-                spacing: 4
-                visible: root.showSyntheticTracks
-                Repeater {
-                    model: media3.trackNames
-                    delegate: Rectangle {
-                        required property int index
-                        required property string modelData
-                        width: playerControls.width
-                        height: 32
-                        radius: 6
-                        color: media3.trackIndex === index ? "#dceaf5" : "#f5f6f8"
-                        border.color: "#d5dce3"
-                        Text {
-                            anchors.fill: parent
-                            anchors.leftMargin: 10
-                            anchors.rightMargin: 10
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    visible: root.showSyntheticTracks
+                    Repeater {
+                        model: media3.trackNames
+                        delegate: Button {
+                            required property int index
+                            required property string modelData
+                            Layout.fillWidth: true
+                            implicitHeight: 48
                             text: modelData
-                            color: "#17212b"
-                            font.pixelSize: 11
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideMiddle
-                        }
-                        MouseArea {
-                            anchors.fill: parent
+                            highlighted: media3.trackIndex === index
                             onClicked: media3.selectTrack(index)
                         }
                     }
                 }
-            }
-
-            Text {
-                width: parent.width
-                height: 12
-                text: buildLabel
-                color: "#7f8e9b"
-                font.pixelSize: 9
-                elide: Text.ElideMiddle
             }
         }
     }

@@ -13,6 +13,8 @@ if(ANDROID)
         endif()
     endforeach()
     target_sources(allmusic-player PRIVATE
+        AppearanceController.cpp
+        AppearanceController.h
         AndroidCloudTrackListModel.cpp
         AndroidCloudTrackListModel.h
         AndroidFavoritesModel.cpp
@@ -29,6 +31,8 @@ if(ANDROID)
     set(app_qml ${PROJECT_SOURCE_DIR}/ui/android/Main.qml)
 else()
     target_sources(allmusic-player PRIVATE
+        AppearanceController.cpp
+        AppearanceController.h
         MailWebDavController.cpp
         MailWebDavController.h)
     target_link_libraries(allmusic-player PRIVATE mail-webdav-diagnostic)
@@ -40,7 +44,7 @@ qt_add_qml_module(allmusic-player
     VERSION 1.0
     QML_FILES ${app_qml}
 )
-target_link_libraries(allmusic-player PRIVATE Qt6::Quick)
+target_link_libraries(allmusic-player PRIVATE Qt6::Quick Qt6::QuickControls2)
 set_target_properties(allmusic-player PROPERTIES
     WIN32_EXECUTABLE TRUE
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
@@ -88,7 +92,7 @@ add_library(local-playback STATIC
     ${PROJECT_SOURCE_DIR}/src/playback/WebDavRangeDevice.h)
 target_link_libraries(local-playback PUBLIC Qt6::Multimedia mail-webdav-diagnostic)
 target_include_directories(local-playback PUBLIC ${PROJECT_SOURCE_DIR}/src/playback)
-target_link_libraries(allmusic-player PRIVATE local-playback Qt6::QuickControls2)
+target_link_libraries(allmusic-player PRIVATE local-playback)
 if(MSVC)
     target_compile_options(local-playback PRIVATE /utf-8 /W4)
 endif()

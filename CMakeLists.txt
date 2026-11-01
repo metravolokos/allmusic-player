@@ -6,11 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Deliberately require the approved version; never silently use another Qt.
-find_package(Qt6 6.12.0 EXACT REQUIRED COMPONENTS Quick Network)
+find_package(Qt6 6.12.0 EXACT REQUIRED COMPONENTS Quick QuickControls2 Network)
 qt_standard_project_setup(REQUIRES 6.12)
 
 if(NOT ANDROID)
-    find_package(Qt6 6.12.0 EXACT REQUIRED COMPONENTS Multimedia QuickControls2)
+    find_package(Qt6 6.12.0 EXACT REQUIRED COMPONENTS Multimedia)
 endif()
 
 add_library(webdav-spike STATIC src/cloud/WebDavProbe.cpp src/cloud/WebDavProbe.h)

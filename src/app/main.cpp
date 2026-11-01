@@ -5,6 +5,7 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <QDebug>
+#include "AppearanceController.h"
 #ifndef Q_OS_ANDROID
 #include "LocalPlayback.h"
 #include "MailWebDavController.h"
@@ -25,9 +26,11 @@ int main(int argc, char *argv[])
     qputenv("QT_MEDIA_BACKEND", "ffmpeg");
     qputenv("QT_FFMPEG_PROTOCOL_WHITELIST", "file");
 #endif
+    AppearanceController::prepareFusionStyle();
     QGuiApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("AllMusic Player"));
     QCoreApplication::setApplicationVersion(QStringLiteral("0.0.1"));
+    AppearanceController appearance;
 
     const auto arguments = app.arguments();
     const bool smokeTest = arguments.size() == 3
@@ -72,6 +75,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("playback"), &playback);
     engine.rootContext()->setContextProperty(QStringLiteral("mailWebDav"), &mailWebDav);
 #endif
+    engine.rootContext()->setContextProperty(QStringLiteral("appearance"), &appearance);
     engine.loadFromModule(QStringLiteral("AllMusicPlayer"), QStringLiteral("Main"));
     if (engine.rootObjects().isEmpty())
         return 1;

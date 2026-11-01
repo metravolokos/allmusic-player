@@ -1,100 +1,96 @@
 import QtQuick
-import QtQuick.Window
-import QtQuick.Controls.Basic
+import QtQuick.Controls
+import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import QtQuick.Dialogs
 import QtMultimedia
 
-Window {
+ApplicationWindow {
     id: window
-    width: 900
-    height: 1020
-    minimumWidth: 540
-    minimumHeight: 760
+    width: 1120
+    height: 760
+    minimumWidth: 760
+    minimumHeight: 560
     visible: true
-    title: "AllMusic Player — этап 002-C"
-    color: "#f5f6f8"
+    title: "AllMusic Player"
+
     readonly property var media: playback.player
-    function time(ms) {
-        const seconds = Math.floor(Math.max(0, ms) / 1000)
+    property int selectedEntry: -1
+    property bool diagnosticsExpanded: false
+
+    function time(milliseconds) {
+        const seconds = Math.floor(Math.max(0, milliseconds) / 1000)
         return Math.floor(seconds / 60) + ":" + (seconds % 60).toString().padStart(2, "0")
     }
+
+    function playSelected() {
+        if (selectedEntry >= 0 && mailWebDav.connected && mailWebDav.canPlay(selectedEntry)
+                && !playback.cloudMailActive) {
+            mailWebDav.play(selectedEntry)
+            return
+        }
+        if (media.hasAudio || media.source.toString().length > 0
+                || playback.currentLoopbackIndex >= 0 || playback.cloudMailActive)
+            playback.togglePlayback()
+    }
+
     FileDialog {
         id: picker
-        title: "Выберите локальный тестовый аудиофайл"
-        nameFilters: ["Аудио (*.mp3 *.flac *.aac *.m4a *.mp4)", "Все файлы (*)"]
+        title: "Открыть локальный аудиофайл"
+        nameFilters: ["Аудиофайлы (*.mp3 *.flac *.aac *.m4a *.mp4)", "Все файлы (*)"]
         onAccepted: playback.openLocal(selectedFile)
     }
+
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 28
-        spacing: 16
-        Label { text: "AllMusic Player"; font.pixelSize: 28; font.bold: true }
-        Label { text: "Desktop-плеер: локальные файлы, loopback-мок и потоковый Cloud Mail"; color: "#526171" }
-        Button { text: "Выбрать аудиофайл…"; onClicked: picker.open() }
-        GroupBox {
+        anchors.margins: 16
+        spacing: 10
+
+        RowLayout {
             Layout.fillWidth: true
-            title: "Локальный тестовый WebDAV"
-            RowLayout {
-                anchors.fill: parent
-                TextField {
-                    id: webdavPort
-                    Layout.preferredWidth: 100
-                    text: "8765"
-                    validator: IntValidator { bottom: 1; top: 65535 }
-                    Accessible.name: "Порт loopback WebDAV"
-                }
-                Button { text: "Найти файлы"; onClicked: playback.scanLoopback(Number(webdavPort.text)) }
-                ComboBox {
-                    id: remoteFile
-                    Layout.fillWidth: true
-                    model: playback.loopbackFiles
-                    Accessible.name: "Файл из /AllMusic"
-                    onActivated: {
-                        if (playback.openLoopback(currentIndex)) playback.togglePlayback()
-                    }
-                }
+            Label { text: "AllMusic Player"; font.pixelSize: 24; font.bold: true }
+            Item { Layout.fillWidth: true }
+            Label { text: "Тема"; Accessible.name: "Настройка темы" }
+            ComboBox {
+                id: themeSelector
+                Layout.preferredWidth: 150
+                model: ["Системная", "Светлая", "Тёмная"]
+                currentIndex: appearance.themeMode === "light" ? 1
+                    : appearance.themeMode === "dark" ? 2 : 0
+                Accessible.name: "Цветовая тема"
+                onActivated: appearance.setThemeMode(["system", "light", "dark"][index])
             }
+            Button { text: "Открыть файл…"; onClicked: picker.open() }
         }
-        Label {
-            Layout.fillWidth: true
-            text: "Локальная потоковая функция обращается только к 127.0.0.1 и внутри /AllMusic. Range 206 обязателен; 200 отображается как ошибка, файл целиком не скачивается."
-            color: "#526171"
-            wrapMode: Text.WordWrap
-        }
-        Label { text: "Получено по Range: " + playback.networkBytes + " байт"; color: "#526171" }
+
         GroupBox {
+            id: cloudPanel
             Layout.fillWidth: true
-            title: "Cloud Mail — потоковое чтение"
+            Layout.fillHeight: true
+            Layout.minimumHeight: 220
+            title: "Cloud Mail · /AllMusic"
+
             ColumnLayout {
                 anchors.fill: parent
                 spacing: 8
+
                 Label {
                     Layout.fillWidth: true
-                    text: "Используются только PROPFIND и ограниченные GET Range внутри /AllMusic. Перенаправления и команды записи не выполняются. Выбор строки не отправляет запрос: нажмите отдельную кнопку воспроизведения."
-                    color: "#526171"
+                    visible: !mailWebDav.connected
+                    text: "Используйте пароль внешнего приложения Mail. Данные не сохраняются и поля очищаются после отправки."
                     wrapMode: Text.WordWrap
+                    opacity: 0.78
                 }
-                Label {
-                    Layout.fillWidth: true
-                    text: "Важно: пароль внешнего приложения Mail может давать права записи на стороне аккаунта. Ограничение методов действует только в этом приложении. Не вводите основной пароль почты."
-                    color: "#8a4b00"
-                    wrapMode: Text.WordWrap
-                }
-                Label {
-                    Layout.fillWidth: true
-                    text: "Адрес и пароль не сохраняются в настройках. Поля очищаются после нажатия, пароль остаётся только во временной памяти сессии до отключения."
-                    color: "#526171"
-                    wrapMode: Text.WordWrap
-                }
+
                 RowLayout {
                     Layout.fillWidth: true
+                    visible: !mailWebDav.connected
                     TextField {
                         id: mailEmail
                         Layout.fillWidth: true
                         placeholderText: "Адрес почты Mail"
                         maximumLength: 320
-                        enabled: !mailWebDav.busy && !mailWebDav.connected
+                        enabled: !mailWebDav.busy
                         inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoAutoUppercase
                         Accessible.name: "Адрес почты Mail"
                     }
@@ -105,180 +101,241 @@ Window {
                         maximumLength: 256
                         echoMode: TextInput.Password
                         passwordMaskDelay: 0
-                        enabled: !mailWebDav.busy && !mailWebDav.connected
+                        enabled: !mailWebDav.busy
                         Accessible.name: "Пароль внешнего приложения Mail"
                     }
-                }
-                RowLayout {
-                    Layout.fillWidth: true
                     Button {
-                        text: "Проверить подключение"
-                        enabled: !mailWebDav.busy && !mailWebDav.connected
-                                 && mailEmail.text.length > 0 && mailAppPassword.text.length > 0
+                        text: mailWebDav.busy ? "Отменить" : "Подключиться"
+                        enabled: mailWebDav.busy || (mailEmail.text.length > 0
+                                 && mailAppPassword.text.length > 0)
                         onClicked: {
-                            mailWebDav.checkConnection(mailEmail.text, mailAppPassword.text)
-                            mailEmail.text = ""
-                            mailAppPassword.text = ""
+                            if (mailWebDav.busy) {
+                                mailWebDav.cancel()
+                            } else {
+                                mailWebDav.checkConnection(mailEmail.text, mailAppPassword.text)
+                                mailEmail.clear()
+                                mailAppPassword.clear()
+                            }
                         }
                     }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: mailWebDav.connected
+                    Label {
+                        Layout.fillWidth: true
+                        text: mailWebDav.currentDirectory
+                        elide: Text.ElideMiddle
+                        Accessible.name: "Текущая папка"
+                    }
+                    Label { text: mailWebDav.entryCount + " элементов" }
                     Button {
-                        text: "Отменить"
-                        enabled: mailWebDav.busy
-                        onClicked: mailWebDav.cancel()
+                        text: "Назад"
+                        enabled: mailWebDav.canGoToParent() && !mailWebDav.busy
+                        onClicked: { mailWebDav.goToParent(); window.selectedEntry = -1 }
                     }
                     Button {
                         text: "Отключиться"
-                        enabled: mailWebDav.connected || mailWebDav.busy
-                        onClicked: {
-                            mailWebDav.disconnectCloud()
-                            mailEmail.text = ""
-                            mailAppPassword.text = ""
-                            rangeConsent.checked = false
-                        }
+                        enabled: !mailWebDav.busy
+                        onClicked: { mailWebDav.disconnectCloud(); window.selectedEntry = -1 }
                     }
-                    Label {
-                        text: mailWebDav.entryCount + " элементов"
-                        color: "#526171"
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: mailWebDav.status
+                    visible: mailWebDav.status.length > 0
+                    wrapMode: Text.WordWrap
+                    Accessible.role: Accessible.AlertMessage
+                }
+
+                ListView {
+                    id: libraryList
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: 120
+                    clip: true
+                    spacing: 2
+                    model: mailWebDav.entries
+                    Accessible.name: "Папки и аудиофайлы текущей папки"
+                    delegate: ItemDelegate {
+                        required property int index
+                        required property var modelData
+                        width: libraryList.width
+                        highlighted: window.selectedEntry === index
+                        text: (modelData.isDirectory ? "▸  " : "♫  ") + modelData.label
+                        onClicked: window.selectedEntry = index
                     }
                 }
                 Label {
                     Layout.fillWidth: true
-                    text: "Текущая папка: " + mailWebDav.currentDirectory
-                    color: "#526171"
-                    elide: Text.ElideMiddle
+                    visible: mailWebDav.connected && !mailWebDav.busy
+                             && mailWebDav.entries.length === 0
+                    text: "В этой папке нет элементов"
+                    horizontalAlignment: Text.AlignHCenter
+                    opacity: 0.7
                 }
+
                 RowLayout {
                     Layout.fillWidth: true
-                    ComboBox {
-                        id: mailEntry
-                        Layout.fillWidth: true
-                        model: mailWebDav.entries
-                        textRole: "label"
-                        enabled: mailWebDav.connected && !mailWebDav.busy
-                        Accessible.name: "Непосредственные папки и аудиофайлы в /AllMusic"
-                    }
                     Button {
                         text: "Открыть папку"
-                        enabled: mailWebDav.canOpenDirectory(mailEntry.currentIndex)
-                        onClicked: mailWebDav.openDirectory(mailEntry.currentIndex)
+                        enabled: mailWebDav.canOpenDirectory(window.selectedEntry)
+                        onClicked: { mailWebDav.openDirectory(window.selectedEntry); window.selectedEntry = -1 }
                     }
                     Button {
-                        text: "Наверх"
-                        enabled: mailWebDav.canGoToParent()
-                        onClicked: mailWebDav.goToParent()
+                        text: "Воспроизвести выбранное"
+                        enabled: mailWebDav.canPlay(window.selectedEntry)
+                        onClicked: mailWebDav.play(window.selectedEntry)
+                    }
+                    Item { Layout.fillWidth: true }
+                    Label {
+                        text: window.selectedEntry >= 0
+                              && window.selectedEntry < mailWebDav.entries.length
+                              ? mailWebDav.entries[window.selectedEntry].label
+                              : "Выберите папку или композицию"
+                        elide: Text.ElideMiddle
+                        Layout.maximumWidth: 360
+                    }
+                }
+            }
+        }
+
+        Button {
+            Layout.fillWidth: true
+            text: window.diagnosticsExpanded ? "Скрыть диагностику" : "Диагностика"
+            onClicked: window.diagnosticsExpanded = !window.diagnosticsExpanded
+        }
+
+        GroupBox {
+            Layout.fillWidth: true
+            visible: window.diagnosticsExpanded
+            title: "Локальная диагностика"
+            ColumnLayout {
+                anchors.fill: parent
+                RowLayout {
+                    Layout.fillWidth: true
+                    TextField {
+                        id: webdavPort
+                        Layout.preferredWidth: 100
+                        text: "8765"
+                        validator: IntValidator { bottom: 1; top: 65535 }
+                        Accessible.name: "Порт loopback WebDAV"
+                    }
+                    Button { text: "Найти loopback-файлы"; onClicked: playback.scanLoopback(Number(webdavPort.text)) }
+                    ComboBox {
+                        id: remoteFile
+                        Layout.fillWidth: true
+                        model: playback.loopbackFiles
+                        Accessible.name: "Файл из тестового /AllMusic"
                     }
                     Button {
-                        text: "Воспроизвести MP3/FLAC"
-                        enabled: mailWebDav.canPlay(mailEntry.currentIndex)
-                        onClicked: mailWebDav.play(mailEntry.currentIndex)
+                        text: "Открыть"
+                        enabled: remoteFile.currentIndex >= 0
+                        onClicked: {
+                            if (playback.openLoopback(remoteFile.currentIndex)) playback.togglePlayback()
+                        }
                     }
+                    Label { text: "Range: " + playback.networkBytes + " байт" }
                 }
                 RowLayout {
                     Layout.fillWidth: true
                     CheckBox {
                         id: rangeConsent
-                        text: "Разрешаю отдельную диагностическую проверку Range до 64 КиБ"
-                        enabled: mailWebDav.canCheckRange(mailEntry.currentIndex)
+                        Layout.fillWidth: true
+                        text: "Разрешаю Range до 64 КиБ для выбранной композиции"
+                        enabled: mailWebDav.canCheckRange(window.selectedEntry)
                         onCheckedChanged: if (!enabled) checked = false
-                        Accessible.name: "Подтверждение отдельной проверки HTTP Range"
                     }
                     Button {
                         text: "Проверить Range"
-                        enabled: rangeConsent.checked
-                                 && mailWebDav.canCheckRange(mailEntry.currentIndex)
+                        enabled: rangeConsent.checked && mailWebDav.canCheckRange(window.selectedEntry)
+                        onClicked: { mailWebDav.checkRange(window.selectedEntry); rangeConsent.checked = false }
+                    }
+                }
+            }
+        }
+
+        GroupBox {
+            id: playerPanel
+            Layout.fillWidth: true
+            title: playback.activeSourceLabel || media.source.toString() || "Сейчас играет"
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 6
+                RowLayout {
+                    Layout.fillWidth: true
+                    Button {
+                        text: media.playbackState === MediaPlayer.PlayingState ? "Пауза" : "Воспроизвести"
+                        enabled: (media.hasAudio || media.source.toString().length > 0
+                                  || playback.currentLoopbackIndex >= 0 || playback.cloudMailActive
+                                  || mailWebDav.canPlay(window.selectedEntry))
+                                 && playback.error.length === 0
                         onClicked: {
-                            mailWebDav.checkRange(mailEntry.currentIndex)
-                            rangeConsent.checked = false
+                            if (media.playbackState === MediaPlayer.PlayingState)
+                                playback.togglePlayback()
+                            else
+                                window.playSelected()
                         }
                     }
+                    Button {
+                        text: "Стоп"
+                        enabled: media.hasAudio || media.source.toString().length > 0
+                                 || playback.currentLoopbackIndex >= 0 || playback.cloudMailActive
+                        onClicked: playback.stop()
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: playback.buffering ? "Буферизация…"
+                              : media.playbackState === MediaPlayer.PlayingState ? "Воспроизведение"
+                              : media.playbackState === MediaPlayer.PausedState ? "Пауза"
+                              : "Остановлено"
+                    }
+                    Label {
+                        text: media.duration > 0
+                              ? window.time(seek.pressed ? seek.value : media.position)
+                                + " / " + window.time(media.duration)
+                              : "Длительность неизвестна"
+                    }
                 }
-                Label {
+                Slider {
+                    id: seek
                     Layout.fillWidth: true
-                    text: mailWebDav.status
-                    color: "#34445a"
-                    wrapMode: Text.WordWrap
-                    Accessible.role: Accessible.AlertMessage
+                    from: 0
+                    to: Math.max(1, media.duration)
+                    value: media.position
+                    enabled: media.seekable && media.duration > 0
+                    Accessible.name: "Позиция воспроизведения"
+                    onMoved: media.setPosition(value)
                 }
-                Label {
+                RowLayout {
                     Layout.fillWidth: true
-                    text: "Создание пароля внешнего приложения и описание Cloud Mail WebDAV: https://help.mail.ru/cloud/desktop/webdav/"
-                    color: "#526171"
-                    wrapMode: Text.WordWrap
-                }
-            }
-        }
-        Label {
-            Layout.fillWidth: true
-            text: playback.activeSourceLabel || window.media.source.toString()
-                  || remoteFile.currentText || "Файл ещё не выбран"
-            elide: Text.ElideMiddle
-            Accessible.name: "Выбранный файл"
-        }
-        RowLayout {
-            Button {
-                text: window.media.playbackState === MediaPlayer.PlayingState ? "Пауза" : "Воспроизвести"
-                enabled: (window.media.hasAudio || window.media.source.toString().length > 0
-                          || playback.currentLoopbackIndex >= 0 || playback.cloudMailActive
-                          || (mailWebDav.connected && mailWebDav.canPlay(mailEntry.currentIndex)))
-                         && playback.error.length === 0
-                onClicked: {
-                    if (window.media.playbackState !== MediaPlayer.StoppedState) {
-                        playback.togglePlayback()
-                    } else if (window.media.source.toString().length === 0
-                               && playback.currentLoopbackIndex < 0
-                               && mailWebDav.connected
-                               && mailWebDav.canPlay(mailEntry.currentIndex)) {
-                        // Stop cancels and destroys the old credential-bearing source.
-                        // A new explicit Play starts a fresh bounded stream for this row.
-                        mailWebDav.play(mailEntry.currentIndex)
-                    } else {
-                        playback.togglePlayback()
+                    Label { text: "Громкость" }
+                    Slider {
+                        id: volume
+                        Layout.fillWidth: true
+                        from: 0; to: 1; value: playback.audio.volume
+                        Accessible.name: "Громкость"
+                        onMoved: playback.audio.volume = value
+                    }
+                    Label { text: Math.round(volume.value * 100) + "%" }
+                    Label {
+                        Layout.fillWidth: true
+                        text: playback.error || playback.deviceWarning
+                        color: palette.windowText
+                        wrapMode: Text.WordWrap
+                        Accessible.role: Accessible.AlertMessage
                     }
                 }
             }
-            Button {
-                text: "Стоп"
-                enabled: window.media.hasAudio || window.media.source.toString().length > 0
-                         || playback.currentLoopbackIndex >= 0 || playback.cloudMailActive
-                onClicked: playback.stop()
-            }
-            Label {
-                text: window.media.playbackState === MediaPlayer.PlayingState ? "Воспроизведение"
-                    : window.media.playbackState === MediaPlayer.PausedState ? "Пауза"
-                    : playback.buffering ? "Буферизация…"
-                    : window.media.mediaStatus === MediaPlayer.LoadingMedia ? "Загрузка…" : "Остановлено"
-            }
         }
-        Slider {
-            id: seek
-            Layout.fillWidth: true
-            from: 0
-            to: Math.max(1, window.media.duration)
-            value: window.media.position
-            enabled: window.media.seekable && window.media.duration > 0
-            Accessible.name: "Позиция воспроизведения"
-            onMoved: window.media.setPosition(value)
-        }
-        Label { text: window.time(seek.pressed ? seek.value : window.media.position) + " / " + window.time(window.media.duration) }
-        RowLayout {
-            Label { text: "Громкость" }
-            Slider {
-                id: volume
-                Layout.fillWidth: true
-                from: 0; to: 1; value: 0.25
-                Accessible.name: "Громкость"
-                onMoved: playback.audio.volume = value
-            }
-            Label { text: Math.round(volume.value * 100) + "%" }
-        }
-        Label {
-            Layout.fillWidth: true
-            text: playback.error || playback.deviceWarning
-            color: "#a52020"
-            wrapMode: Text.WordWrap
-            Accessible.role: Accessible.AlertMessage
-        }
-        Item { Layout.fillHeight: true }
+    }
+
+    Connections {
+        target: mailWebDav
+        function onEntriesChanged() { window.selectedEntry = -1 }
     }
     Component.onDestruction: mailWebDav.disconnectCloud()
 }

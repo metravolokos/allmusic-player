@@ -47,8 +47,9 @@ class Media3StateContractTest(unittest.TestCase):
 
         self.assertIn('Value::Buffering: return tr("Буферизация Media3")', controller)
         self.assertIn("media3.stateText", qml)
-        self.assertIn(r'"\nПлеер: " + media3.activeTrackName + " · " + media3.stateText', qml)
-        self.assertIn('"Избранное: " + root.selectedCloudLabel', qml)
+        player_panel = qml.split('id: playerPanel', 1)[1].split('\n        }', 1)[0]
+        self.assertIn('" · " + media3.stateText', player_panel)
+        self.assertIn('media3.activeTrackName', player_panel)
 
 
 if __name__ == "__main__":
