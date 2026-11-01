@@ -181,7 +181,8 @@ void LibraryModel::setRemoteTracks(const QVector<Track> &tracks)
             continue;
         remote.available = true;
         remote.playable = canStreamPath(remote.path) && remote.size > 0;
-        remote.title = fallbackTitle(remote.path);
+        if (!remote.metadataLoaded)
+            remote.title = fallbackTitle(remote.path);
         const auto cachedIt = cached.constFind(remote.stableId);
         if (cachedIt != cached.cend() && sameVersion(cachedIt.value(), remote)
             && cachedIt->metadataLoaded) {
